@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>garten.salat.dev</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.4em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 0;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      canvas {
+        width: 500px;
+        margin: 5px;
+      }
+      textarea {
+        padding: 8px;
+        font-size: 1.4em;
+        border: 1px solid white;
+        outline: none;
+        background-color: transparent;
+        color: white;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 plotting functions</h2>
+    <p>how to plot a function with the bare minimum?</p>
+    <canvas id="plot1"></canvas>
+    <textarea id="input" type="text" rows="4"></textarea>
+    <details>
+      <summary>show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script id="code">
+      const canvas = document.querySelector("#plot1");
+      // make sure canvas is sharp
+      canvas.style.width = canvas.width;
+      canvas.style.height = canvas.height;
+      canvas.width *= window.devicePixelRatio;
+      canvas.height *= window.devicePixelRatio;
+      // define plot ranges
+      const xrange = [-Math.PI * 2, Math.PI * 2];
+      const yrange = [-1, 1];
+      // live coding
+      const input = document.querySelector("#input");
+      const onPlot = () => {
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const lines = input.value.split("\n");
+        const colors = ["cyan", "magenta", "yellow", "white"];
+        for (let i in lines) {
+          const fn = new Function("x", `return ${lines[i]}`);
+          plot(fn, canvas, xrange, yrange, colors[i % colors.length]);
+        }
+      };
+      input.value = "Math.sin(x)\nMath.cos(x)"; // initial value
+      onPlot(); // initial render
+      input.addEventListener("input", onPlot); // rerender on change
+
+      // plot function
+      function plot(
+        fn,
+        canvas,
+        xrange = [-1, 1],
+        yrange = [-1, 1],
+        color = "black",
+        lineWidth = 4
+      ) {
+        // these 3 functions are very good to know..
+        const lerp = (v, min, max) => v * (max - min) + min;
+        const invLerp = (v, min, max) => (v - min) / (max - min);
+        const remap = (v, vmin, vmax, omin, omax) =>
+          lerp(invLerp(v, vmin, vmax), omin, omax);
+        // prepare draw context
+        const ctx = canvas.getContext("2d");
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = color;
+        // function ranges
+        const [x0, x1] = xrange;
+        const [y0, y1] = yrange;
+        // draw ranges
+        const [px0, px1] = [0, canvas.width];
+        const [py0, py1] = [canvas.height - ctx.lineWidth, ctx.lineWidth];
+        // actual draw logic
+        ctx.beginPath();
+        for (let px = 0; px < canvas.width; px++) {
+          const x = remap(px, px0, px1, x0, x1);
+          const y = fn(x);
+          const py = remap(y, y0, y1, py0, py1);
+          px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+      // render code
+      const code = document
+        .querySelector("html")
+        .outerHTML.split("\n")
+        .join("\n");
+      document.querySelector("#pre").textContent = code;
+    </script>
+  </body>
+</html>
