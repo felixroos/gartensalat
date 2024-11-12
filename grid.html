@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>garten.salat.dev</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.4em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 0;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      input,
+      textarea {
+        padding: 8px;
+        font-size: 1em;
+        border: 1px solid white;
+        outline: none;
+        background-color: transparent;
+        color: white;
+        width: 100%;
+        margin: 8px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 faking shaders</h2>
+    <p>This is how a sawtooth function looks from "above":</p>
+    <canvas id="plot0"></canvas>
+    <input id="code0" type="text" />
+    <p>
+      The y value is stored as opacity in a single dimension! Now we can plot a
+      function for each block/pixel:
+    </p>
+    <canvas id="plot1"></canvas>
+    <textarea id="input" type="text" rows="4"></textarea>
+    <div style="display: flex">
+      <input id="gapSlider" type="range" min="0" max="4" step=".1" />
+      <input id="dimSlider" type="range" min="8" max="128" step="1" />
+    </div>
+    <p>The following variables can be used:</p>
+    <ul>
+      <li>t = time in seconds</li>
+      <li>i = block index between 0 and 1</li>
+      <li>x = x between 0 and 1</li>
+      <li>y = y between 0 and 1</li>
+    </ul>
+    <p>
+      The returned value is expected to be within 0 and 1. Each line is another
+      color channel: <br /><code>[cyan, magenta, yellow]%i</code>
+    </p>
+    <p>Here are some examples to copy paste:</p>
+    <pre>(x-.5)*(y-.5)*(Math.sin(t*2)*8+16)%1</pre>
+    <pre>(y**x*(120+t))%1</pre>
+    <pre>
+(Math.cos((1-x)*y*43+t*4)+1)/2
+(Math.sin((1-x)*y*32+t*4)+1)/2
+(Math.sin(t)+1)/8</pre
+    >
+    <pre>
+Math.ceil((x-.5)**2+(y-.5)**2-t/8%.1)/2
+Math.ceil((x-.5)**2+(y-.5)**2-t/8%.2)/2
+Math.ceil((x-.5)**2+(y-.5)**2-t/6%.3)/2</pre
+    >
+    <p>
+      This way of rendering is very similar to what a shader would do, but we
+      don't need to use WebGL. Of course, this is much slower, but that's not
+      the point.
+    </p>
+    <details>
+      <summary>show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script>
+      //LIB
+      // init canvas size and make it sharp
+      HTMLCanvasElement.prototype.init = function (width = 500, height = 500) {
+        this.width = width;
+        this.height = height;
+        this.style.width = this.width + "px";
+        this.style.height = this.height + "px";
+        this.width *= window.devicePixelRatio;
+        this.height *= window.devicePixelRatio;
+        return this;
+      };
+
+      // helper to quickly wire up ui / data binding
+      const ui = (config, onChange) => {
+        let data = {};
+        for (let key in config) {
+          const [selector, value] = config[key];
+          const isNumber = !isNaN(value);
+          data[key] = value;
+          const el = document.querySelector(selector);
+          el.value = value;
+          el.addEventListener("input", (e) => {
+            let value = e.target.value;
+            if (isNumber) {
+              value = Number(value);
+            }
+            data[key] = value;
+            onChange(data);
+          });
+        }
+        return () => onChange(data);
+      };
+
+      // LOGIC
+      const canvas0 = document.querySelector("#plot0").init(500, 20);
+      ui(
+        {
+          code: ["#code0", "x*4%1"],
+        },
+        ({ code }) => {
+          const ctx = canvas0.getContext("2d");
+          canvas0.width = canvas0.width; // clears screen
+          const fn = new Function("t", "i", "x", "y", `return ${code}`);
+          plot(fn, 0, canvas0, [128, 1], "cyan", 1);
+        }
+      )();
+
+      const canvas = document.querySelector("#plot1").init(500, 500);
+      const initialCode = "x*y*8%1";
+      // const initialCode = "(x*3)%1\n(y*2)%1\n(i*355)%.5";
+      // const colors = ["green", "blue", "red"];
+      const colors = ["cyan", "magenta", "yellow"];
+      let raf;
+      ui(
+        {
+          gap: ["#gapSlider", 0],
+          dim: ["#dimSlider", 64],
+          code: ["#input", initialCode],
+        },
+        ({ gap, dim, code }) => {
+          const ctx = canvas.getContext("2d");
+          const lines = code.split("\n");
+          let frame = () => {
+            canvas.width = canvas.width; // clears screen
+            for (let i in lines) {
+              const fn = new Function("t", "i", "x", "y", `return ${lines[i]}`);
+              const t = performance.now() / 1000;
+              plot(fn, t, canvas, [dim, dim], colors[i % colors.length], gap);
+            }
+            raf = requestAnimationFrame(frame);
+          };
+          raf && cancelAnimationFrame(raf);
+          frame();
+        }
+      )();
+
+      // plot function
+      function plot(fn, t, canvas, [dimx, dimy], color = "black", gap = 1) {
+        // these 3 functions are very good to know..
+        const lerp = (v, min, max) => v * (max - min) + min;
+        const invLerp = (v, min, max) => (v - min) / (max - min);
+        const remap = (v, vmin, vmax, omin, omax) =>
+          lerp(invLerp(v, vmin, vmax), omin, omax);
+        // prepare draw context
+        const ctx = canvas.getContext("2d");
+        // function ranges
+        const blocks = dimx * dimy;
+        // draw ranges
+        const [px0, px1] = [0, canvas.width];
+        const [py0, py1] = [canvas.height, 0];
+        const bw = remap(1, 0, dimx, px0, px1);
+        const bh = remap(1, 0, dimy, py1, py0);
+        // actual draw logic
+        for (let block = 0; block < blocks; block++) {
+          const xi = block % dimx;
+          const yi = Math.floor(block / dimx);
+          const x = remap(xi, 0, dimx, px0, px1);
+          const y = remap(yi, 0, dimy, py0, py1);
+          ctx.fillStyle = color;
+          // ctx.globalAlpha = fn(block / blocks) ?? 0;
+          ctx.globalAlpha = Math.abs(
+            fn(t, block / blocks, xi / dimx, yi / dimy) ?? 0
+          );
+          ctx.fillRect(x, y - bh, bw - gap, bh - gap);
+        }
+      }
+      // render code
+      document.querySelector("#pre").textContent =
+        document.querySelector("html").outerHTML;
+    </script>
+  </body>
+</html>

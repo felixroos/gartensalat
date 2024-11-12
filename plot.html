@@ -44,7 +44,7 @@
   </head>
   <body>
     <h2>🌱 plotting functions</h2>
-    <p>how to plot a function with the bare minimum?</p>
+    <p>how to plot functions with the bare minimum?</p>
     <canvas id="plot1"></canvas>
     <textarea id="input" type="text" rows="4"></textarea>
     <details>
@@ -53,7 +53,7 @@
     </details>
     <br />
     <a href="/">back to garten.salat</a>
-    <script id="code">
+    <script>
       const canvas = document.querySelector("#plot1");
       // make sure canvas is sharp
       canvas.style.width = canvas.width;
@@ -114,10 +114,7 @@
         ctx.stroke();
       }
       // render code
-      const code = document
-        .querySelector("html")
-        .outerHTML.split("\n")
-        .join("\n");
+      const code = document.querySelector("html").outerHTML;
       document.querySelector("#pre").textContent = code;
     </script>
   </body>
