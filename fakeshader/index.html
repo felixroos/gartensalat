@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>🌱 fakeshader</title>
+    <style>
+      body {
+        margin: 0;
+        background: black;
+      }
+      canvas {
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas" width="500" height="500"></canvas>
+    <script>
+      class FakeShader {
+        constructor(canvas) {
+          this.o = { r: 0, g: 0, b: 0 };
+          this.i = { t: 0, x: 0, y: 0 };
+          this.g = { dim: 64, sharp: true }; // global object
+          this.ctx = canvas.getContext("2d");
+          const rect = canvas.getBoundingClientRect();
+          canvas.width = rect.width; // * window.devicePixelRatio;
+          canvas.height = rect.height; // * window.devicePixelRatio;
+        }
+        update(code) {
+          this.o.r = this.o.g = this.o.b = 0;
+          const main = new Function("g", `${code}\n return main;`)(this.g);
+          if (this.lastDim !== this.g.dim) {
+            this.imageData = this.ctx.createImageData(this.g.dim, this.g.dim);
+            this.lastDim = this.g.dim;
+          }
+          let frame = () => {
+            const { i, g, imageData, ctx } = this;
+            this.i.t = performance.now() / 1000;
+            this.draw(main);
+            this.raf = requestAnimationFrame(frame);
+          };
+          this.raf && cancelAnimationFrame(this.raf);
+          frame();
+        }
+        draw(main) {
+          const { imageData, ctx, i, o, g } = this;
+          const dim = g.dim;
+          const blocks = dim * dim; // total blocks
+          for (let block = 0; block < blocks; block++) {
+            // calculate normalized coordinates
+            i.x = ((block % dim) + 0.5) / dim;
+            i.y = 1 - (Math.floor(block / dim) + 0.5) / dim;
+            main(i, o); // changes contents of o
+            let blockStart = block * 4; // 4 per block = rgba
+            imageData.data[blockStart] = o.r * 255;
+            imageData.data[blockStart + 1] = o.g * 255;
+            imageData.data[blockStart + 2] = o.b * 255;
+            imageData.data[blockStart + 3] = 255;
+          }
+          ctx.putImageData(imageData, 0, 0);
+          ctx.imageSmoothingEnabled = !g.sharp; // this needs to be here for some reason
+          const { width, height } = ctx.canvas;
+          ctx.drawImage(ctx.canvas, 0, 0, dim, dim, 0, 0, width, height); // scale up
+        }
+      }
+      console.log(
+        `welcome to fakeshader.
+available functions: 
+- $: run full fakeshader code, expected to define a main function
+- $$: run expression using x,y,t. expected to set any of o.r, o.g, o.b
+examples: 
+- $\`let main = ({x,y,t},o)=>o.r=o.b=(y**x*(120+t))%1\`
+- $$\`o.r=o.g=(y**x*(120+t))%1\`
+more info: https://garten.salat.dev/fake-shaders2.html`
+      );
+      const canvas = document.querySelector("#canvas");
+      const shader = new FakeShader(canvas);
+      // live coding / sharing logic
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        shader.update(urlCode);
+      });
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        console.log("loaded code from url:");
+        urlCode = atob(urlCode);
+        console.log(`$\`${urlCode}\``);
+      }
+      const defaultCode = "let main=({x,y,t},o)=>o.g=o.b=(y**x*(120+t))%1";
+      const initialCode = urlCode || defaultCode;
+      shader.update(initialCode);
+      window.$ = (code) => {
+        window.location.hash = "#" + btoa(code + "");
+      };
+      window.$$ = (code) => $(`let main = ({x,y,t},o) => ${code}`);
+    </script>
+  </body>
+</html>
