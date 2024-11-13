@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>🌱 faking shaders part 2</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.4em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 0;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre,
+      textarea {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        border: 1px solid white;
+        outline: none;
+        overflow: auto;
+        background-color: transparent;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      ul {
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 faking shaders part 2</h2>
+    <p>
+      Let's continue with <a href="fake-shaders.html">faking shaders</a>.. I
+      felt the single line approach was a bit painful, so let's introduce a main
+      function. We can now write regular JavaScript and the main function is
+      what runs for every pixel.
+    </p>
+    <canvas id="canvas" width="500" height="500"></canvas>
+    <textarea id="input" type="text" rows="16" spellcheck="false"></textarea>
+    <span id="hint"
+      ><small>💡 hit ctrl+enter to update the code.</small>
+      <small
+        style="cursor: pointer; opacity: 50%"
+        onclick="document.querySelector('#hint').remove()"
+        >hide</small
+      ></span
+    >
+    <ul>
+      <li>
+        <a
+          href="#bGV0IHJvdFggPSAoeCx5LGEpID0+IAooeC0uNSkqTWF0aC5jb3MoMipNYXRoLlBJKmEpLQooeS0uNSkqTWF0aC5zaW4oMipNYXRoLlBJKmEpKzAuNQpsZXQgcm90WSA9ICh4LHksYSkgPT4gCih4LS41KSpNYXRoLnNpbigyKk1hdGguUEkqYSkrCih5LS41KSpNYXRoLmNvcygyKk1hdGguUEkqYSkrMC41CgpmdW5jdGlvbiBtYWluKHt0LHgseX0sbykgeyAgCmxldCBhPXQvNAogIGxldCB4ciA9IHJvdFgoeCx5LGEpCiAgbGV0IHlyID0gcm90WSh4LHksYSkKICBvLnI9eHIKICBvLmc9eXIKICBvLmI9eAp9"
+          >rotations</a
+        >
+      </li>
+      <li>
+        <a
+          href="#ZnVuY3Rpb24gc21vb3Roc3RlcChhLCBiLCB4KSB7CiAgbGV0IHQgPSBNYXRoLm1heCgwLCBNYXRoLm1pbigxLCAoeCAtIGEpIC8gKGIgLSBhKSkpOwogIHJldHVybiB0ICogdCAqICgzIC0gMiAqIHQpOwp9CmxldCBsZW5ndGggPSAoeCwgeSkgPT4gTWF0aC5zcXJ0KCh4IC0gMC41KSAqKiAyICsgKHkgLSAwLjUpICoqIDIpOwpsZXQgcyA9ICh2LCBhID0gMC4xLCB4KSA9PiBzbW9vdGhzdGVwKHYgLSBhIC8gMiwgdiArIGEgLyAyLCB4KTsKbGV0IGxlcnAgPSAoeCwgYSwgYikgPT4gKGIgLSBhKSAqIHggKyBhOwpsZXQgc2luciA9ICh4LCBhLCBiKSA9PiBsZXJwKChNYXRoLnNpbih4KSArIDEpIC8gMiwgYSwgYik7CgpsZXQgbWFpbiA9IChpLCBvKSA9PiB7CiAgY29uc3QgeyB0LCB4LCB5IH0gPSBpOwogIG8uciA9IHMoc2lucih0ICogNCwgMC4xLCAwLjQpLCAtMC4xLCBsZW5ndGgoeCwgeSkpOwogIG8uZyA9IG8ucjsKICBvLmIgPSBvLnI7Cn07Cg=="
+          >circle</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IG9zYyA9ICh4LGYpID0+IChNYXRoLnNpbigyKk1hdGguUEkqKHgrZikpKzEpLzIKZnVuY3Rpb24gbWFpbih7dCx4LHl9LG8pIHsgIAogIGxldCBmID0gLjUKICBsZXQgdyA9IC45CiAgbGV0IGQgPSAuMjUKICBvLnI9b3NjKHgreS93LHQqZikKICBvLmc9b3NjKCgoMS14KSt5L3crZCkqMSx0KmYpCiAgby5iPW9zYygoeCsoMS15KS93K2QqMikqMSx0KmYpCn0="
+        >
+          mesh
+        </a>
+      </li>
+      <li>
+        <a
+          href="#ZnVuY3Rpb24gc21vb3Roc3RlcChhLCBiLCB4KSB7CiAgbGV0IHQgPSBNYXRoLm1heCgwLCBNYXRoLm1pbigxLCAoeCAtIGEpIC8gKGIgLSBhKSkpOwogIHJldHVybiB0ICogdCAqICgzIC0gMiAqIHQpOwp9CmxldCBsZW5ndGggPSAoeCx5KSA9PiBNYXRoLnNxcnQoeCoqMit5KioyKQovLyBwb3J0ZWQgZnJvbSBoeWRyYQpmdW5jdGlvbiBzaGFwZSh4LHksIHNpZGVzLCByYWRpdXMsIHNtb290aGluZykgewogIHggPSB4ICogMi4gLSAxOwogIHkgPSB5ICogMi4gLSAxOwogIC8vIEFuZ2xlIGFuZCByYWRpdXMgZnJvbSB0aGUgY3VycmVudCBwaXhlbAogIGxldCBhID0gTWF0aC5hdGFuMih4LCB5KSArIDMuMTQxNjsKICBsZXQgciA9ICgyLiAqIDMuMTQxNikgLyBzaWRlczsKICBsZXQgZCA9IE1hdGguY29zKE1hdGguZmxvb3IoLjUgKyBhIC8gcikgKiByIC0gYSkgKiBsZW5ndGgoeCx5KTsKICBsZXQgYyA9IDEtc21vb3Roc3RlcChyYWRpdXMsIHJhZGl1cyArIHNtb290aGluZyArIDAuMDAwMDAwMSwgZCkKICByZXR1cm4gYzsKfQpsZXQgbnNpbiA9ICh4KSA9PiAoTWF0aC5zaW4oeCkrMSkvMgpmdW5jdGlvbiBtYWluKHt0LHgseX0sbykgeyAKICBjb25zdCByID0gIG5zaW4odCoyKSsuNgogIG8ucj1zaGFwZSh4LHksNixyLzIsLjEpCiAgby5nPXNoYXBlKHgseSw1LHIvMywuMSkKICBvLmI9c2hhcGUoeCx5LDQsci81LC4xKQp9"
+          >hydra shape</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IG9zYyA9ICh4LGYpID0+IChNYXRoLnNpbigyKk1hdGguUEkqKHgrZikpKzEpLzIKZnVuY3Rpb24gbWFpbih7dCx4LHl9LG8pIHsgIAogIGxldCBmID0gLjMKICBsZXQgdyA9IC4yNQogIGxldCBkID0gLjIKICBvLnI9b3NjKHgvdyx0KmYpCiAgby5nPW9zYygoeC93K2QpKjEsdCpmKQogIG8uYj1vc2MoKHgvdytkKjIpKjEsdCpmKQp9"
+          >oscillator</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IG1haW4gPSAoe3QseCx5fSxvKSA9PiBvLmcgPSBvLmIgPSB4KnkqOCUxCg=="
+          >faking shaders part 1 example 1</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IG1haW49KHt0LHgseX0sbyk9PiB7Cm8ucj0oTWF0aC5jb3MoeCp5KjQzK3QqNCkrMSkvMgpvLmc9KE1hdGguc2luKHgqeSozMit0KjQpKzEpLzIKby5iPShNYXRoLnNpbih0KSsxKS84Cn0="
+          >faking shaders part 1 example 2</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IG1haW49KHt0LHgseX0sbyk9PiAKby5nPW8uYj0oeSoqeCooMTIwK3QpKSUx"
+          >faking shaders part 1 example 3</a
+        >
+      </li>
+    </ul>
+
+    <p>The main function takes 2 arguments:</p>
+    <ol>
+      <li>i: input object, containing t, x, y</li>
+      <li>o: output object, containing r, g, b</li>
+    </ol>
+    <p>
+      This format seems more flexible, and it allows to implement typical shader
+      functions. It's kind of comparable to GLSL, although we don't have vector
+      primitives and a standard library for common operations..
+    </p>
+    <details>
+      <summary>show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script>
+      class FakeShader {
+        constructor(canvas) {
+          // to avoid re-allocations we reuse these objects
+          this.o = { r: 0, g: 0, b: 0 };
+          this.i = { t: 0, x: 0, y: 0 };
+          this.g = { dim: 64, sharp: true }; // global object
+          this.ctx = canvas.getContext("2d");
+        }
+        update(code) {
+          this.o.r = this.o.g = this.o.b = 0;
+          const main = new Function("g", `${code}\n return main;`)(this.g);
+          if (this.lastDim !== this.g.dim) {
+            // dim has been changed
+            console.log(`init ${this.g.dim}x${this.g.dim} image`);
+            this.imageData = this.ctx.createImageData(this.g.dim, this.g.dim);
+            this.lastDim = this.g.dim;
+          }
+          let frame = () => {
+            const { i, g, imageData, ctx } = this;
+            this.i.t = performance.now() / 1000;
+            this.draw(main);
+            this.raf = requestAnimationFrame(frame);
+          };
+          this.raf && cancelAnimationFrame(this.raf);
+          frame();
+        }
+        draw(main) {
+          const { imageData, ctx, i, o, g } = this;
+          const dim = g.dim;
+          const blocks = dim * dim; // total blocks
+          for (let block = 0; block < blocks; block++) {
+            // calculate normalized coordinates
+            i.x = ((block % dim) + 0.5) / dim;
+            i.y = 1 - (Math.floor(block / dim) + 0.5) / dim;
+            main(i, o); // changes contents of o
+            let blockStart = block * 4; // 4 per block = rgba
+            // actual draw calls
+            imageData.data[blockStart] = o.r * 255;
+            imageData.data[blockStart + 1] = o.g * 255;
+            imageData.data[blockStart + 2] = o.b * 255;
+            imageData.data[blockStart + 3] = 255;
+          }
+          ctx.putImageData(imageData, 0, 0);
+          ctx.imageSmoothingEnabled = !g.sharp; // this needs to be here for some reason
+          const { width, height } = ctx.canvas;
+          // scale up image
+          ctx.drawImage(ctx.canvas, 0, 0, dim, dim, 0, 0, width, height);
+        }
+      }
+      const canvas = document.querySelector("#canvas");
+      const input = document.querySelector("#input");
+      const shader = new FakeShader(canvas);
+
+      // live coding / sharing logic
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        shader.update(input.value);
+      });
+      // update on ctrl+enter
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          window.location.hash = "#" + btoa(input.value);
+          // hash update already updates the shader...
+        }
+      });
+
+      // read base64 code from url
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!");
+      }
+      const fallbackHash =
+        "bGV0IG9zYyA9ICh4LGYpID0+IChNYXRoLnNpbigyKk1hdGguUEkqKHgrZikpKzEpLzIKZnVuY3Rpb24gbWFpbih7dCx4LHl9LG8pIHsgIAogIGxldCBmID0gLjMKICBsZXQgdyA9IC4yNQogIGxldCBkID0gLjIKICBvLnI9b3NjKHgvdyx0KmYpCiAgby5nPW9zYygoeC93K2QpKjEsdCpmKQogIG8uYj1vc2MoKHgvdytkKjIpKjEsdCpmKQp9";
+
+      const initialCode = urlCode || atob(fallbackHash);
+      shader.update(initialCode);
+      input.value = initialCode;
+
+      // render code
+      document.querySelector("#pre").textContent =
+        document.querySelector("html").outerHTML;
+    </script>
+  </body>
+</html>
