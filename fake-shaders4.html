@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>🌱 faking shaders IV: bitfields</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.4em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 0;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+
+      pre,
+      textarea {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        border: 1px solid white;
+        outline: none;
+        overflow: auto;
+        background-color: transparent;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      ul {
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 faking shaders IV: bitfields</h2>
+    <p>
+      This page collects bitfield formulas, originally discovered by
+      <a href="https://aem1k.com/">aem1k</a> (who also created tixyland). I
+      don't want to link to the shitsite this was originally posted on..
+    </p>
+    <div id="examples" style="width: 512px"></div>
+    <canvas id="canvas" width="512" height="512"></canvas>
+    <textarea id="input" type="text" rows="16" spellcheck="false"></textarea>
+    <span id="hint"
+      ><small>💡 hit ctrl+enter to update the code.</small>
+      <small
+        style="cursor: pointer; opacity: 50%"
+        onclick="document.querySelector('#hint').remove()"
+        >hide</small
+      ></span
+    >
+    <details>
+      <summary>show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script>
+      class FakeShader {
+        constructor(canvas, scale = 1) {
+          this.o = { r: 0, g: 0, b: 0 };
+          this.i = { t: 0, i: 0, x: 0, y: 0, u: 0, v: 0 };
+          this.g = { dim: 64, sharp: true, animate: true };
+          this.ctx = canvas.getContext("2d");
+          const rect = canvas.getBoundingClientRect();
+          canvas.width = rect.width * scale; // * window.devicePixelRatio;
+          canvas.height = rect.height * scale; // * window.devicePixelRatio;
+        }
+        update(code, lib = "") {
+          const main = new Function(
+            "g",
+            `${lib};const {sin,cos,tan,random,PI,sqrt,hypot,atan,atan2} = Math; ${code}; return main;`
+          )(this.g);
+          if (this.lastDim !== this.g.dim) {
+            this.imageData = this.ctx.createImageData(this.g.dim, this.g.dim);
+            this.lastDim = this.g.dim;
+          }
+          let frame = () => {
+            const { i, g, imageData, ctx } = this;
+            this.i.t = performance.now() / 1000;
+            this.draw(main);
+            this.g.animate && (this.raf = requestAnimationFrame(frame));
+          };
+          this.raf && cancelAnimationFrame(this.raf);
+          frame();
+        }
+        draw(main) {
+          const { imageData, ctx, i, o, g } = this;
+          const dim = g.dim;
+          const blocks = dim * dim; // total blocks
+          for (let block = 0; block < blocks; block++) {
+            // calculate normalized coordinates
+            i.px = block % dim;
+            i.x = (i.px + 0.5) / dim;
+            i.py = dim - Math.floor(block / dim) - 1;
+            i.y = (i.py + 0.5) / dim;
+            i.i = block;
+            o.r = o.g = o.b = 0;
+            main(i, o); // changes contents of o
+            let blockStart = block * 4; // 4 per block = rgba
+            imageData.data[blockStart] = o.r * 255;
+            imageData.data[blockStart + 1] = o.g * 255;
+            imageData.data[blockStart + 2] = o.b * 255;
+            imageData.data[blockStart + 3] = 255;
+          }
+          ctx.putImageData(imageData, 0, 0);
+          ctx.imageSmoothingEnabled = !g.sharp; // this needs to be here for some reason
+          const { width, height } = ctx.canvas;
+          ctx.drawImage(ctx.canvas, 0, 0, dim, dim, 0, 0, width, height); // scale up
+        }
+      }
+      let libs = `let bitfield = (fn) => {
+  return ({t,i,px,py},o) => {
+    x = px;
+    y = g.dim-py-1;
+    o.r=o.g=o.b=1-fn(t,i,x,y)
+  }
+}
+`;
+      const canvas = document.querySelector("#canvas");
+      const input = document.querySelector("#input");
+      const shader = new FakeShader(canvas);
+      const updateHash = (code) => {
+        window.location.hash = "#" + btoa(code);
+      };
+      // live coding / sharing logic
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        shader.update(input.value, libs);
+      });
+      // update on ctrl+enter
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          updateHash(input.value);
+        }
+      });
+
+      // read base64 code from url
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!");
+      }
+      const fallbackHash =
+        "LyogYWxpZW5hcnQgKi8KZy5kaW09MjU2Cm1haW4gPSBiaXRmaWVsZCgodCxpLHgseSkgPT4gKAogICh4IF4geSkgJSA5Cikp";
+
+      const initialCode = urlCode || atob(fallbackHash);
+      shader.update(initialCode, libs);
+      input.value = initialCode;
+
+      // examples
+      let addExample = (code) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 64;
+        canvas.height = 64;
+        canvas.style = "cursor: pointer;width:64px;height:64px";
+
+        document.querySelector("#examples").appendChild(canvas);
+        const thumb = new FakeShader(canvas, 4);
+        thumb.update(`g.animate=0;${code}`, libs);
+
+        canvas.addEventListener("click", () => {
+          shader.update(code, libs);
+          updateHash(code);
+        });
+        canvas.addEventListener("mouseenter", () => {
+          thumb.update(`g.animate=1;${code}`, libs);
+        });
+        canvas.addEventListener("mouseleave", () => {
+          thumb.update(`g.animate=0;${code}`, libs);
+        });
+      };
+
+      let examples = {
+        alienart: "(x ^ y) % 9",
+        more1: "(x ^ y) % 5",
+        more2: "(x ^ y) % 17",
+        more3: "(x ^ y) % 33",
+        more3: "(x ^ y) % 33",
+        sierpinski1: "(x | y) % 7",
+        sierpinski2: "(x | y) % 17",
+        sierpinski3: "(x | y) % 29",
+        circular1: "(x * y) & 64",
+        circular2: "(x * y) & 24",
+        circular3: "(x * y) & 47",
+        steps1: "(x ^ y) < 77",
+        steps2: "(x ^ y) < 214",
+        steps3: "(x ^ y) < 120",
+        beams1: "(x * 2) % y",
+        beams2: "(x * 64) % y",
+        beams3: "(x * 31) % y",
+        checker1: "(x ^ y) & 32",
+        checker2: "(x ^ y) & 72",
+        checker3: "(x ^ y) & 23",
+        noise1: "((x * y) ** 4) % 7",
+        noise2: "((x * y) ** 5) % 99",
+        noise3: "((x * y) ** 9) % 3",
+        rotate1: "(x % y) % 4",
+        rotate2: "(y % x) % 20",
+        rotate3: "40 % (x % y)",
+        minimal1: "x & y",
+        minimal2: "x % y",
+        minimal3: "x & 9",
+        combinations1: "(x & y) & (x ^ y) % 19",
+        combinations2: "((x ^ y) & 32) * (x ^ y) % 9",
+        combinations3: "(x * 64) % y * ((x ^ y) < 77)",
+        bitfolly: `(x&y^t*20)%100/128`,
+      };
+      Object.entries(examples).forEach(([label, code]) =>
+        addExample(`/* ${label} */
+g.dim=256
+main = bitfield((t,i,x,y) => (
+  ${code}
+))`)
+      );
+
+      // render code
+      document.querySelector("#pre").textContent =
+        document.querySelector("html").outerHTML;
+    </script>
+  </body>
+</html>
