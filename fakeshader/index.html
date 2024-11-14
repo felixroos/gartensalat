@@ -20,7 +20,7 @@
       class FakeShader {
         constructor(canvas) {
           this.o = { r: 0, g: 0, b: 0 };
-          this.i = { t: 0, x: 0, y: 0 };
+          this.i = { t: 0, x: 0, y: 0, px: 0, py: 0, i: 0 };
           this.g = { dim: 64, sharp: true }; // global object
           this.ctx = canvas.getContext("2d");
           const rect = canvas.getBoundingClientRect();
@@ -28,7 +28,6 @@
           canvas.height = rect.height; // * window.devicePixelRatio;
         }
         update(code) {
-          this.o.r = this.o.g = this.o.b = 0;
           const main = new Function("g", `${code}\n return main;`)(this.g);
           if (this.lastDim !== this.g.dim) {
             this.imageData = this.ctx.createImageData(this.g.dim, this.g.dim);
@@ -49,8 +48,12 @@
           const blocks = dim * dim; // total blocks
           for (let block = 0; block < blocks; block++) {
             // calculate normalized coordinates
-            i.x = ((block % dim) + 0.5) / dim;
-            i.y = 1 - (Math.floor(block / dim) + 0.5) / dim;
+            i.px = block % dim;
+            i.x = (i.px + 0.5) / dim;
+            i.py = dim - Math.floor(block / dim) - 1;
+            i.y = (i.py + 0.5) / dim;
+            i.i = block;
+            o.r = o.g = o.b = 0;
             main(i, o); // changes contents of o
             let blockStart = block * 4; // 4 per block = rgba
             imageData.data[blockStart] = o.r * 255;
@@ -70,7 +73,7 @@ available functions:
 - $: run full fakeshader code, expected to define a main function
 - $$: run expression using x,y,t. expected to set any of o.r, o.g, o.b
 examples: 
-- $\`let main = ({x,y,t},o)=>o.r=o.b=(y**x*(120+t))%1\`
+- $\`let main = ({t,i,x,y,px,py},o)=>o.r=o.b=(y**x*(120+t))%1\`
 - $$\`o.r=o.g=(y**x*(120+t))%1\`
 more info: https://garten.salat.dev/fake-shaders2.html`
       );
@@ -87,13 +90,24 @@ more info: https://garten.salat.dev/fake-shaders2.html`
         urlCode = atob(urlCode);
         console.log(`$\`${urlCode}\``);
       }
-      const defaultCode = "let main=({x,y,t},o)=>o.g=o.b=(y**x*(120+t))%1";
+      const defaultCode = "let main=({t,i,x,y},o)=>o.g=o.b=(y**x*(120+t))%1";
       const initialCode = urlCode || defaultCode;
       shader.update(initialCode);
       window.$ = (code) => {
         window.location.hash = "#" + btoa(code + "");
       };
-      window.$$ = (code) => $(`let main = ({x,y,t},o) => ${code}`);
+      window.$$ = (code) => $(`let main = ({t,i,x,y,px,py},o) => ${code}`);
+      window.$$$ = (code) =>
+        $(`let main = ({t,i,x,y,px,py},o) => o.r=o.g=o.b=${code}`);
+      window.tixyland = (code) =>
+        $(`g.dim=16;let main = ({t,i,x,y,px,py},o) => {
+        x=px; y=15-py;
+        let c = ${code};
+        if(c>=0) {
+          o.r=o.g=o.b=c;
+        } else {
+          o.r=c*-1;
+        }}`);
     </script>
   </body>
 </html>
