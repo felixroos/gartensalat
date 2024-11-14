@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>🌱 faking shaders III</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.4em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 0;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+
+      pre,
+      textarea {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        border: 1px solid white;
+        outline: none;
+        overflow: auto;
+        background-color: transparent;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      ul {
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 faking shaders III</h2>
+    <p>
+      My little <a href="fake-shaders2.html">fake shader</a> is partly inspired
+      by <a href="https://tixy.land/" target="_blank">tixyland</a>, which is
+      also low-res shader toy. I couldn't resist to port the tixyland examples
+      to my format:
+    </p>
+    <div id="examples" style="width: 512px"></div>
+    <canvas id="canvas" width="512" height="512"></canvas>
+    <textarea id="input" type="text" rows="16" spellcheck="false"></textarea>
+    <span id="hint"
+      ><small>💡 hit ctrl+enter to update the code.</small>
+      <small
+        style="cursor: pointer; opacity: 50%"
+        onclick="document.querySelector('#hint').remove()"
+        >hide</small
+      ></span
+    >
+    <p>While porting these, I've added some more improvements:</p>
+    <ul>
+      <li>no need to type Math. anymore</li>
+      <li>
+        added px,py,i to get actual pixel indices (not normalized). this is
+        handy for bit shifting
+      </li>
+    </ul>
+    <details>
+      <summary>show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script>
+      class FakeShader {
+        constructor(canvas) {
+          this.o = { r: 0, g: 0, b: 0 };
+          this.i = { t: 0, i: 0, x: 0, y: 0, u: 0, v: 0 };
+          this.g = { dim: 64, sharp: true, animate: true };
+          this.ctx = canvas.getContext("2d");
+          const rect = canvas.getBoundingClientRect();
+          canvas.width = rect.width; // * window.devicePixelRatio;
+          canvas.height = rect.height; // * window.devicePixelRatio;
+        }
+        update(code, lib = "") {
+          const main = new Function(
+            "g",
+            `${lib};const {sin,cos,tan,random,PI,sqrt,hypot,atan,atan2} = Math; ${code}; return main;`
+          )(this.g);
+          if (this.lastDim !== this.g.dim) {
+            this.imageData = this.ctx.createImageData(this.g.dim, this.g.dim);
+            this.lastDim = this.g.dim;
+          }
+          let frame = () => {
+            const { i, g, imageData, ctx } = this;
+            this.i.t = performance.now() / 1000;
+            this.draw(main);
+            this.g.animate && (this.raf = requestAnimationFrame(frame));
+          };
+          this.raf && cancelAnimationFrame(this.raf);
+          frame();
+        }
+        draw(main) {
+          const { imageData, ctx, i, o, g } = this;
+          const dim = g.dim;
+          const blocks = dim * dim; // total blocks
+          for (let block = 0; block < blocks; block++) {
+            // calculate normalized coordinates
+            i.px = block % dim;
+            i.x = (i.px + 0.5) / dim;
+            i.py = dim - Math.floor(block / dim) - 1;
+            i.y = (i.py + 0.5) / dim;
+            i.i = block;
+            o.r = o.g = o.b = 0;
+            main(i, o); // changes contents of o
+            let blockStart = block * 4; // 4 per block = rgba
+            imageData.data[blockStart] = o.r * 255;
+            imageData.data[blockStart + 1] = o.g * 255;
+            imageData.data[blockStart + 2] = o.b * 255;
+            imageData.data[blockStart + 3] = 255;
+          }
+          ctx.putImageData(imageData, 0, 0);
+          ctx.imageSmoothingEnabled = !g.sharp; // this needs to be here for some reason
+          const { width, height } = ctx.canvas;
+          ctx.drawImage(ctx.canvas, 0, 0, dim, dim, 0, 0, width, height); // scale up
+        }
+      }
+      let libtixy = `let tixy = (fn) => {
+  g.dim = 16;
+  return ({ t, i, x, y, px, py }, o) => {
+    x = px;
+    y = 15 - py;
+    let c = fn(t, i, x, y);
+    if (c >= 0) {
+      o.r = o.g = o.b = c;
+    } else {
+      o.r = c * -1;
+    }
+  };
+};`;
+      const canvas = document.querySelector("#canvas");
+      const input = document.querySelector("#input");
+      const shader = new FakeShader(canvas);
+      const updateHash = (code) => {
+        window.location.hash = "#" + btoa(code);
+      };
+      // live coding / sharing logic
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        shader.update(input.value, libtixy);
+      });
+      // update on ctrl+enter
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          updateHash(input.value);
+        }
+      });
+
+      // read base64 code from url
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!");
+      }
+      const fallbackHash =
+        "Lyogc2tpcCBgTWF0aC5gIHRvIHVzZSBtZXRob2RzIAphbmQgcHJvcHMgbGlrZSBgc2luYCBvciBgUElgICovCm1haW4gPSB0aXh5KCh0LGkseCx5KSA9PiAoCiAgc2luKHQtc3FydCgoeC03LjUpKioyKyh5LTYpKioyKSkKKSk=";
+
+      const initialCode = urlCode || atob(fallbackHash);
+      shader.update(initialCode, libtixy);
+      input.value = initialCode;
+
+      // examples
+      let addExample = (code) => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 64;
+        canvas.height = 64;
+        canvas.style = "cursor: pointer";
+
+        document.querySelector("#examples").appendChild(canvas);
+        const thumb = new FakeShader(canvas);
+        thumb.update(`g.animate=0;${code}`, libtixy);
+
+        canvas.addEventListener("click", () => {
+          shader.update(code, libtixy);
+          updateHash(code);
+        });
+        canvas.addEventListener("mouseenter", () => {
+          thumb.update(`g.animate=1;${code}`, libtixy);
+        });
+        canvas.addEventListener("mouseleave", () => {
+          thumb.update(`g.animate=0;${code}`, libtixy);
+        });
+      };
+
+      let tixyExamples = {
+        "for every dot return 0 or 1 \nto change the visibility":
+          "Math.random() < 0.1",
+        "use a float between 0 and 1\n to define the size": "Math.random()",
+        "parameter `t` is \nthe time in seconds": "Math.sin(t)",
+        "param `i` is the index \nof the dot (0..255)": "i / 256",
+        "`x` is the column index\n from 0 to 15": "x / 16",
+        "`y` is the row\n also from 0 to 15": "y / 16",
+        "positive numbers are white,\nnegatives are red": "y - 7.5",
+        "use the time\nto animate values": "y - t%16",
+        "multiply the time\nto change the speed": "y - t%4*4",
+        "create patterns using \ndifferent color": "[1, 0, -1][i%3]",
+        "skip `Math.` to use methods \nand props like `sin` or `PI`":
+          "sin(t-sqrt((x-7.5)**2+(y-6)**2))",
+        "more examples ...": "sin(y/8 + t)",
+        "simple triangle": "y - x",
+        "quarter triangle": "(y > x) && (14-x < y)",
+        pattern: "i%4 - y%4",
+        grid: "x%4 && y%4",
+        square: "x>3 & y>3 & x<12 & y<12",
+        "animated square": "t=t%8,-(x>t & y>t & x<15-t & y<15-t)",
+        "mondrian squares": "(y-6) * (x-6)",
+        "moving cross": "t=t%8,(y-4*t|0) * (x-2-t|0)",
+        sierpinski: "4 * t & i & x & y",
+        "binary clock": "(t*10) & (1<<x) && y==8",
+        "random noise": "random() * 2 - 1",
+        "static smooth noise": "sin(i ** 2)",
+        "animated smooth noise": "cos(t + i + x * y)",
+        waves: "sin(x/2) - sin(x-t) - y+6",
+        "bloop bloop bloop\nby @v21": "(x-8)*(y-8) - sin(t)*64",
+        "fireworks\nby @p_malin and @aemkei": "-.4/(hypot(x-t%10,y-t%8)-t%2*9)",
+        "ripples\nby @thespite": "Math.sin(t-Math.sqrt(x*x+y*y))",
+        "scrolling TIXY font\nby @atesgoral":
+          "[5463,2194,2386][y+t*9&7]&1<<x-1",
+        "3d checker board\nby @p_malin": "(((x-8)/y+t*5)&1^1/y*8&1)*y/5",
+        "sticky blood\nby @joeytwiddle":
+          "t=t%10,y-t*3+9+3*cos(x*3-t)-5*sin(x*7)",
+        "3d starfield\nby @p_malin": "d=y*y%5.9+1,!((x+t*50/d)&15)/d",
+        "dialogue with an alien\nby @chiptune": "1/32*tan(t/64*x*tan(i-x))",
+        "space invader\nby @keithclarkcouk + @zozuar":
+          "'p}¶¼<¼¶}p'.charCodeAt(x)&2**y",
+        "hungry pac man\nby @p_malin and @aemkei":
+          "hypot(x-=t%4*5,y-=8)<6&&x<y|y<-x",
+        "spectrum analyser\nby @joeytwiddle": "x&y<9&y>4+sin(8*t+x*x)+x/4",
+        diagonals: "y == x || -(15-x == y)",
+        frame: "x==0 | x==15 | y==0 | y==15",
+        drop: "8*t%13 - hypot(x-7.5, y-7.5)",
+        rotation: "sin(2*atan((y-7.5)/(x-7.5))+5*t)",
+        wipe: "(x-y) - sin(t) * 16",
+        "soft wipe": "(x-y)/24 - sin(t)",
+        disco: "sin(t*5) * tan(t*7)",
+        "input is limited \nto 32 characters!":
+          "(x-5)**2 + (y-5)**2 - 99*sin(t)",
+        // "click here to \ncreate your own": "'HAVE FUN!'",
+      };
+      let examples = {
+        aliasingwaves: `g.dim=64;
+function main({t,x,y,px,py},o) {
+  t+=3;
+  o.g=(px**y*22)%(py*Math.sin(t/8)+.3)/8
+}`,
+        circle: `g.dim=64;
+function smoothstep(a, b, x) {
+  let t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+let length = (x, y) => Math.sqrt((x - 0.5) ** 2 + (y - 0.5) ** 2);
+let s = (v, a = 0.1, x) => smoothstep(v - a / 2, v + a / 2, x);
+let lerp = (x, a, b) => (b - a) * x + a;
+let sinr = (x, a, b) => lerp((Math.sin(x) + 1) / 2, a, b);
+let main = (i, o) => {
+  const { t, x, y } = i;
+  o.r = s(sinr(t * 4, 0.1, 0.4), -0.1, length(x, y));
+  o.g = o.r;
+  o.b = o.r;
+};
+            `,
+        mesh: `g.dim=64;
+let osc = (x,f) => (Math.sin(2*Math.PI*(x+f))+1)/2
+function main({t,x,y},o) {
+  let f = .5
+  let w = .9
+  let d = .25
+  o.r=osc(x+y/w,t*f)
+  o.g=osc(((1-x)+y/w+d)*1,t*f)
+  o.b=osc((x+(1-y)/w+d*2)*1,t*f)
+}`,
+        hydra_shape: `function smoothstep(a, b, x) {
+  let t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+let length = (x,y) => Math.sqrt(x**2+y**2)
+// ported from hydra
+function shape(x,y, sides, radius, smoothing) {
+  x = x * 2. - 1;
+  y = y * 2. - 1;
+  // Angle and radius from the current pixel
+  let a = Math.atan2(x, y) + 3.1416;
+  let r = (2. * 3.1416) / sides;
+  let d = Math.cos(Math.floor(.5 + a / r) * r - a) * length(x,y);
+  let c = 1-smoothstep(radius, radius + smoothing + 0.0000001, d)
+  return c;
+}
+let nsin = (x) => (Math.sin(x)+1)/2
+function main({t,x,y},o) {
+  const r =  nsin(t*2)+.6
+  o.r=shape(x,y,6,r/2,.1)
+  o.g=shape(x,y,5,r/3,.1)
+  o.b=shape(x,y,4,r/5,.1)
+}`,
+        oscillator: `let osc = (x,f) => (Math.sin(2*Math.PI*(x+f))+1)/2
+function main({t,x,y},o) {
+  let f = .3
+  let w = .25
+  let d = .2
+  o.r=osc(x/w,t*f)
+  o.g=osc((x/w+d)*1,t*f)
+  o.b=osc((x/w+d*2)*1,t*f)
+}`,
+        fake1: `g.dim=64;let main = ({t,x,y},o) => o.g = o.b = x*y*8%1`,
+        fake2: `g.dim=64;let main=({t,x,y},o)=> {
+o.r=(Math.cos(x*y*43+t*4)+1)/2
+o.g=(Math.sin(x*y*32+t*4)+1)/2
+o.b=(Math.sin(t)+1)/8
+}`,
+        fake3: `g.dim=64;let main=({t,x,y},o)=> 
+o.g=o.b=(y**x*(120+t))%1`,
+        sierpinski: `g.dim=64;let main = ({t,i,x,y,px,py},o)=>o.g=o.b=px&py&(t-1)*4`,
+        circles: `g.dim=64;let main = ({t,x,y},o) => {
+  o.r=Math.ceil((x-.5)**2+(y-.5)**2-t/8%.1)/2
+  o.g=Math.ceil((x-.5)**2+(y-.5)**2-t/8%.2)/2
+  o.b=Math.ceil((x-.5)**2+(y-.5)**2-t/6%.3)/2
+}`,
+        karo: `g.dim=64;main = ({x,y,t},o)=>o.g=o.b=
+Math.abs((x-.5)*(y-.5)*(Math.sin(t*2)*8+16)%1)`,
+      };
+
+      Object.entries(tixyExamples).forEach(([label, code]) =>
+        addExample(`/* ${label} */
+main = tixy((t,i,x,y) => (
+  ${code}
+))`)
+      );
+      Object.entries(examples).forEach(([label, code]) => addExample(code));
+
+      // render code
+      document.querySelector("#pre").textContent =
+        document.querySelector("html").outerHTML;
+    </script>
+  </body>
+</html>

@@ -20,15 +20,18 @@
       class FakeShader {
         constructor(canvas) {
           this.o = { r: 0, g: 0, b: 0 };
-          this.i = { t: 0, x: 0, y: 0, px: 0, py: 0, i: 0 };
-          this.g = { dim: 64, sharp: true }; // global object
+          this.i = { t: 0, i: 0, x: 0, y: 0, u: 0, v: 0 };
+          this.g = { dim: 64, sharp: true, animate: true };
           this.ctx = canvas.getContext("2d");
           const rect = canvas.getBoundingClientRect();
           canvas.width = rect.width; // * window.devicePixelRatio;
           canvas.height = rect.height; // * window.devicePixelRatio;
         }
-        update(code) {
-          const main = new Function("g", `${code}\n return main;`)(this.g);
+        update(code, lib = "") {
+          const main = new Function(
+            "g",
+            `${lib};const {sin,cos,tan,random,PI,sqrt,hypot,atan,atan2} = Math; ${code}; return main;`
+          )(this.g);
           if (this.lastDim !== this.g.dim) {
             this.imageData = this.ctx.createImageData(this.g.dim, this.g.dim);
             this.lastDim = this.g.dim;
@@ -37,7 +40,7 @@
             const { i, g, imageData, ctx } = this;
             this.i.t = performance.now() / 1000;
             this.draw(main);
-            this.raf = requestAnimationFrame(frame);
+            this.g.animate && (this.raf = requestAnimationFrame(frame));
           };
           this.raf && cancelAnimationFrame(this.raf);
           frame();
@@ -67,14 +70,34 @@
           ctx.drawImage(ctx.canvas, 0, 0, dim, dim, 0, 0, width, height); // scale up
         }
       }
+      let libtixy = `let tixy = (fn) => {
+  g.dim = 16;
+  return ({ t, i, x, y, px, py }, o) => {
+    x = px;
+    y = 15 - py;
+    let c = fn(t, i, x, y);
+    if (c >= 0) {
+      o.r = o.g = o.b = c;
+    } else {
+      o.r = c * -1;
+    }
+  };
+};`;
       console.log(
-        `welcome to fakeshader.
+        `welcome to fakeshader. 👁️🫦👁️
+
 available functions: 
 - $: run full fakeshader code, expected to define a main function
 - $$: run expression using x,y,t. expected to set any of o.r, o.g, o.b
+
 examples: 
+- $$$: run expression and assign to all channels automatically
+- tixy: run tixyland expression
 - $\`let main = ({t,i,x,y,px,py},o)=>o.r=o.b=(y**x*(120+t))%1\`
 - $$\`o.r=o.g=(y**x*(120+t))%1\`
+- $$$\`(y**x*(120+t))%1\`
+- tixy\`sin(t-sqrt((x-7.5)**2+(y-6)**2))\`
+
 more info: https://garten.salat.dev/fake-shaders2.html`
       );
       const canvas = document.querySelector("#canvas");
@@ -82,7 +105,7 @@ more info: https://garten.salat.dev/fake-shaders2.html`
       // live coding / sharing logic
       window.addEventListener("hashchange", function () {
         const urlCode = atob(window.location.hash.slice(1));
-        shader.update(urlCode);
+        shader.update(urlCode, libtixy);
       });
       let urlCode = window.location.hash.slice(1);
       if (urlCode) {
@@ -92,22 +115,14 @@ more info: https://garten.salat.dev/fake-shaders2.html`
       }
       const defaultCode = "let main=({t,i,x,y},o)=>o.g=o.b=(y**x*(120+t))%1";
       const initialCode = urlCode || defaultCode;
-      shader.update(initialCode);
+      shader.update(initialCode, libtixy);
       window.$ = (code) => {
         window.location.hash = "#" + btoa(code + "");
       };
       window.$$ = (code) => $(`let main = ({t,i,x,y,px,py},o) => ${code}`);
       window.$$$ = (code) =>
         $(`let main = ({t,i,x,y,px,py},o) => o.r=o.g=o.b=${code}`);
-      window.tixyland = (code) =>
-        $(`g.dim=16;let main = ({t,i,x,y,px,py},o) => {
-        x=px; y=15-py;
-        let c = ${code};
-        if(c>=0) {
-          o.r=o.g=o.b=c;
-        } else {
-          o.r=c*-1;
-        }}`);
+      window.tixy = (code) => $(`let main = tixy((t,i,x,y)=>(${code}))`);
     </script>
   </body>
 </html>
