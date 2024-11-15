@@ -181,10 +181,7 @@
         const scale = 2;
         font.writeText(ctx2, editor.value, 10, 10, scale, 1);
       }
-      editor.addEventListener("input", () => {
-        console.log("change", editor.value);
-        renderText();
-      });
+      editor.addEventListener("input", () => renderText());
       renderText();
       // render code
       document.querySelector("#pre").textContent =
