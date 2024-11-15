@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>🌱 pixelfont rendering</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: monospace;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 0;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre,
+      textarea {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        font-size: 12px;
+        padding: 8px;
+        border: 1px solid white;
+        outline: none;
+        overflow: auto;
+        background-color: transparent;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 pixelfont rendering</h2>
+    <p>
+      trying out different rendering techniques, I've settled on prerendering
+      the whole font as a sprite sheet, then picking and placing onto the target
+      canvas. The performance seems good:
+    </p>
+    <canvas
+      id="output"
+      style="background: black"
+      width="500"
+      height="500"
+    ></canvas>
+    <p>
+      One downside to this approach is that all available colors have to be
+      prerendered as well (currently only black on white). The upside is that
+      all the image data is precalculated, which makes the cpu happy.
+    </p>
+    <canvas
+      id="output2"
+      style="background: black"
+      width="500"
+      height="200"
+    ></canvas>
+    <textarea
+      id="editor"
+      style="width: 500px"
+      rows="10"
+      spellcheck="false"
+    ></textarea>
+    <p>the next step would be to get rid of the old textarea...</p>
+    <details>
+      <summary>show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <br />
+
+    <script>
+      class PixelFont {
+        constructor(font) {
+          const { base64, chars, cols } = font;
+          this.base64 = base64;
+          this.chars = chars;
+          this.perChar = base64.length / chars.length;
+          const maxBits = this.perChar * 6; // 1 base64 char = 6 bit
+          this.cols = cols;
+          this.rows = Math.floor(maxBits / cols);
+          this.bitsPerChar = this.cols * this.rows;
+          this.decode();
+        }
+        getChar(char) {
+          const i = this.chars.indexOf(char);
+          const [from, to] = [i * this.perChar, (i + 1) * this.perChar];
+          const chunk = this.base64.slice(from, to);
+          const bin = this.base64ToBinary(chunk);
+          return bin.slice(0, this.bitsPerChar);
+        }
+        base64ToBinary(base64String) {
+          const binaryString = atob(base64String);
+          let str = "";
+          for (let i = 0; i < binaryString.length; i++) {
+            str += binaryString.charCodeAt(i).toString(2).padStart(8, "0");
+          }
+          return str;
+        }
+        decode() {
+          const strip = new ImageData(this.cols, this.rows * this.chars.length);
+          for (let i = 0; i < this.chars.length; i++) {
+            const blockOffset = i * this.bitsPerChar * 4;
+            const bits = this.getChar(this.chars[i]);
+            for (let j = 0; j < bits.length; j++) {
+              const blockStart = j * 4;
+              const v = bits[j] === "1" ? 255 : 0; // white color..
+              strip.data[blockOffset + blockStart] = v;
+              strip.data[blockOffset + blockStart + 1] = v;
+              strip.data[blockOffset + blockStart + 2] = v;
+              strip.data[blockOffset + blockStart + 3] = 255;
+            }
+          }
+          this.canvas = document.createElement("canvas");
+          const ctx = this.canvas.getContext("2d");
+          this.canvas.width = this.cols;
+          this.canvas.height = this.rows * this.chars.length;
+          ctx.imageSmoothingEnabled = false;
+          ctx.putImageData(strip, 0, 0);
+        }
+        drawChar(char, ctx, x = 0, y = 0, scale = 4) {
+          const i = this.chars.indexOf(char);
+          const [sx, sy] = [0, i * this.rows];
+          const [sw, sh] = [this.cols, this.rows];
+          const [w, h] = [this.cols * scale, this.rows * scale];
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(this.canvas, sx, sy, sw, sh, x, y, w, h);
+        }
+        writeText(ctx, text, x, y, scale = 4, gap = 1) {
+          const lines = text.split("\n");
+          lines.forEach((line, l) => {
+            line.split("").forEach((char, i) => {
+              const offsetX = x + i * (this.cols + gap) * scale;
+              const offsetY = y + l * (this.rows + gap) * scale;
+              char !== " " && this.drawChar(char, ctx, offsetX, offsetY, scale);
+            });
+          });
+        }
+      }
+      const font = new PixelFont({
+        base64:
+          "IQhCAIAAUoAAAAAAV9SlfUAAdWji1cQAzkRETmAARSiKyaAAIQAAAAAAOiEIQQcA4IIQhFwAURQAAAAAAQnyEAAAAAAAAIQAAAHwAAAAAAAAAIAACEREQgAAdGNYxcAA4QhCE+AAdEIiI+AAdEJgxcAAEZUviEAA/CHgxcAAdGHoxcAA+EIiIgAAdGLoxcAAdGLwxcAAAAgAAIAAAAgAAIQAGREEEGAAAD4PgAAAwQQREwAAdEIiAIAA/Gt4Q+AAdGP4xiAA9GPox8AAdGEIRcAA5KMYy4AA/CHoQ+AA/CHoQgAAdCF4xcAAjGP4xiAA+QhCE+AAGEIYxcAAjKmKSiAAhCEIQ+AAjvdaxiAAzmtazmAAdGMYxcAA9GPoQgAAdGMayaAA9GPqSiAAdGDgxcAA+QhCEIAAjGMYxcAAjGKlEIAArWtaqUAAjFRFRiAAjGLiEIAA+EREQ+AA/CEIQh8AhBBBBCAA+EIQhD8AIqIAAAAAAAAAAB8AAAAAAAAAABs4zaAAhC2Y5sAAAB8IQeAACFs4zaAAAB0fweAAMT5CEIAAAB0YxeFwhC2YxiAAAD5CE+AAAAIYxcAAhCMuSiAAACEIQ+AAACO61iAAAC2YxiAAAB0YxcAAAB0Yx9CAAB0YxeEIACdMQgAAAB8HB8AAIT5CEMAAACMYxcAAACMYqIAAACMa1UAAACKiKiAAACMVKITAAD4XQ+AAOhGMIQcAIQhCEIQA4IQxiFwAABFRAAAA",
+        chars:
+          "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+        cols: 5,
+      });
+
+      // font rendering
+      const canvas = document.querySelector("#output");
+      canvas.style.imageRendering = "pixelated";
+      const ctx = canvas.getContext("2d");
+      let i = 0;
+      requestAnimationFrame(function frame() {
+        font.drawChar(
+          font.chars[i++ % font.chars.length],
+          ctx,
+          Math.round(Math.random() * canvas.width - 20),
+          Math.round(Math.random() * canvas.height - 20),
+          Math.round(Math.random() * 8 + 1) //scale
+        );
+        requestAnimationFrame(frame);
+      });
+
+      const canvas2 = document.querySelector("#output2");
+      canvas2.style.imageRendering = "pixelated";
+      const ctx2 = canvas2.getContext("2d");
+      const editor = document.querySelector("#editor");
+      editor.value = `The quick brown fox\njumps over the lazy\ndog!`;
+      function renderText() {
+        ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
+        const scale = 2;
+        font.writeText(ctx2, editor.value, 10, 10, scale, 1);
+      }
+      editor.addEventListener("input", () => {
+        console.log("change", editor.value);
+        renderText();
+      });
+      renderText();
+      // render code
+      document.querySelector("#pre").textContent =
+        document.querySelector("html").outerHTML;
+    </script>
+  </body>
+</html>
