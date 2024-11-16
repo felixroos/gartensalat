@@ -141,17 +141,16 @@
       class Editor {
         constructor(canvas, font) {
           this.canvas = canvas;
-          this.scale = 4;
-          this.col = 0;
-          this.row = 0;
-          this.cols = 20;
-          this.rows = 12;
-          this.gap = 1;
+          this.scale = 4; // upscale factor for font
+          this.col = 0; // caret column
+          this.row = 0; // caret row
+          this.cols = 20; // number of columns
+          this.rows = 12; // number of rows
+          this.gap = 1; // gap between chars in px
           this.ctx = canvas.getContext("2d");
           this.buffer = new Array(this.cols * this.rows).fill(".");
           this.font = font;
           canvas.style.imageRendering = "pixelated";
-          const ctx = canvas.getContext("2d");
           this.updateCaret(0, 0);
           this.paint();
           document.addEventListener("keydown", (e) => {
