@@ -100,7 +100,7 @@
           i.s = inputImage.data;
           const dim = g.dim;
           const blocks = dim * dim; // total blocks
-          for (let block = 0; block <= blocks; block++) {
+          for (let block = 0; block < blocks; block++) {
             // calculate normalized coordinates
             i.px = block % dim;
             i.x = (i.px + 0.5) / dim;
@@ -109,13 +109,12 @@
             i.i = block;
             o.r = o.g = o.b = 0;
             o.a = 1;
-            main(i, o); // changes contents of o
-            let blockStart = i.i * 4; // 4 per block = rgba
+            let blockStart = block * 4; // 4 per block = rgba
             i.r = i.s[blockStart] / 255;
             i.g = i.s[blockStart + 1] / 255;
             i.b = i.s[blockStart + 2] / 255;
             i.a = i.s[blockStart + 3] / 255;
-            blockStart -= 4; // somehow this is needed to start at x=0
+            main(i, o); // changes contents of o
             imageData.data[blockStart] = o.r * 255;
             imageData.data[blockStart + 1] = o.g * 255;
             imageData.data[blockStart + 2] = o.b * 255;
@@ -124,7 +123,6 @@
           ctx.putImageData(imageData, 0, 0);
           ctx.imageSmoothingEnabled = !g.sharp; // this needs to be here for some reason
           const { width, height } = ctx.canvas;
-          ctx.drawImage(ctx.canvas, 0, 0, dim, dim, 0, 0, width, height); // scale up
         }
       }
       class PixelFont {
@@ -137,7 +135,8 @@
           this.cols = cols;
           this.rows = Math.floor(maxBits / cols);
           this.bitsPerChar = this.cols * this.rows;
-          this.image = new ImageData(this.cols, this.rows * this.chars.length);
+          const totalPixels = this.cols * this.rows * this.chars.length;
+          this.bits = new Uint8Array(totalPixels);
           this.decode();
         }
         getChar(char) {
@@ -157,49 +156,44 @@
         }
         decode() {
           for (let i = 0; i < this.chars.length; i++) {
-            const blockOffset = i * this.bitsPerChar * 4;
+            const blockOffset = i * this.bitsPerChar;
             const bits = this.getChar(this.chars[i]);
             for (let j = 0; j < bits.length; j++) {
-              const blockStart = j * 4;
-              const v = bits[j] === "1" ? 255 : 0; // white color..
-              this.image.data[blockOffset + blockStart] = v;
-              this.image.data[blockOffset + blockStart + 1] = v;
-              this.image.data[blockOffset + blockStart + 2] = v;
-              this.image.data[blockOffset + blockStart + 3] = v ? 255 : 0;
+              const blockStart = (blockOffset + j) * 4;
+              const v = bits[j] === "1" ? 255 : 0;
+              this.bits[blockOffset + j] = v;
             }
           }
         }
 
-        insertChar(char, imageData, x, y, gap = 1) {
+        insertChar(char, imageData, x, y, gap = 1, a = 1) {
+          const { data } = imageData;
           const charIndex = this.chars.indexOf(char);
           const readStart = charIndex * this.cols * this.rows;
           const fw = this.cols + gap;
           const fh = this.rows + gap;
           const topLeft = y * imageData.width + x;
-          //const topLeft = row * this.rows * imageData.width + col * this.cols;
-          for (let r = 0; r < this.rows; r++) {
-            const writeStart = topLeft + r * imageData.width;
-            for (let c = 0; c < this.cols; c++) {
-              const writeOffset = (writeStart + c) * 4;
-              const readOffset = (readStart + (r * this.cols + c)) * 4;
-              const red = this.image.data[readOffset];
-              const green = this.image.data[readOffset + 1];
-              const blue = this.image.data[readOffset + 2];
-              const sum = red + green + blue;
-              imageData.data[writeOffset + 0] = red;
-              imageData.data[writeOffset + 1] = green;
-              imageData.data[writeOffset + 2] = blue;
-              imageData.data[writeOffset + 3] = sum > 0 ? 255 : 0;
+          const ia = 1 - a;
+          for (let row = 0; row < this.rows; row++) {
+            const writeStart = topLeft + row * imageData.width;
+            for (let col = 0; col < this.cols; col++) {
+              const i = (writeStart + col) * 4;
+              const readBlock = readStart + (row * this.cols + col);
+              const v = this.bits[readBlock] * a;
+              data[i] = v + ia * data[i];
+              data[i + 1] = v + ia * data[i + 1];
+              data[i + 2] = v + ia * data[i + 2];
+              data[i + 3] = 255;
             }
           }
         }
-        insertText(text, imageData, x, y, gap = 1) {
+        insertText(text, imageData, x, y, gap = 1, a = 1) {
           const lines = text.split("\n");
           lines.forEach((line, l) => {
             line.split("").forEach((char, i) => {
               const offsetX = x + i * (this.cols + gap);
               const offsetY = y + l * (this.rows + gap);
-              this.insertChar(char, imageData, offsetX, offsetY);
+              this.insertChar(char, imageData, offsetX, offsetY, this.gap, a);
             });
           });
         }
@@ -207,10 +201,10 @@
 
       const _mod = (n, m) => ((n % m) + m) % m;
       class Editor {
-        constructor(canvas, font, onPaint) {
-          this.onPaint = onPaint;
+        constructor(canvas, font, onChange) {
+          this.onChange = onChange;
           this.canvas = canvas;
-          this.scale = 1; // upscale factor for font
+          this.scale = 4;
           this.col = 0; // caret column
           this.row = 0; // caret row
           this.cols = 20; // number of columns
@@ -223,8 +217,8 @@
 
           canvas.width = w * this.cols;
           canvas.height = h * this.rows;
-          canvas.style.width = canvas.width * 4 + "px";
-          canvas.style.height = canvas.height * 4 + "px";
+          canvas.style.width = canvas.width * this.scale + "px";
+          canvas.style.height = canvas.height * this.scale + "px";
           canvas.style.imageRendering = "pixelated";
           this.image = new ImageData(canvas.width, canvas.height);
           this.paint();
@@ -242,32 +236,32 @@
             } else if (e.key === "Backspace") {
               this.updateCaret(-1, 0);
               this.writeChar(" ");
+              this.updateCaret(0, 0);
             } else if (e.key === " " || this.font.chars.includes(e.key)) {
               this.writeChar(e.key);
               this.updateCaret(1, 0);
             } else {
               return;
             }
-            this.paint();
+            this.onChange(this);
+            //this.paint();
           });
         }
         paint() {
-          this.font.insertText(
-            this.getBufferString(),
-            this.image,
-            0,
-            0,
-            this.scale
-          );
+          const text = this.getBufferString();
+          this.font.insertText(text, this.image, 0, 0, this.gap);
           this.updateCaret(0, 0);
-          this.onPaint && this.onPaint(this);
         }
         writeChar(char) {
           const index = this.row * this.cols + this.col;
           this.buffer[index] = char;
+          const x = this.col * (this.font.cols + this.gap);
+          const y = this.row * (this.font.rows + this.gap);
+          this.font.insertChar(char, this.image, x, y);
         }
         updateCaret(dx, dy) {
           const [x0, y0] = this.getCaretRect();
+          const char = this.buffer[this.row * this.cols + this.col];
           this.col += dx;
           this.row += dy;
           if (this.col >= this.cols) {
@@ -282,7 +276,9 @@
           this.col = _mod(this.col, this.cols);
           this.row = _mod(this.row, this.rows);
           const [x1, y1, w, h] = this.getCaretRect();
-          this.font.insertChar("§", this.image, x1, y1, this.gap);
+          const colIndex = this.row * this.cols + this.col;
+          this.font.insertChar(char, this.image, x0, y0, this.gap, 1);
+          this.font.insertChar("§", this.image, x1, y1, this.gap, 0.4);
         }
         getBufferString() {
           let s = "";
@@ -293,8 +289,8 @@
           return s;
         }
         getCaretRect() {
-          const w = (this.font.cols + this.gap) * this.scale;
-          const h = (this.font.rows + this.gap) * this.scale;
+          const w = this.font.cols + this.gap;
+          const h = this.font.rows + this.gap;
           const x = this.col * w;
           const y = this.row * h;
           return [x, y, w, h];
@@ -330,12 +326,10 @@ o.b=x*y*8%1;
 
 /******************/
 `;
-      //"g.animate=0;let main = ({px,py,t},o) =>o.g=o.b=[2386,2194,5463][py]&2**px";
       const editor = new Editor(canvas, font, ({ image, buffer }) => {
         shader.inputImage = image;
         let code = buffer.join("");
         code = wrap(code || initialCode);
-        console.log("code", code);
         shader.update(code);
       });
 
@@ -344,7 +338,7 @@ o.b=x*y*8%1;
         .map((l) => l.padEnd(20, " "))
         .join("")
         .split("");
-      // console.log("editor.buffer", editor.buffer);
+
       editor.paint();
       shader.update(wrap(/* code ||  */ initialCode));
       shader.inputImage = editor.image;
