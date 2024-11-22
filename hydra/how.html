@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>🌱 how hydra works</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.4em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 0;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        width: 100%;
+        overflow: auto;
+        border: 1px solid #aaa;
+        padding: 8px;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      textarea {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 1px solid #aaa;
+        outline: none;
+        background-color: transparent;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 how hydra works</h2>
+    <p>
+      <a href="https://hydra.ojack.xyz/">hydra</a> is a fascinating visual live
+      coding language, but how does it work? here's an example from Olivia Jack:
+    </p>
+    <pre>
+// licensed with CC BY-NC-SA 4.0 https://creativecommons.org/licenses/by-nc-sa/4.0/
+// by Olivia Jack
+// https://ojack.github.io
+
+osc(100, 0.01, 1.4)
+  .rotate(0, 0.1)
+  .mult(osc(10, 0.1).modulate(osc(10).rotate(0, -0.1), 1))
+  .color(2.83,0.91,0.39)
+  .out(o0)
+    </pre>
+    <p>
+      I've heard that hydra translates the JS above into a GLSL shader. I've dug
+      around a bit and found GlslSource.prototype.compile to be the part of the
+      code where the code is rendered. To look at the generated code, you can
+      set a breakpoint after the assignment to shaderInfo. The interesting bit
+      is in shaderInfo.fragColor:
+    </p>
+    <pre>
+color(mult(osc(rotate(st, 0., 0.1), 100., 0.01, 1.4), osc(modulate(st, osc(rotate(st, 0., -0.1), 10., 0.1, 0.), 1.), 10., 0.1, 0.), 1.), 2.83, 0.91, 0.39, 1.)
+    </pre>
+    <p>Here's the same code, but formatted and commented:</p>
+    <pre>
+color(
+  mult(
+    osc(
+      rotate(st, 0., 0.1), // vec2 _st
+      100., // float frequency
+      0.01, // float sync
+      1.4 // float offset
+    ), // vec4 _c0
+    osc(
+      modulate(
+        st, // vec2 _st
+        osc(
+          rotate(st, 0., -0.1), // vec2 _st
+          10., // float frequency
+          0.1, // float sync
+          0. // float offset
+        ), // vec4 _c0
+        1. // float amount
+      ), // vec2 _st
+      10., // float frequency
+      0.1, // float sync
+      0. // float offset
+    ), // vec4 _c1
+    1. // float amount
+  ), // vec4 _c0
+  2.83, // float r
+  0.91, // float g
+  0.39, // float b
+  1. // float a
+)
+    </pre>
+    <p>
+      To run the code, we need all the GLSL function definitions (color, mult,
+      osc, rotate, modulate) and the variable st, which is the standard vector.
+      In the hydra source code, these can be found in glsl-functions.js. I've
+      converted the JS/GLSL mixture to just a giant blob of GLSL definitions.
+      With these in place, we can embed the fragColor calculation into a
+      shadertoy style mainImage function:
+    </p>
+    <canvas id="canvas" width="500" height="500"></canvas>
+    <span id="hint"
+      ><small>💡 hit ctrl+enter to update the code.</small>
+      <small
+        style="cursor: pointer; opacity: 50%"
+        onclick="document.querySelector('#hint').remove()"
+        >hide</small
+      ></span
+    >
+    <textarea id="code" type="text" rows="16" spellcheck="false"></textarea>
+    <p>
+      Now we have successfully converted the hydra code to a shadertoy style
+      fragment shader (You can paste this into
+      <a href="https://www.shadertoy.com/new" target="_blank">shadertoy</a>).
+      The shader rendering on this page works identical to
+      <a href="/real-shaders.html">real-shaders</a>.
+    </p>
+    <p>
+      Next, it would be interesting to see how to convert the hydra code
+      automatically into GLSL..
+    </p>
+    <details>
+      <summary>show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      // read base64 code from url
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!");
+      }
+      // use urlCode or fall back to default shadertoy example
+      const initialShader =
+        urlCode ||
+        `vec4 color(vec4 _c0, float r, float g, float b, float a) {
+  vec4 c = vec4(r, g, b, a);
+  vec4 pos = step(0.0, c); // detect whether negative
+  return vec4(mix((1.0 - _c0) * abs(c), c * _c0, pos));
+}
+vec4 mult(vec4 _c0, vec4 _c1, float amount) {
+  return _c0 * (1.0 - amount) + (_c0 * _c1) * amount;
+}
+vec4 osc(vec2 _st, float frequency, float sync, float offset) {
+  vec2 st = _st;
+  float r = sin((st.x - offset / frequency + iTime * sync) * frequency) * 0.5 + 0.5;
+  float g = sin((st.x + iTime * sync) * frequency) * 0.5 + 0.5;
+  float b = sin((st.x + offset / frequency + iTime * sync) * frequency) * 0.5 + 0.5;
+  return vec4(r, g, b, 1.0);
+}
+vec2 rotate(vec2 _st, float angle, float speed) {
+  vec2 xy = _st - vec2(0.5);
+  float ang = angle + speed * iTime;
+  xy = mat2(cos(ang), -sin(ang), sin(ang), cos(ang)) * xy;
+  xy += 0.5;
+  return xy;
+}
+vec2 modulate(vec2 _st, vec4 _c0, float amount) {
+  return _st + _c0.xy * amount;
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 uv = fragCoord.xy / iResolution.xy;
+  vec2 st = vec2(uv.x, 1.0 - uv.y);
+  fragColor = color(mult(osc(rotate(st, 0., 0.1), 100., 0.01, 1.4), osc(modulate(st, osc(rotate(st, 0., -0.1), 10., 0.1, 0.), 1.), 10., 0.1, 0.), 1.), 2.83, 0.91, 0.39, 1.);
+}
+`;
+      // set up code input
+      const input = document.querySelector("#code");
+      input.value = initialShader;
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        updateShader(urlCode);
+      });
+
+      // vertex shader
+      const vs = `attribute vec4 a_position;
+void main() {
+  gl_Position = a_position;
+}`;
+      // set up canvas
+      const canvas = document.querySelector("#canvas");
+      const gl = canvas.getContext("webgl");
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width; // * window.devicePixelRatio;
+      canvas.height = rect.height; // * window.devicePixelRatio;
+
+      // animation frame logic
+      let requestId;
+      function requestFrame(render) {
+        if (!requestId) {
+          requestId = requestAnimationFrame(render);
+        }
+      }
+      function cancelFrame() {
+        if (requestId) {
+          cancelAnimationFrame(requestId);
+          requestId = undefined;
+        }
+      }
+
+      // runs on eval
+      let then = 0;
+      let time = 0;
+      function updateShader(mainImageFunction) {
+        // fragment shader
+        const fs = `
+precision highp float;
+uniform vec2 iResolution;
+uniform float iTime;
+
+${mainImageFunction}
+void main() {
+  mainImage(gl_FragColor, gl_FragCoord.xy);
+}`;
+        cancelFrame();
+        const program = createProgram(gl, vs, fs);
+        const positionLoc = gl.getAttribLocation(program, "a_position");
+        const resolutionLoc = gl.getUniformLocation(program, "iResolution");
+        const mouseLoc = gl.getUniformLocation(program, "iMouse");
+        const timeLoc = gl.getUniformLocation(program, "iTime");
+        const vertices = new Float32Array([
+          -1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0,
+        ]);
+        const vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+        const framebuffer = gl.createFramebuffer();
+
+        function render(now) {
+          requestId = undefined;
+          now *= 0.001; // convert to seconds
+          const elapsedTime = Math.min(now - then, 0.1);
+          time += elapsedTime;
+          then = now;
+
+          gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+          gl.useProgram(program);
+          gl.enableVertexAttribArray(positionLoc);
+          gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
+
+          gl.uniform2f(resolutionLoc, gl.canvas.width, gl.canvas.height);
+          gl.uniform1f(timeLoc, time);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // draw to canvas
+
+          requestFrame(render);
+        }
+        requestFrame(render);
+      }
+
+      // start rendering
+      updateShader(input.value);
+
+      // update on ctrl+enter
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          // updateShader(input.value); // hash update already updates it...
+          window.location.hash = "#" + btoa(input.value);
+          console.log("update", input.value);
+        }
+      });
+
+      document.querySelector("#pre").textContent =
+        document.querySelector("html").outerHTML;
+
+      // webgl boilerplate code
+      function loadShader(gl, src, type) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, src);
+        gl.compileShader(shader);
+        const compiled = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+        if (!compiled) {
+          const error = gl.getShaderInfoLog(shader);
+          console.error(
+            `Error compiling shader '${shader}': ${error}
+      ${src
+        .split("\n")
+        .map((l, i) => `${i + 1}: ${l}`)
+        .join("\n")}`
+          );
+          gl.deleteShader(shader);
+          return null;
+        }
+
+        return shader;
+      }
+      function createProgram(gl, vs, fs) {
+        const program = gl.createProgram();
+        gl.attachShader(program, loadShader(gl, vs, gl.VERTEX_SHADER));
+        gl.attachShader(program, loadShader(gl, fs, gl.FRAGMENT_SHADER));
+        gl.linkProgram(program);
+        const success = gl.getProgramParameter(program, gl.LINK_STATUS);
+        if (!success) {
+          const error = gl.getProgramInfoLog(program);
+          console.error("Linker Error:" + error);
+          gl.deleteProgram(program);
+          return null;
+        }
+        return program;
+      }
+    </script>
+  </body>
+</html>
