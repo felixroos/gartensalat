@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+  <!-- license: AGPL-3.0 -->
   <head>
     <meta charset="UTF-8" />
     <title>🌱 how hydra works</title>
@@ -141,6 +142,7 @@ color(
       <pre id="pre"></pre>
     </details>
     <p>
+      <a href="/LICENSE">license: AGPL-3.0</a><br /><br />
       <a href="/">back to garten.salat</a>
     </p>
     <script>
@@ -153,7 +155,8 @@ color(
       // use urlCode or fall back to default shadertoy example
       const initialShader =
         urlCode ||
-        `vec4 color(vec4 _c0, float r, float g, float b, float a) {
+        `// license: AGPL-3.0
+vec4 color(vec4 _c0, float r, float g, float b, float a) {
   vec4 c = vec4(r, g, b, a);
   vec4 pos = step(0.0, c); // detect whether negative
   return vec4(mix((1.0 - _c0) * abs(c), c * _c0, pos));
