@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>🌱 let's make a clock</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.4em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 0;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre,
+      textarea {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        border: 1px solid white;
+        outline: none;
+        overflow: auto;
+        background-color: transparent;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 let's make a clock</h2>
+    <button id="play">play</button>
+    <button id="stop">stop</button>
+    <textarea id="code" spellcheck="false" rows="12"></textarea>
+    <script>
+      class Clock {
+        constructor(ac, onTick) {
+          this.ac = ac;
+          this.runs = false;
+          this.onTick = onTick;
+          return this;
+        }
+        timeout(onComplete, startTime, stopTime) {
+          const constantNode = this.ac.createConstantSource();
+          constantNode.start(startTime);
+          constantNode.stop(stopTime);
+          constantNode.onended = () => onComplete();
+        }
+        stop() {
+          this.runs = false;
+        }
+        start(begin = ac.currentTime + 0.01, duration = 0.1) {
+          if (this.runs) {
+            return;
+          }
+          this.runs = true;
+          this.tick(begin, duration);
+        }
+        tick(begin, duration) {
+          this.runs = true;
+          this.onTick(begin);
+          const end = begin + duration;
+          this.timeout(
+            () => {
+              this.runs && this.tick(end, duration);
+            },
+            begin,
+            end
+          );
+        }
+      }
+      function livecode(input, initialCode, onUpdate, onStop) {
+        const updateHash = (code) => {
+          window.location.hash = "#" + btoa(code);
+        };
+        window.addEventListener("hashchange", function () {
+          const urlCode = atob(window.location.hash.slice(1));
+          if (urlCode) {
+            input.value = urlCode;
+            onUpdate(input.value, false);
+          }
+        });
+        // update on ctrl+enter
+        input.addEventListener("keydown", (e) => {
+          if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+            updateHash(input.value);
+            onUpdate(input.value, false);
+          }
+          if ((e.ctrlKey || e.altKey) && e.key === ".") {
+            onStop();
+          }
+        });
+        // read base64 code from url
+        let urlCode = window.location.hash.slice(1);
+        if (urlCode) {
+          urlCode = atob(urlCode);
+          console.log("loaded code from url!");
+        }
+        const code = urlCode || initialCode;
+        input.value = code;
+        onUpdate(code, true);
+      }
+
+      class Sequencer {
+        constructor(ac) {
+          this.tick = 0;
+          this.seqs = [];
+          if (ac) {
+            this.init(ac);
+          }
+        }
+        async loadSamples(map) {
+          const samples = Object.entries(map).map(async ([name, url]) => {
+            const res = await fetch(url);
+            const buf = await res.arrayBuffer();
+            const audioBuffer = await this.ac.decodeAudioData(buf);
+            return [name, audioBuffer];
+          });
+          return Object.fromEntries(await Promise.all(samples));
+        }
+        init(ac, samples) {
+          this.ac = ac;
+          this.clock = new Clock(ac, async (a) => {
+            const t = a + 0.1;
+            this.seqs.forEach((seq) => this.playStep(seq, t));
+            this.tick++;
+          });
+          this.samplesLoaded = this.loadSamples(samples);
+        }
+        start() {
+          this.clock.start(this.ac.currentTime + 0.01, 0.2);
+        }
+        stop() {
+          this.clock.stop();
+        }
+        async playStep(seq, t) {
+          const step = seq[this.tick % seq.length];
+          const isRest = step === " ";
+          if (isRest) {
+            return;
+          }
+          const bufs = await this.samplesLoaded;
+          if (this.ac.currentTime >= t) {
+            console.log("too late", this.ac.currentTime - t);
+            return;
+          }
+          if (!bufs[step]) {
+            console.log(`sound ${step} not loaded`);
+            return;
+          }
+          const src = this.ac.createBufferSource();
+          src.buffer = bufs[step];
+          src.connect(this.ac.destination);
+          src.start(t);
+        }
+      }
+      const sequencer = new Sequencer();
+
+      const audioReady = new Promise((resolve) => {
+        document.addEventListener("click", function init() {
+          const ac = new AudioContext();
+          document.removeEventListener("click", init);
+          resolve(ac);
+        });
+      });
+
+      livecode(
+        document.querySelector("#code"),
+        `   s   
+b  b b  
+ hh   h  hh `,
+        async (code, init) => {
+          console.log("update", code);
+          lines = code.split("\n");
+          sequencer.seqs = lines.map((line) => line.split(""));
+          await audioReady;
+          !init && sequencer.start();
+        },
+        () => sequencer.stop()
+      );
+
+      document.querySelector("#play").addEventListener("click", async () => {
+        await audioReady;
+        sequencer.start();
+      });
+      document.querySelector("#stop").addEventListener("click", async () => {
+        await audioReady;
+        sequencer.stop();
+      });
+
+      audioReady.then((ac) => {
+        sequencer.init(ac, {
+          h: "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/refs/heads/master/hh/000_hh3closedhh.wav",
+          b: "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/refs/heads/master/bd/BT0A0A7.wav",
+          s: "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/refs/heads/master/sd/rytm-00-hard.wav",
+        });
+      });
+    </script>
+    <!---->
+    <details>
+      <summary>show page source</summary>
+      <pre id="pagesource"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script>
+      // render code
+      document.querySelector("#pagesource").textContent =
+        document.querySelector("html").outerHTML;
+    </script>
+  </body>
+</html>

@@ -1,0 +1,136 @@
+<html>
+  <head>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: darkslateblue;
+        color: white;
+        font-family: monospace;
+      }
+      #wrap {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+
+      #wrap > * {
+        padding: 10px;
+      }
+      #code {
+        flex-grow: 1;
+        height: 100%;
+        background-color: transparent;
+        color: white;
+        outline: none;
+      }
+      #canvas {
+        position: fixed;
+        pointer-events: none;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <div>press ctrl+enter to eval, look at the console for the result</div>
+      <textarea id="code"></textarea>
+      <canvas id="canvas"></canvas>
+    </div>
+    <script>
+      const $ = document.querySelector.bind(document);
+      const input = $("#code");
+      const canvas = $("#canvas");
+      canvas.width = canvas.clientWidth;
+      canvas.height = canvas.clientHeight;
+
+      input.value = `const samples = fill((t,d) => ((t*50)%1*2-1)/8*pow((1-t/d),4) , .5);
+playSamples(samples)`;
+
+      // lib
+      // returns a promise that returns audiocontext as soon as document is clicked for the first time
+      const audioInit = new Promise((resolve) => {
+        document.addEventListener("click", function initAudio() {
+          resolve(new AudioContext());
+          document.removeEventListener("click", initAudio);
+        });
+      });
+
+      // draw time domain to canvas
+      function drawSamples(samples) {
+        const ctx = canvas.getContext("2d");
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 3;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height / 2);
+        let sampleIndex = 0;
+        const samplesPerPixel = samples.length / canvas.width;
+        for (let i = 0; i < canvas.width; i++) {
+          const amp = samples[Math.floor(sampleIndex)];
+          sampleIndex += samplesPerPixel;
+          let y = ((amp + 1) / 2) * canvas.height;
+          ctx.lineTo(i, y);
+        }
+        ctx.stroke();
+      }
+
+      let source,
+        SR = 44100;
+      // play given samples in a loop for given duration
+      async function playSamples(samples, duration = 0) {
+        const ctx = await audioInit;
+        const buf = ctx.createBuffer(1, samples.length, ctx.sampleRate);
+        const out = buf.getChannelData(0);
+        for (let i = 0; i < out.length; i++) {
+          out[i] = samples[i];
+        }
+        if (source) {
+          source.stop();
+        }
+        source = ctx.createBufferSource();
+        source.buffer = buf;
+        source.loop = 1;
+        const start = ctx.currentTime + 0.1;
+        source.start(start);
+        source.connect(ctx.destination);
+        if (duration) {
+          source.stop(start + duration);
+        }
+        drawSamples(samples);
+      }
+      // helper to create array of samples
+      function fill(callback, seconds = 1) {
+        return Array(Math.round(SR * seconds))
+          .fill(0)
+          .map((_, i) => callback(i / SR, seconds));
+      }
+
+      // evaluates code with given scope (without polluting global scope)
+      function update(code, scope = {}) {
+        console.log("scope", scope);
+        const argumentNames = Object.keys(scope);
+        const fn = new Function(...argumentNames, code);
+        const argumentValues = Object.values(scope);
+        const result = fn(...argumentValues);
+        console.log(code);
+        console.log(result);
+      }
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          const math = Object.fromEntries(
+            Object.getOwnPropertyNames(Math).map((key) => [key, Math[key]])
+          );
+          console.log("math", math);
+          update(input.value, { SR, playSamples, fill, ...math });
+        }
+        if ((e.ctrlKey || e.altKey) && e.key === ".") {
+          source?.stop();
+        }
+      });
+    </script>
+  </body>
+</html>

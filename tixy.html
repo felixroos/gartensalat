@@ -1,0 +1,43 @@
+
+<!-- 
+[2386,2194,5463][py]&1<<px
+[2386,2194,5463][py] selects different numbers for bottom 3 rows
+e.g. for py 0, it will give 2386
+2386 = parseInt(100101010010,2)
+&1<<px will scan through the binary number from right to left
+1<<0 = 1 = parseInt(1,2)
+1<<1 = 2 = parseInt(10,2)
+1<<2 = 4 = parseInt(100,2)
+2386 & 2 = parseInt(100101010010,2) & parseInt(10,2) = 2
+100101010010
+000000000010
+          ^
+
+ooo o o o o o = 1110101010101
+ o  o  o   o  = 0100100100010
+ o  o o o  o  = 0100101010010
+
+5463 =parseInt('1110101010101'.split('').reverse().join(''), 2)
+2194 =parseInt('0100100100010'.split('').reverse().join(''), 2)
+2386 =parseInt('0100101010010'.split('').reverse().join(''), 2)
+
+
+o oo ooo oooo ooooo oooooo ooooooo
+1011011101111011111011111101111111
+                              ^
+                              30
+
+17112227565 =parseInt('1011011101111011111011111101111111'.split('').reverse().join(''), 2)
+'1011011101111011111011111101111111'.length == 34
+
+1<<30 = 1073741824
+1<<31 = -2147483648
+1<<32 = 1
+
+=> 1<<0 == 1<<32
+=> "the [<<] operator returns a 32-bit integer"
+
+17112227565&2**px still doesn't work because:
+=> "the [&] operator returns a 32-bit integer"
+
+->
