@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>🌱 pixelfont editor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: monospace;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 0;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        font-size: 12px;
+        padding: 8px;
+        border: 1px solid white;
+        overflow: auto;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 pixelfont editor</h2>
+    <canvas
+      id="canvas"
+      style="background: #003333"
+      width="480"
+      height="480"
+    ></canvas>
+    <details>
+      <summary>show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <br />
+    <script>
+      class PixelFont {
+        constructor(font) {
+          const { base64, chars, cols } = font;
+          this.base64 = base64;
+          this.chars = chars;
+          this.perChar = base64.length / chars.length;
+          const maxBits = this.perChar * 6; // 1 base64 char = 6 bit
+          this.cols = cols;
+          this.rows = Math.floor(maxBits / cols);
+          this.bitsPerChar = this.cols * this.rows;
+          const totalPixels = this.cols * this.rows * this.chars.length;
+          this.bits = new Uint8Array(totalPixels);
+          this.decode();
+        }
+        getChar(char) {
+          const i = this.chars.indexOf(char);
+          const [from, to] = [i * this.perChar, (i + 1) * this.perChar];
+          const chunk = this.base64.slice(from, to);
+          const bin = this.base64ToBinary(chunk);
+          return bin.slice(0, this.bitsPerChar);
+        }
+        base64ToBinary(base64String) {
+          const binaryString = atob(base64String);
+          let str = "";
+          for (let i = 0; i < binaryString.length; i++) {
+            str += binaryString.charCodeAt(i).toString(2).padStart(8, "0");
+          }
+          return str;
+        }
+        decode() {
+          for (let i = 0; i < this.chars.length; i++) {
+            const blockOffset = i * this.bitsPerChar;
+            const bits = this.getChar(this.chars[i]);
+            for (let j = 0; j < bits.length; j++) {
+              const blockStart = (blockOffset + j) * 4;
+              const v = bits[j] === "1" ? 255 : 0;
+              this.bits[blockOffset + j] = v;
+            }
+          }
+        }
+
+        insertChar(char, imageData, x, y, gap = 1, a = 1) {
+          const { data } = imageData;
+          const charIndex = this.chars.indexOf(char);
+          const readStart = charIndex * this.cols * this.rows;
+          const fw = this.cols + gap;
+          const fh = this.rows + gap;
+          if (x >= imageData.width) {
+            console.log("overflow..");
+            return;
+          }
+          const topLeft = y * imageData.width + x;
+          const ia = 1 - a;
+          for (let row = 0; row < this.rows; row++) {
+            const writeStart = topLeft + row * imageData.width;
+            for (let col = 0; col < this.cols; col++) {
+              const i = (writeStart + col) * 4;
+              const readBlock = readStart + (row * this.cols + col);
+              const v = this.bits[readBlock] * a;
+              data[i] = v + ia * data[i];
+              data[i + 1] = v + ia * data[i + 1];
+              data[i + 2] = v + ia * data[i + 2];
+              data[i + 3] = v ? 255 : 0;
+            }
+          }
+        }
+        insertText(text, imageData, x, y, gap = 1, a = 1) {
+          const lines = text.split("\n");
+          lines.forEach((line, l) => {
+            line.split("").forEach((char, i) => {
+              const offsetX = x + i * (this.cols + gap);
+              const offsetY = y + l * (this.rows + gap);
+              this.insertChar(char, imageData, offsetX, offsetY, this.gap, a);
+            });
+          });
+        }
+      }
+
+      const _mod = (n, m) => ((n % m) + m) % m;
+      const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+      class Editor {
+        constructor(canvas, font, text) {
+          this.canvas = canvas;
+          this.scale = 2;
+          this.col = 0; // caret column
+          this.maxCol = 0; // max caret column
+          this.row = 0; // caret row
+          this.cols = 50; // number of columns
+          this.rows = 20; // number of rows
+          this.gap = 1; // gap between chars in px
+          this.ctx = canvas.getContext("2d");
+          this.setBuffer(text);
+          this.font = font;
+          const [x, y, w, h] = this.getCaretRect();
+
+          canvas.width = w * this.cols;
+          canvas.height = h * this.rows;
+          canvas.style.width = canvas.width * this.scale + "px";
+          canvas.style.height = canvas.height * this.scale + "px";
+          canvas.style.imageRendering = "pixelated";
+          this.image = new ImageData(canvas.width, canvas.height);
+          this.onChange();
+          this.paint();
+          document.addEventListener("keydown", (e) => {
+            if (e.key === "ArrowRight") {
+              this.moveRight();
+            } else if (e.key === "ArrowLeft") {
+              this.moveLeft();
+            } else if (e.key === "ArrowUp") {
+              this.moveUp();
+            } else if (e.key === "ArrowDown") {
+              this.moveDown();
+            } else if (e.key === "Enter") {
+              this.writeChar("\n");
+              this.col = 0;
+              this.maxCol = 0;
+              this.row++;
+            } else if (e.key === "Backspace") {
+              this.deleteChar();
+            } else if (e.key === " " || this.font.chars.includes(e.key)) {
+              this.writeChar(e.key);
+              this.col++;
+              this.maxCol = this.col;
+            } else {
+              return;
+            }
+            this.onChange();
+            this.paint();
+          });
+        }
+        getLines() {
+          return this.buffer.join("").split("\n");
+        }
+        setBuffer(text) {
+          this.buffer = text.split("");
+        }
+        getPaddedText() {
+          const padded = [];
+          const lines = this.getLines();
+          for (let r = 0; r < this.rows; r++) {
+            padded[r] =
+              lines[r]?.padEnd(this.cols).slice(0, this.cols) ||
+              Array(this.cols).fill(" ").join("");
+          }
+          return padded.join("\n");
+        }
+        onChange() {
+          const paddedText = this.getPaddedText();
+          this.font.insertText(paddedText, this.image, 0, 0, this.gap);
+        }
+        paint() {
+          this.ctx.imageSmoothingEnabled = false;
+          this.drawCaret();
+          this.ctx.putImageData(this.image, 0, 0);
+        }
+
+        moveRight() {
+          const lines = this.getLines();
+          const line = lines[this.row];
+          this.col++;
+          if (this.col > line.length && this.row < lines.length - 1) {
+            this.row++;
+            this.col = 0;
+          } else if (this.col > line.length) {
+            this.col = line.length;
+          }
+          this.maxCol = this.col;
+        }
+        moveLeft() {
+          const lines = this.getLines();
+          const line = lines[this.row];
+          this.col--;
+          if (this.col < 0 && this.row > 0) {
+            this.row--;
+            this.col = lines[this.row].length;
+          } else if (this.col < 0) {
+            this.col = 0;
+          }
+          this.maxCol = this.col;
+        }
+        moveUp() {
+          const lines = this.getLines();
+          const line = lines[this.row];
+          if (this.row > 0) {
+            this.row--;
+            this.col = Math.min(this.maxCol, lines[this.row].length);
+          } else {
+            this.col = this.maxCol = 0;
+          }
+        }
+        moveDown() {
+          const lines = this.getLines();
+          const line = lines[this.row];
+          if (this.row < lines.length - 1) {
+            this.row++;
+            this.col = Math.min(this.maxCol, lines[this.row].length);
+          } else {
+            this.col = this.maxCol = lines[this.row].length;
+          }
+        }
+        getCaretIndex() {
+          const chars = this.getLines()
+            .slice(0, this.row)
+            .reduce((sum, line) => sum + line.length + 1, 0);
+          return chars + this.col;
+        }
+        deleteChar() {
+          if (this.col > 0 || this.row > 0) {
+            this.moveLeft();
+            this.buffer.splice(this.getCaretIndex(), 1);
+          }
+        }
+        writeChar(char) {
+          this.buffer.splice(this.getCaretIndex(), 0, char);
+        }
+        drawCaret() {
+          const [x, y] = this.getCaretRect();
+          const char = this.buffer[this.row * this.cols + this.col];
+          this.font.insertChar("§", this.image, x, y, this.gap, 0.4);
+        }
+        getCaretRect() {
+          const w = this.font.cols + this.gap;
+          const h = this.font.rows + this.gap;
+          const x = this.col * w;
+          const y = this.row * h;
+          return [x, y, w, h];
+        }
+      }
+      const canvas = document.querySelector("#canvas");
+      const font = new PixelFont({
+        base64:
+          "////////AAAAAAAAIQhCAIAAUoAAAAAAV9SlfUAAdWji1cQAzkRETmAARSiKyaAAIQAAAAAAOiEIQQcA4IIQhFwAURQAAAAAAQnyEAAAAAAAAIQAAAHwAAAAAAAAAIAACEREQgAAdGNYxcAA4QhCE+AAdEIiI+AAdEJgxcAAEZUviEAA/CHgxcAAdGHoxcAA+EIiIgAAdGLoxcAAdGLwxcAAAAgAAIAAAAgAAIQAGREEEGAAAD4PgAAAwQQREwAAdEIiAIAA/Gt4Q+AAdGP4xiAA9GPox8AAdGEIRcAA5KMYy4AA/CHoQ+AA/CHoQgAAdCF4xcAAjGP4xiAA+QhCE+AAGEIYxcAAjKmKSiAAhCEIQ+AAjvdaxiAAzmtazmAAdGMYxcAA9GPoQgAAdGMayaAA9GPqSiAAdGDgxcAA+QhCEIAAjGMYxcAAjGKlEIAArWtaqUAAjFRFRiAAjGLiEIAA+EREQ+AA/CEIQh8AhBBBBCAA+EIQhD8AIqIAAAAAAAAAAB8AAAAAAAAAABs4zaAAhC2Y5sAAAB8IQeAACFs4zaAAAB0fweAAMT5CEIAAAB0YxeFwhC2YxiAAAD5CE+AAAAIYxcAAhCMuSiAAACEIQ+AAACO61iAAAC2YxiAAAB0YxcAAAB0Yx9CAAB0YxeEIACdMQgAAAB8HB8AAIT5CEMAAACMYxcAAACMYqIAAACMa1UAAACKiKiAAACMVKITAAD4XQ+AAOhGMIQcAIQhCEIQA4IQxiFwAABFRAAAA",
+        chars:
+          "§ !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+        cols: 5,
+      });
+
+      const initialCode = `I want the editor to behave like a regular text 
+input, where a change moves the rest of the 
+buffer. This is now at a point where it behaves 
+as you would expect. Selection is still missing + 
+overflow won't move the "camera" or wrap the text
+
+as a bonus, here are two dogs:
+
+            /)-_-(\\        /)-_-(\\
+             (o o)          (o o)
+     .-----__/\\o/            \\o/\\__-----.
+    /  __      /              \\      __  \\
+\\__/\\ /  \\_\\ |/                \\| /_/  \\ /\\__/
+     \\\\     ||                  ||      \\\\
+     //     ||                  ||      //
+     |\\     |\\                  /|     /|
+`;
+      const editor = new Editor(canvas, font, initialCode);
+
+      // render code
+      document.querySelector("#pre").textContent =
+        document.querySelector("html").outerHTML;
+    </script>
+  </body>
+</html>
