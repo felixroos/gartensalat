@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>🌱 pixelfont encoding</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: "JGS7";
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 0;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      @font-face {
+        font-family: "JGS7";
+        src: url("./jgs7.ttf");
+      }
+      #encoded {
+        width: 500px;
+        padding: 8px;
+        font-family: monospace;
+        word-break: break-all;
+        background-color: black;
+        color: white;
+        font-size: 12px;
+        line-height: normal;
+      }
+      #fontface {
+        display: flex;
+        flex-wrap: wrap;
+      }
+      pre,
+      textarea {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        border: 1px solid white;
+        outline: none;
+        overflow: auto;
+        background-color: transparent;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 pixelfont encoding: jgs7</h2>
+    <p>
+      Let's see how to encode a pixel based font to a compact format, usable in
+      a garden that tolerates no external assets. Instead of learning how to
+      parse TTF files, the pixel data from an existing font can be read from a
+      canvas:
+    </p>
+    <div id="fontface"></div>
+    <p>
+      In this case, each character has a size of 5x9, 45 pixels in total. base64
+      can store 6 bits of information per character. Using 8 characters, we can
+      store 48 bits, which is enough. The base64 string, along with the
+      character sequence and the col size can be stored in a JSON like this:
+    </p>
+    <div id="encoded"></div>
+    <p>
+      To use the font, all we need to do is to copy that JSON, along with the
+      logic to decode it. Then we can render text to a canvas:
+    </p>
+    <canvas
+      id="output"
+      style="background: white; width: 500px; height: 200px"
+      width="500"
+      height="200"
+    ></canvas>
+    <p>
+      This is exciting! It opens the door to create custom editors, not
+      constrained by the DOM. Eventually, it could also be fed into a shader..
+    </p>
+
+    <details>
+      <summary>show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <br />
+
+    <script>
+      // scraper
+      let f = new FontFace("JGS7", "url('./jgs7.ttf')");
+      function scrape(char) {
+        let canvas = document.createElement("canvas");
+        const [w, h, base] = [7, 14, 11];
+        canvas.width = w;
+        canvas.height = h;
+        let upscale = 6; // how big the canvas is displayed
+        canvas.style.width = canvas.width * upscale + "px";
+        canvas.style.height = canvas.height * upscale + "px";
+        canvas.style.backgroundColor = "white";
+
+        let ctx = canvas.getContext("2d");
+
+        canvas.style.imageRendering = "pixelated";
+        canvas.style.border = "1px solid yellow";
+        ctx.font = `${(canvas.width * h) / w}px JGS7`;
+        const m = ctx.measureText(char);
+
+        ctx.fillText(char, 0, base);
+        document.querySelector("#fontface").append(canvas);
+        // read back font from canvas
+        let img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const pixels = w * h;
+        let bits = [];
+        for (let p = 0; p < pixels; p++) {
+          // 4 values per pixel
+          bits.push(Math.round(img.data[p * 4 + 3] / 255));
+        }
+        return bits;
+      }
+
+      function binaryArrayToBase64(binaryArray) {
+        const paddedArray = [...binaryArray];
+        while (paddedArray.length % 8 !== 0) {
+          paddedArray.push(0);
+        }
+        let binaryString = "";
+        for (let i = 0; i < paddedArray.length; i += 8) {
+          const byte = paddedArray.slice(i, i + 8).join("");
+          const char = String.fromCharCode(parseInt(byte, 2));
+          binaryString += char;
+        }
+        return btoa(binaryString);
+      }
+      function base64ToBinaryArray(base64String) {
+        const binaryString = atob(base64String);
+        const binaryArray = [];
+        for (let i = 0; i < binaryString.length; i++) {
+          const binaryChar = binaryString
+            .charCodeAt(i)
+            .toString(2)
+            .padStart(8, "0");
+          binaryArray.push(...binaryChar.split("").map(Number));
+        }
+        return binaryArray;
+      }
+      function getFontChar(font, char) {
+        const { base64, chars, cols } = font;
+        const perChar = base64.length / chars.length;
+        const bits = perChar * 6; // 1 base64 char = 6 bit
+        const rows = Math.floor(bits / cols);
+        const i = chars.indexOf(char);
+        const chunk = base64.slice(i * perChar, (i + 1) * perChar);
+        const bin = base64ToBinaryArray(chunk).join("");
+        return bin;
+      }
+      const getCharImageData = (font, char) => {
+        const [w, h] = [7, 14];
+        const stamp = new ImageData(w, h);
+        const bits = getFontChar(font, char);
+        for (let i = 0; i < w * h; i++) {
+          const blockStart = i * 4;
+          const v = bits[i] === "1" ? 0 : 255;
+          stamp.data[blockStart] = v;
+          stamp.data[blockStart + 1] = v;
+          stamp.data[blockStart + 2] = v;
+          stamp.data[blockStart + 3] = 255;
+        }
+        return stamp;
+      };
+
+      function writeText(ctx, font, text, x, y) {
+        let stamp;
+        text.split("").forEach((char, i) => {
+          if (char === " ") {
+            return;
+          }
+          stamp = getCharImageData(font, char);
+          const col = i + x;
+          const [py, px] = [2, 2];
+          const row = Math.floor(y);
+          const cx = col * 8 + px;
+          const cy = row * 15 + py;
+          ctx.putImageData(stamp, cx, cy);
+          ctx.imageSmoothingEnabled = false;
+          const { width, height } = ctx.canvas;
+          const [w, h] = [7, 14];
+        });
+      }
+
+      f.load().then(() => {
+        // convert font to JSON
+        let chars = {};
+        let encoded = "";
+        let charstr = "";
+        for (let i = 33; i < 127; i++) {
+          let char = String.fromCharCode(i);
+          charstr += char;
+          chars[char] = scrape(char);
+          const encodedChar = binaryArrayToBase64(chars[char]);
+          encoded += encodedChar;
+        }
+        // create font
+        const font = {
+          base64: encoded,
+          chars: charstr,
+          cols: 5,
+        };
+        // display font JSON
+        document.querySelector("#encoded").innerText = JSON.stringify(font);
+
+        // font rendering
+        // write in og size to offscreen canvas
+        const offscreen = document.createElement("canvas");
+        const offscreenCtx = offscreen.getContext("2d");
+        writeText(offscreenCtx, font, "The quick brown fox", 0, 0);
+        writeText(offscreenCtx, font, "jumps over the lazy", 0, 1);
+        writeText(offscreenCtx, font, "dog", 0, 2);
+
+        // then draw scaled up version to visible canvas
+        const canvas = document.querySelector("#output");
+        const ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = false;
+        const scale = 3;
+        // scale up
+        ctx.drawImage(
+          offscreenCtx.canvas,
+          0,
+          0,
+          ctx.canvas.width,
+          ctx.canvas.height,
+          0,
+          0,
+          ctx.canvas.width * scale,
+          ctx.canvas.height * scale
+        );
+      });
+      // render code
+      document.querySelector("#pre").textContent =
+        document.querySelector("html").outerHTML;
+    </script>
+  </body>
+</html>

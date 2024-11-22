@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>🌱 pixelfont editor</title>
+    <title>🌱 pixelfont editor: jgs7</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
       body {
@@ -38,10 +38,10 @@
     </style>
   </head>
   <body>
-    <h2>🌱 pixelfont editor</h2>
+    <h2>🌱 pixelfont editor: jgs7</h2>
     <p>
-      <a>PixeloidMono</a>
-      <a href="pixelfont-editor2.html">jgs7</a>
+      <a href="pixelfont-editor.html">PixeloidMono</a>
+      <a>jgs7</a>
     </p>
     <canvas
       id="canvas"
@@ -49,6 +49,12 @@
       width="480"
       height="480"
     ></canvas>
+    <p>
+      Font:
+      <a href="https://adelfaure.net/tools/jgs/" target="_blank"
+        >jgs7 by Adel Faure</a
+      >
+    </p>
     <details>
       <summary>show page source</summary>
       <pre id="pre"></pre>
@@ -59,13 +65,13 @@
     <script>
       class PixelFont {
         constructor(font) {
-          const { base64, chars, cols } = font;
+          const { base64, chars, cols, rows } = font;
           this.base64 = base64;
           this.chars = chars;
           this.perChar = base64.length / chars.length;
           const maxBits = this.perChar * 6; // 1 base64 char = 6 bit
           this.cols = cols;
-          this.rows = Math.floor(maxBits / cols);
+          this.rows = rows;
           this.bitsPerChar = this.cols * this.rows;
           const totalPixels = this.cols * this.rows * this.chars.length;
           this.bits = new Uint8Array(totalPixels);
@@ -129,7 +135,7 @@
             line.split("").forEach((char, i) => {
               const offsetX = x + i * (this.cols + gap);
               const offsetY = y + l * (this.rows + gap);
-              this.insertChar(char, imageData, offsetX, offsetY, this.gap, a);
+              this.insertChar(char, imageData, offsetX, offsetY, gap, a);
             });
           });
         }
@@ -144,9 +150,9 @@
           this.col = 0; // caret column
           this.maxCol = 0; // max caret column
           this.row = 0; // caret row
-          this.cols = 50; // number of columns
+          this.cols = 46; // number of columns
           this.rows = 20; // number of rows
-          this.gap = 1; // gap between chars in px
+          this.gap = 0; // gap between chars in px
           this.ctx = canvas.getContext("2d");
           this.setBuffer(text);
           this.font = font;
@@ -286,21 +292,28 @@
         }
       }
       const canvas = document.querySelector("#canvas");
-      const font = new PixelFont({
+      /* const font = new PixelFont({
         base64:
           "////////AAAAAAAAIQhCAIAAUoAAAAAAV9SlfUAAdWji1cQAzkRETmAARSiKyaAAIQAAAAAAOiEIQQcA4IIQhFwAURQAAAAAAQnyEAAAAAAAAIQAAAHwAAAAAAAAAIAACEREQgAAdGNYxcAA4QhCE+AAdEIiI+AAdEJgxcAAEZUviEAA/CHgxcAAdGHoxcAA+EIiIgAAdGLoxcAAdGLwxcAAAAgAAIAAAAgAAIQAGREEEGAAAD4PgAAAwQQREwAAdEIiAIAA/Gt4Q+AAdGP4xiAA9GPox8AAdGEIRcAA5KMYy4AA/CHoQ+AA/CHoQgAAdCF4xcAAjGP4xiAA+QhCE+AAGEIYxcAAjKmKSiAAhCEIQ+AAjvdaxiAAzmtazmAAdGMYxcAA9GPoQgAAdGMayaAA9GPqSiAAdGDgxcAA+QhCEIAAjGMYxcAAjGKlEIAArWtaqUAAjFRFRiAAjGLiEIAA+EREQ+AA/CEIQh8AhBBBBCAA+EIQhD8AIqIAAAAAAAAAAB8AAAAAAAAAABs4zaAAhC2Y5sAAAB8IQeAACFs4zaAAAB0fweAAMT5CEIAAAB0YxeFwhC2YxiAAAD5CE+AAAAIYxcAAhCMuSiAAACEIQ+AAACO61iAAAC2YxiAAAB0YxcAAAB0Yx9CAAB0YxeEIACdMQgAAAB8HB8AAIT5CEMAAACMYxcAAACMYqIAAACMa1UAAACKiKiAAACMVKITAAD4XQ+AAOhGMIQcAIQhCEIQA4IQxiFwAABFRAAAA",
         chars:
           "§ !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
         cols: 5,
+      }); */
+      const font = new PixelFont({
+        base64:
+          "////////////////////ECBAgQIECAAAQIAAAA==AAChQoAAAAAAAAAAAA==RIkX9EiRIkSL+iRIgA==AABBxUoOChSo4IAAAA==AkVRIIEECCBBIqiQAA==AADCRIopSokR0AAAAA==AAAgggAAAAAAAAAAAA==AgQQIIECBAgQECAgQA==gQECAgQIECBBAggQAA==AAAAhUc/nFQgAAAAAA==ECBAgQI/iBAgQIECAA==AAAAAAAAAAAQQQAAAA==AAAAAAA/gAAAAAAAAA==AAAAAAAAAAAAQIAAAA==AgQQIIEECCBBAggQAA==AAABxEiVKkSI4AAAAA==AAAAQYUCBAgQIAAAAA==AAABxECCCCCB8AAAAA==AAABxECGAgSI4AAAAA==AAAAwoUSJHwQIAAAAA==AAAD5AgeAgSI4AAAAA==AAABxEgeIkSI4AAAAA==AAAD4ECCCCCBAAAAAA==AAABxEiOIkSI4AAAAA==AAABxEiRHgSI4AAAAA==AAAAgQAAAAAAQIAAAA==AAAAgQAAAAAQQQAAAA==AAAAMYwgQGAwGAAAAA==AAAH8AAAAAAD+AAAAA==AAAGAwGAgQxjAAAAAA==AHESIEEECAAAQIAAAA==AAABxFOpUpiA4AAAAA==AAABxEiRPkSJEAAAAA==AAADxEieIkSJ4AAAAA==AAABxEgQIECI4AAAAA==AAADxEiRIkSJ4AAAAA==AAAD5AgeIECB8AAAAA==AAAD5AgeIECBAAAAAA==AAABxEgQLkSI4AAAAA==AAACJEifIkSJEAAAAA==AAAD4QIECBAh8AAAAA==AAAAIECBAkSI4AAAAA==AAACJIoYMFCREAAAAA==AAACBAgQIECB8AAAAA==AAACJsqRIkSJEAAAAA==AAACJkyVKkyZEAAAAA==AAABxEiRIkSI4AAAAA==AAADxEiRPECBAAAAAA==AAABxEiRIlSQ0AAAAA==AAADxEiRPFCREAAAAA==AAABxEgOAgSI4AAAAA==AAAD4QIECBAgQAAAAA==AAACJEiRIkSI4AAAAA==AAACJEiKFCggQAAAAA==AAACJEiRIlTZEAAAAA==AAACJEUECCiJEAAAAA==AAACJEUKCBAgQAAAAA==AAAD4EEECCCB8AAAAA==AAAA8QIECBAgeAAAAA==gQECAgQECAgQECAgQA==AAAHgQIECBAjwAAAAA==EFCiJFBggAAAAAAAAA==AAAAAAAAAAAAAAAfwA==AACAgIAAAAAAAAAAAA==AAAAAAcRHkSI4AAAAA==AAACBA8RIkSI4AAAAA==AAAAAAcRIECI4AAAAA==AAAAIEeRIkSI4AAAAA==AAAAAAcRPkCI4AAAAA==AAABxEgeIECBAAAAAA==AAAAAAcRIkR4EiOAAA==AAACBA8RIkSJEAAAAA==AAAAgQAACBAgQAAAAA==AAAAIEAAAgQIEiOAAA==AAACBAiWMGCxEAAAAA==AAAAgQIECBAgQAAAAA==AAAAAAUVKlSJEAAAAA==AAAAAAcRIkSJEAAAAA==AAAAAAcRIkSI4AAAAA==AAAAAAcRIkSJ4gQAAA==AAAAAAcRIkSI8CBAAA==AAAAAAcRIECBAAAAAA==AAAAAAcRHASI4AAAAA==AAACBAgeIECI4AAAAA==AAAAAAiRIkSI4AAAAA==AAAAAAiRFCggQAAAAA==AAAAAAiRKlSooAAAAA==AAAAAAiKCBBREAAAAA==AAAAAAiRIkR4EiOAAA==AAAAAA+CCBBB8AAAAA==AAwgQIYQIDAQIEBgAA==ECBAgQIECBAgQIECAA==AYCBAgMBAhhAgQwAAA==YSBIYAAAAAAAAAAAAA==",
+        chars:
+          "§!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+        cols: 7,
+        rows: 14,
       });
 
-      const initialCode = `I want the editor to behave like a regular text 
-input, where a change moves the rest of the 
-buffer. This is now at a point where it behaves 
-as you would expect. Selection is still missing + 
-overflow won't move the "camera" or wrap the text
+      const initialCode = ` 
+ This is a beautiful font called jgs7 
+ made by Adel Faure. Check out adelfaure.net
+ The quick brown fox jumps over the lazy dog
 
-as a bonus, here are two dogs:
+ as a bonus, here are two dogs:
 
             /)-_-(\\        /)-_-(\\
              (o o)          (o o)
@@ -310,6 +323,7 @@ as a bonus, here are two dogs:
      \\\\     ||                  ||      \\\\
      //     ||                  ||      //
      |\\     |\\                  /|     /|
+
 `;
       const editor = new Editor(canvas, font, initialCode);
 
