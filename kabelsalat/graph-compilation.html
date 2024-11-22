@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <title>🌱 graph compilation</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.4em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 0;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        width: 100%;
+        overflow: auto;
+        border: 1px solid #aaa;
+        padding: 8px;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      textarea {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 1px solid #aaa;
+        outline: none;
+        background-color: transparent;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 graph compilation</h2>
+    <p>
+      Don't panic.. The title of this post sounds super scary. But it isn't.
+      What we're doing: expressing graphs as js code, then turning it into a
+      piece of lower level code that represents the data flow of the graph.
+    </p>
+    <p>
+      Why? This is essentially what hydra and kabelsalat are doing to turn user
+      code into more lower level code.
+    </p>
+    <p>
+      To make it as simple as possible, I've written a tiny language for math
+      expressions:
+    </p>
+    <label
+      >user code:
+      <textarea id="input" type="text" rows="4" spellcheck="false"></textarea>
+    </label>
+    <label
+      >generated code:
+      <pre id="generated"></pre>
+    </label>
+    <label
+      >result:
+      <pre id="result"></pre>
+    </label>
+    <p>
+      You can edit the user code and run it with ctrl+enter to see what changes
+      in the generated code and output.
+    </p>
+    <details>
+      <summary>show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      // generic graph lib
+      class Node {
+        constructor(type, ins, compileSelf) {
+          this.type = type;
+          this.ins = ins;
+          this.compileSelf = compileSelf;
+        }
+      }
+      // registers a function on the node class + standalone
+      let register = (type, compile) => {
+        Node.prototype[type] = function (...args) {
+          return new Node(type, [this, ...args], compile);
+        };
+        return (...args) => new Node(type, args, compile);
+      };
+      // sort nodes by dependencies
+      function topoSort(graph) {
+        const sorted = [];
+        const visited = new Set();
+        function dfs(node) {
+          if (!(node instanceof Node) || visited.has(node)) {
+            return; // constant values or already visited nodes
+          }
+          visited.add(node);
+          for (let i in node.ins) {
+            dfs(node.ins[i]);
+          }
+          sorted.push(node);
+        }
+        dfs(graph);
+        return sorted;
+      }
+      // convert node to code + metadata
+      Node.prototype.compile = function () {
+        let nodes = topoSort(this);
+        const getRef = (input) =>
+          ["number", "string"].includes(typeof input)
+            ? input
+            : `v${nodes.indexOf(input)}`;
+        let lines = [];
+        for (let id in nodes) {
+          const node = nodes[id];
+          const args = node.ins.map(getRef);
+          const ref = getRef(node);
+          lines.push(node.compileSelf(node, ref, args));
+        }
+        const last = getRef(nodes[nodes.length - 1]);
+        return { lines, last };
+      };
+      // the following code uses the above graph lib in a more specific way
+      // arithmetic example
+      const compileSelf = (node, ref, args) =>
+        `let ${ref} = lib.${node.type}(${args.join(",")})`;
+      const add = register("add", compileSelf);
+      const sub = register("sub", compileSelf);
+      const mul = register("mul", compileSelf);
+      const div = register("div", compileSelf);
+      const lib = {
+        add: (a, b) => a + b,
+        sub: (a, b) => a - b,
+        mul: (a, b) => a * b,
+        div: (a, b) => a / b,
+      };
+      const input = document.querySelector("#input");
+      const generated = document.querySelector("#generated");
+      const result = document.querySelector("#result");
+      input.value = `add(1, 2).mul(20).div(2).add(12)`;
+      let update = () => {
+        const node = new Function(`return ${input.value}`)();
+        console.log("node", node);
+        const unit = node.compile();
+        unit.lines.push(`return ${unit.last}`);
+        const code = unit.lines.join("\n");
+        console.log("code", code);
+        generated.innerText = code;
+        const fn = new Function("lib", code);
+        const res = fn(lib);
+        console.log("res", res);
+        result.innerText = res;
+      };
+      // update on ctrl+enter
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          update();
+        }
+      });
+      update();
+
+      document.querySelector("#pre").textContent =
+        document.querySelector("html").outerHTML;
+    </script>
+  </body>
+</html>
