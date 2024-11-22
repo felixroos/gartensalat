@@ -240,7 +240,7 @@
             this.row--;
             this.col = Math.min(this.maxCol, lines[this.row].length);
           } else {
-            this.col = this.maxCol = 0;
+            this.col = 0;
           }
         }
         moveDown() {
@@ -250,7 +250,7 @@
             this.row++;
             this.col = Math.min(this.maxCol, lines[this.row].length);
           } else {
-            this.col = this.maxCol = lines[this.row].length;
+            this.col = lines[this.row].length;
           }
         }
         getCaretIndex() {
