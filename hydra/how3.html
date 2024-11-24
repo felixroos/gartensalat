@@ -354,19 +354,11 @@ st._X(...args).Y(...args) = st._Y(...args)._X(...args)</pre
       // use urlCode or fall back to default shadertoy example
       const initialCode =
         urlCode ||
-        `st._rotate(0, 0.1)
-      ._osc(100, 0.01, 1.4)
-      .mult(
-        st._modulate(
-          st._rotate(0, -0.1)
-          ._osc(10, 0.1, 0),
-          1
-          )
-        ._osc(10, 0.1, 0),
-        1
-      )
-      .color(2.83, 0.91, 0.39, 1)
-      .out()`;
+        `osc(100, 0.01, 1.4)
+.rotate(0, 0.1)
+.mult(osc(10, 0.1).modulate(osc(10).rotate(0, -0.1), 1))
+.color(2.83,0.91,0.39)
+.out(o0)`;
       // set up code input
       const input = document.querySelector("#input");
       input.value = initialCode;
