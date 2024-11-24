@@ -96,8 +96,8 @@ vec2 modulate(vec2 _st, vec4 _c0, float amount) {
       Without going into detail of how these functions, work, we can assume that
       vec2 is always a 2D position [x,y] and vec4 is always a color [r,g,b,a].
       So in short, the vec2 functions are related to geometry, whereas the vec4
-      functions are related to color. To illustrate that, we can compare the
-      first 2 lines in our examples:
+      functions are related to color. Let's look again at the first lines in our
+      example:
     </p>
     <pre>
 // our half baked syntax
@@ -114,8 +114,8 @@ vec2 v6 = rotate(st, 0., -0.1);
 vec4 v5 = osc(v6, 10., 0.1, 0.);</pre
     >
     <p>
-      To morph the hydra version into our version, we can define these 2 rewrite
-      rules:
+      To morph the hydra version into our version, we can define these 2
+      (unscientific) rewrite rules:
     </p>
     <pre>
 // with X = vec4 function and Y = vec2 function
