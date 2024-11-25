@@ -11,60 +11,46 @@
         max-width: 500px;
         margin: auto;
         font-family: serif;
-        font-size: 1.4em;
+        font-size: 1.2em;
         color: #edd;
-        text-align: left;
-        padding: 20px 0;
+        padding: 20px 8px;
       }
       @font-face {
         font-family: "FontWithASyntaxHighlighter";
         src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
           format("woff2");
       }
-      pre {
-        font-size: 12px;
-        font-family: "FontWithASyntaxHighlighter", monospace;
-        width: 100%;
-        overflow: auto;
-        border: 1px solid #aaa;
-        padding: 8px;
-      }
       a {
         color: cyan;
         font-size: 1em;
       }
-      textarea {
+      textarea,
+      pre {
+        box-sizing: border-box;
         font-family: "FontWithASyntaxHighlighter", monospace;
         padding: 8px;
         font-size: 12px;
-        border: 1px solid #aaa;
+        border: 0;
         outline: none;
-        background-color: transparent;
+        overflow: auto;
+        background-color: #44444490;
         color: white;
         width: 100%;
         margin-top: 8px;
+        box-sizing: border-box;
       }
     </style>
   </head>
   <body>
-    <h2>🌱 graph compilation</h2>
+    <h2>🌱 a graph compiler</h2>
     <p>
-      Don't panic.. The title of this post sounds super scary. But it isn't.
-      What we're doing: expressing graphs as js code, then turning it into a
-      piece of lower level code that represents the data flow of the graph.
+      After building <a href="./graph-language.html">a graph language</a>, we
+      can now use these graphs to actually do something. A graph can represent
+      the flow of data in a system. We can turn a graph into a piece of runnable
+      code in any language.. For the purpose of demonstration, let's compile our
+      math graph language back to JS:
     </p>
-    <p>
-      Why? This is essentially what hydra and kabelsalat are doing to turn user
-      code into more lower level code.
-    </p>
-    <p>
-      To make it as simple as possible, I've written a tiny language for math
-      expressions:
-    </p>
-    <label
-      >user code:
-      <textarea id="input" type="text" rows="4" spellcheck="false"></textarea>
-    </label>
+    <textarea id="input" type="text" rows="4" spellcheck="false"></textarea>
     <label
       >generated code:
       <pre id="generated"></pre>
@@ -76,6 +62,11 @@
     <p>
       You can edit the user code and run it with ctrl+enter to see what changes
       in the generated code and output.
+    </p>
+    <p>
+      The key is to first sort nodes by dependency (topoSort), then we can
+      generate the output code line by line. Each node can define its compiled
+      output, which allows compiling to any language.
     </p>
     <details>
       <summary>show page source</summary>
@@ -121,9 +112,7 @@
       Node.prototype.compile = function () {
         let nodes = topoSort(this);
         const getRef = (input) =>
-          ["number", "string"].includes(typeof input)
-            ? input
-            : `v${nodes.indexOf(input)}`;
+          typeof input !== "object" ? input : `v${nodes.indexOf(input)}`;
         let lines = [];
         for (let id in nodes) {
           const node = nodes[id];
@@ -151,6 +140,7 @@
       const input = document.querySelector("#input");
       const generated = document.querySelector("#generated");
       const result = document.querySelector("#result");
+      const graph = document.querySelector("#graph");
       input.value = `add(1, 2).mul(20).div(2).add(12)`;
       let update = () => {
         const node = new Function(`return ${input.value}`)();
