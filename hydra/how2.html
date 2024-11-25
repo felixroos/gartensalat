@@ -54,7 +54,9 @@
       Continuing <a href="./how.html">how hydra works</a>, let's see how to turn
       a hydra style patch into GLSL code. With the help of
       <a href="/kabelsalat/graph-compilation.html">graph compilation</a>, we can
-      treat each function call as a node.
+      treat each function call as a node. Note that this implementation is
+      different from the hydra codebase, as it is just my own attempt to
+      recreate it using graphs.
     </p>
     <p>
       In the last episode, we've seen that hydra has generated code like this:
@@ -85,8 +87,8 @@ color(v0, 2.83, 0.91, 0.39, 1.);</pre
       Here, I've manually de-nested the expression by creating a variable for
       each step. This would be the target output of our graph compiler. Let's
       take the inverse route and manually morph that into our input language. We
-      will follow this one rule: <code>a.b(c) = b(a,c)</code>, for example
-      <code>rotate(st, 0, -0.1) = st.rotate(0, -0.1)</code>. By stupidly
+      will follow this one rewrite rule: <code>a.b(c) = b(a,c)</code>, for
+      example <code>rotate(st, 0, -0.1) = st.rotate(0, -0.1)</code>. By stupidly
       applying this rule throughout, we end up with this:
     </p>
     <pre>
@@ -127,7 +129,8 @@ st.rotate(0, 0.1)
     </label>
     <p>
       The now automatically generated GLSL code is structurally identical to our
-      handishly produced version from earlier.
+      handishly produced version from earlier. Next up, we need to bridge the
+      gap between this and actual hydra syntax..
     </p>
     <details>
       <summary>show page source</summary>
