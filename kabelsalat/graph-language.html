@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 a graph language</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre,
+      textarea {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        border: 0;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 a graph language</h2>
+    <p>I've found this way of building graphs really compelling:</p>
+    <pre>
+class Node {
+  constructor(type, ins) {
+    this.type = type;
+    this.ins = ins;
+  }
+}
+// registers a function on the node class + standalone
+let registerNode = (type) => {
+  Node.prototype[type] = function (...args) {
+    return new Node(type, [this, ...args]);
+  };
+  return (...args) => new Node(type, args);
+};
+const add = registerNode("add");
+const sub = registerNode("sub");
+const mul = registerNode("mul");
+const div = registerNode("div");
+
+add(3, 2).mul(3).div(2);
+// = div(mul(add(3, 2), 3), 2);
+    </pre>
+    <p>
+      It's a thin abstraction over function calling, allowing you to use method
+      chaining to pass the left side to the next function, without paren
+      nesting. Hydra, strudel and kabelsalat use a variant of this syntax for
+      their DSL (domain specific language). The output looks like this:
+    </p>
+    <pre>
+{
+  "type": "div",
+  "ins": [
+    {
+      "type": "mul",
+      "ins": [
+        {
+          "type": "add",
+          "ins": [3, 2],
+          "id": 0
+        },
+        3
+      ],
+      "id": 1
+    },
+    2
+  ],
+  "id": 2
+}
+    </pre>
+    <p>
+      The above JSON is a syntax tree, describing the structure of function
+      calls. We can visualize this using graphhviz:
+    </p>
+    <div id="graph1"></div>
+    <p>The tree becomes a graph when we reuse nodes as variables:</p>
+    <pre>
+let a = add(1, 2);
+return a.mul(3).add(a)</pre
+    >
+    <div id="graph2"></div>
+
+    <p>we can even form cycles, by routing a node to its own input:</p>
+    <pre>
+const node = add(1)
+node.ins.push(node)
+return node;</pre
+    >
+    <div id="graph3"></div>
+    <p>
+      I'll get more into cycles and feedback in another post. Here's an editor
+      to play around with:
+    </p>
+    <textarea id="input" type="text" rows="4" spellcheck="false"></textarea>
+    <div id="graph"></div>
+    <p>
+      Now that we know how to create graphs, it's time to actually use them..
+    </p>
+    <details>
+      <summary>show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script type="module">
+      /** graph lib **/
+      // generic graph lib
+      class Node {
+        constructor(type, ins) {
+          this.type = type;
+          this.ins = ins;
+        }
+      }
+      // registers a function on the node class + standalone
+      let registerNode = (type) => {
+        Node.prototype[type] = function (...args) {
+          return new Node(type, [this, ...args]);
+        };
+        return (...args) => new Node(type, args);
+      };
+      const run = (code, lib) => {
+        const keys = Object.keys(lib);
+        const values = Object.values(lib);
+        return new Function(...keys, code)(...values);
+      };
+
+      // ui
+      const lib = {
+        add: registerNode("add"),
+        sub: registerNode("sub"),
+        mul: registerNode("mul"),
+        div: registerNode("div"),
+      };
+      const container = document.querySelector("#graph");
+      const input = document.querySelector("#input");
+      input.value = `let a = add(1, 2);
+return a.mul(3).add(a)`;
+      let update = () => {
+        const node = run(input.value, lib);
+        renderNode(node, container);
+      };
+      // update on ctrl+enter
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          update();
+        }
+      });
+      update();
+
+      renderNode(
+        run(`return add(3, 2).mul(3).div(2)`, lib),
+        document.querySelector("#graph1")
+      );
+      renderNode(
+        run(
+          `let a = add(1, 2);
+return a.mul(3).add(a)`,
+          lib
+        ),
+        document.querySelector("#graph2")
+      );
+      renderNode(
+        run(
+          `const node = add(1)
+node.ins.push(node)
+return node;`,
+          lib
+        ),
+        document.querySelector("#graph3")
+      );
+
+      /** graphviz **/
+      function gvjson2dot(json) {
+        const { nodes, edges } = json;
+        let renderProps = (props) =>
+          `[${Object.entries(props)
+            .map(([key, value]) => `${key}="${value}"`)
+            .join(",")}]`;
+        return `digraph {
+      bgcolor="transparent"
+      rankdir="LR"
+      ${nodes.map((node) => `  "${node.id}" ${renderProps(node)}`).join("\n")}
+      ${edges
+        .map(
+          (edge) => `  ${edge.source} -> ${edge.target} ${renderProps(edge)}`
+        )
+        .join("\n")}
+      }`;
+      }
+      function node2gvjson(graph) {
+        let dfs = (node, fn, visited = []) => {
+          if (typeof node !== "object") {
+            return node;
+          }
+          visited.push(node);
+          node.ins = node.ins.map((input) => {
+            if (visited.includes(input)) {
+              return input;
+            }
+            return dfs(input, fn, visited);
+          });
+          node = fn(node, visited);
+          return node;
+        };
+        const nodes = [],
+          edges = [];
+        let style = {
+          color: "white",
+          fontcolor: "white",
+          fontsize: "10",
+          fontname: "monospace",
+        };
+        dfs(graph, (node) => {
+          node.id = nodes.length;
+          nodes.push({
+            id: node.id,
+            label: `${node.type} ${node.ins
+              .map((input) => (typeof input === "object" ? "_" : input))
+              .join(" ")}`,
+            ordering: "in",
+            width: "0.5",
+            height: "0.4",
+            ...style,
+          });
+          for (let i in node.ins) {
+            if (typeof node.ins[i] !== "object") {
+              continue;
+            }
+            edges.push({
+              id: edges.length,
+              source: node.ins[i].id,
+              target: node.id,
+              directed: "true",
+              ...style,
+            });
+          }
+          return node;
+        });
+        return { nodes, edges };
+      }
+      function node2dot(node) {
+        const flat = node2gvjson(node);
+        const dot = gvjson2dot(flat);
+        return dot;
+      }
+      async function renderDot(dot, container) {
+        // this breaks my rule of self-contained html :/
+        // but graphviz is just so good..
+        // i don't want to segway into graph layouting rn...
+        // download the file here: https://unpkg.com/@hpcc-js/wasm@2.18.0/dist/graphviz.js
+        // sorry if you're living in 2051 and npm has collapsed already..
+        const { Graphviz } = await import("./graphviz.js");
+        const graphvizLoaded = Graphviz.load();
+        const graphviz = await graphvizLoaded;
+        const svg = await graphviz.layout(dot, "svg", "dot", {});
+        container.innerHTML = svg;
+      }
+      function renderNode(node, container) {
+        const dot = node2dot(node);
+        return renderDot(dot, container);
+      }
+
+      // render code
+      document.querySelector("#pre").textContent =
+        document.querySelector("html").outerHTML;
+    </script>
+  </body>
+</html>
