@@ -11,42 +11,41 @@
         max-width: 500px;
         margin: auto;
         font-family: serif;
-        font-size: 1.4em;
+        font-size: 1.2em;
         color: #edd;
         text-align: left;
-        padding: 20px 0;
+        padding: 20px 8px;
       }
       @font-face {
         font-family: "FontWithASyntaxHighlighter";
         src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
           format("woff2");
       }
-      pre {
-        font-size: 12px;
-        font-family: "FontWithASyntaxHighlighter", monospace;
-        width: 100%;
-        overflow: auto;
-        border: 1px solid #aaa;
-        padding: 8px;
-      }
       a {
         color: cyan;
         font-size: 1em;
       }
-      textarea {
+      textarea,
+      pre {
+        overflow: auto;
         font-family: "FontWithASyntaxHighlighter", monospace;
         padding: 8px;
         font-size: 12px;
-        border: 1px solid #aaa;
+        border: 0;
         outline: none;
-        background-color: transparent;
+        background-color: #44444490;
+        border: 0;
         color: white;
         width: 100%;
         margin-top: 8px;
+        box-sizing: border-box;
       }
       ul,
       ol {
         padding-left: 20px;
+      }
+      canvas {
+        max-width: 100%;
       }
     </style>
   </head>
@@ -97,26 +96,8 @@ vec2 modulate(vec2 _st, vec4 _c0, float amount) {
       Without going into detail of how these functions, work, we can assume that
       vec2 is always a 2D position [x,y] and vec4 is always a color [r,g,b,a].
       So in short, the vec2 functions are related to geometry, whereas the vec4
-      functions are related to color. Let's look again at the first lines in our
-      example:
-    </p>
-    <pre>
-// our half baked syntax
-st.rotate(0, 0.1)
-.osc(100, 0.01, 1.4)
-// actual hydra
-osc(100, 0.01, 1.4)
-.rotate(0, 0.1)
-      </pre
-    >
-    <p>expected output:</p>
-    <pre>
-vec2 v6 = rotate(st, 0., -0.1);
-vec4 v5 = osc(v6, 10., 0.1, 0.);</pre
-    >
-    <p>
-      To morph the hydra version into our version, we can define these 2
-      (unscientific) rewrite rules:
+      functions are related to color. To morph the hydra version into our
+      version, we can define these 2 (unscientific) rewrite rules:
     </p>
     <pre>
 // with X = vec4 function and Y = vec2 function
@@ -134,14 +115,14 @@ st._X(...args).Y(...args) = st._Y(...args)._X(...args)</pre
       example patch:
     </p>
     <canvas id="canvas" width="500" height="500"></canvas>
-    <span id="hint"
-      ><small>💡 hit ctrl+enter to update the code.</small>
+    <div id="hint">
+      <small>💡 hit ctrl+enter to update the code.</small>
       <small
         style="cursor: pointer; opacity: 50%"
         onclick="document.querySelector('#hint').remove()"
         >hide</small
-      ></span
-    >
+      >
+    </div>
     <textarea id="input" type="text" rows="16" spellcheck="false"></textarea>
     <label
       >generated code:
