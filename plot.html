@@ -10,19 +10,15 @@
         max-width: 500px;
         margin: auto;
         font-family: serif;
-        font-size: 1.4em;
+        font-size: 1.2em;
         color: #edd;
         text-align: left;
-        padding: 20px 0;
+        padding: 20px 8px;
       }
       @font-face {
         font-family: "FontWithASyntaxHighlighter";
         src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
           format("woff2");
-      }
-      pre {
-        font-size: 12px;
-        font-family: "FontWithASyntaxHighlighter", monospace;
       }
       a {
         color: cyan;
@@ -30,16 +26,20 @@
       }
       canvas {
         width: 500px;
-        margin: 5px;
+        max-width: 100%;
       }
-      textarea {
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
         padding: 8px;
-        font-size: 1.4em;
-        border: 1px solid white;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
         outline: none;
-        background-color: transparent;
+        background-color: #44444490;
         color: white;
         width: 100%;
+        box-sizing: border-box;
       }
     </style>
   </head>

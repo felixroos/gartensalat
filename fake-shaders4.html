@@ -10,10 +10,10 @@
         max-width: 512px;
         margin: auto;
         font-family: serif;
-        font-size: 1.4em;
+        font-size: 1.2em;
         color: #edd;
         text-align: left;
-        padding: 20px 0;
+        padding: 20px 8px;
       }
       @font-face {
         font-family: "FontWithASyntaxHighlighter";
@@ -26,10 +26,10 @@
         font-size: 12px;
         font-family: "FontWithASyntaxHighlighter", monospace;
         padding: 8px;
-        border: 1px solid white;
+        border: 0;
         outline: none;
         overflow: auto;
-        background-color: transparent;
+        background-color: #44444490;
         width: 100%;
         margin: 0px 0;
         color: white;
@@ -42,6 +42,9 @@
       ul {
         margin-top: 10px;
       }
+      canvas {
+        max-width: 100%;
+      }
     </style>
   </head>
   <body>
@@ -51,8 +54,8 @@
       <a href="https://aem1k.com/">aem1k</a> (who also created tixyland). I
       don't want to link to the shitsite this was originally posted on..
     </p>
-    <div id="examples" style="width: 512px"></div>
-    <canvas id="canvas" width="512" height="512"></canvas>
+    <div id="examples" style="width: 512px; max-width: 100%"></div>
+    <canvas id="canvas" width="512" height="512"></canvas><br />
     <textarea id="input" type="text" rows="16" spellcheck="false"></textarea>
     <span id="hint"
       ><small>💡 hit ctrl+enter to update the code.</small>

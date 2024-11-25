@@ -13,7 +13,7 @@
         font-size: 1.2em;
         color: #edd;
         text-align: left;
-        padding: 20px 0;
+        padding: 20px 8px;
       }
       @font-face {
         font-family: "FontWithASyntaxHighlighter";
@@ -24,11 +24,12 @@
         font-family: "FontWithASyntaxHighlighter", monospace;
         font-size: 12px;
         padding: 8px;
-        border: 1px solid white;
+        border: 0;
         overflow: auto;
         width: 100%;
         margin: 0px 0;
         color: white;
+        background: #44444490;
         box-sizing: border-box;
       }
       a {
@@ -43,12 +44,14 @@
       <a>PixeloidMono</a>
       <a href="pixelfont-editor2.html">jgs7</a>
     </p>
-    <canvas
-      id="canvas"
-      style="background: #003333"
-      width="480"
-      height="480"
-    ></canvas>
+    <div style="max-width: 100%; overflow: auto">
+      <canvas
+        id="canvas"
+        style="background: #003333"
+        width="480"
+        height="480"
+      ></canvas>
+    </div>
     <details>
       <summary>show page source</summary>
       <pre id="pre"></pre>

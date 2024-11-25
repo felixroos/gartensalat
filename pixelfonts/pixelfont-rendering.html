@@ -8,12 +8,13 @@
       body {
         background-color: #222;
         max-width: 512px;
+        width: 100%;
         margin: auto;
         font-family: monospace;
         font-size: 1.2em;
         color: #edd;
         text-align: left;
-        padding: 20px 0;
+        padding: 20px 8px;
       }
       @font-face {
         font-family: "FontWithASyntaxHighlighter";
@@ -25,10 +26,10 @@
         font-family: "FontWithASyntaxHighlighter", monospace;
         font-size: 12px;
         padding: 8px;
-        border: 1px solid white;
+        border: 0;
         outline: none;
         overflow: auto;
-        background-color: transparent;
+        background-color: #44444490;
         width: 100%;
         margin: 0px 0;
         color: white;
@@ -37,6 +38,9 @@
       a {
         color: cyan;
         font-size: 1em;
+      }
+      canvas {
+        max-width: 100%;
       }
     </style>
   </head>
@@ -64,12 +68,7 @@
       width="500"
       height="200"
     ></canvas>
-    <textarea
-      id="editor"
-      style="width: 500px"
-      rows="10"
-      spellcheck="false"
-    ></textarea>
+    <textarea id="editor" rows="10" spellcheck="false"></textarea>
     <p>the next step would be to get rid of the old textarea...</p>
     <details>
       <summary>show page source</summary>

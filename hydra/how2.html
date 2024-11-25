@@ -11,42 +11,40 @@
         max-width: 500px;
         margin: auto;
         font-family: serif;
-        font-size: 1.4em;
+        font-size: 1.2em;
         color: #edd;
         text-align: left;
-        padding: 20px 0;
+        padding: 20px 8px;
       }
       @font-face {
         font-family: "FontWithASyntaxHighlighter";
         src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
           format("woff2");
       }
-      pre {
-        font-size: 12px;
-        font-family: "FontWithASyntaxHighlighter", monospace;
-        width: 100%;
-        overflow: auto;
-        border: 1px solid #aaa;
-        padding: 8px;
-      }
       a {
         color: cyan;
         font-size: 1em;
       }
-      textarea {
+      textarea,
+      pre {
         font-family: "FontWithASyntaxHighlighter", monospace;
         padding: 8px;
         font-size: 12px;
-        border: 1px solid #aaa;
+        border: 0;
         outline: none;
-        background-color: transparent;
+        background-color: #44444490;
         color: white;
         width: 100%;
         margin-top: 8px;
+        box-sizing: border-box;
+        overflow: auto;
       }
       ul,
       ol {
         padding-left: 20px;
+      }
+      canvas {
+        max-width: 100%;
       }
     </style>
   </head>
@@ -114,14 +112,14 @@ st.rotate(0, 0.1)
       graph compiler:
     </p>
     <canvas id="canvas" width="500" height="500"></canvas>
-    <span id="hint"
-      ><small>💡 hit ctrl+enter to update the code.</small>
+    <div id="hint">
+      <small>💡 hit ctrl+enter to update the code.</small>
       <small
         style="cursor: pointer; opacity: 50%"
         onclick="document.querySelector('#hint').remove()"
         >hide</small
-      ></span
-    >
+      >
+    </div>
     <textarea id="input" type="text" rows="16" spellcheck="false"></textarea>
     <label
       >generated code:

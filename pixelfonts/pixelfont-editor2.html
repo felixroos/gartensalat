@@ -13,7 +13,7 @@
         font-size: 1.2em;
         color: #edd;
         text-align: left;
-        padding: 20px 0;
+        padding: 20px 8px;
       }
       @font-face {
         font-family: "FontWithASyntaxHighlighter";
@@ -24,12 +24,13 @@
         font-family: "FontWithASyntaxHighlighter", monospace;
         font-size: 12px;
         padding: 8px;
-        border: 1px solid white;
+        border: 0;
         overflow: auto;
         width: 100%;
         margin: 0px 0;
         color: white;
         box-sizing: border-box;
+        background-color: #44444490;
       }
       a {
         color: cyan;
@@ -43,12 +44,14 @@
       <a href="pixelfont-editor.html">PixeloidMono</a>
       <a>jgs7</a>
     </p>
-    <canvas
-      id="canvas"
-      style="background: #003333"
-      width="480"
-      height="480"
-    ></canvas>
+    <div style="max-width: 100%; overflow: auto">
+      <canvas
+        id="canvas"
+        style="background: #003333"
+        width="480"
+        height="480"
+      ></canvas>
+    </div>
     <p>
       Font:
       <a href="https://adelfaure.net/tools/jgs/" target="_blank"
@@ -319,7 +322,6 @@
 
 `;
       const editor = new Editor(canvas, font, initialCode);
-
       // render code
       document.querySelector("#pre").textContent =
         document.querySelector("html").outerHTML;
