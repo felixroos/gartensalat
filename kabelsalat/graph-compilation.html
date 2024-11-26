@@ -39,6 +39,9 @@
         margin-top: 8px;
         box-sizing: border-box;
       }
+      #lines {
+        height: 200px;
+      }
     </style>
   </head>
   <body>
@@ -48,9 +51,12 @@
       can now use these graphs to actually do something. A graph can represent
       the flow of data in a system. We can turn a graph into a piece of runnable
       code in any language.. For the purpose of demonstration, let's compile our
-      math graph language back to JS:
+      dummy math language back to JS:
     </p>
-    <textarea id="input" type="text" rows="4" spellcheck="false"></textarea>
+    <label
+      >editable code:
+      <textarea id="input" type="text" rows="4" spellcheck="false"></textarea>
+    </label>
     <label
       >generated code:
       <pre id="generated"></pre>
@@ -59,14 +65,24 @@
       >result:
       <pre id="result"></pre>
     </label>
+    <p>🐌 Here's how it works in slow motion:</p>
     <p>
-      You can edit the user code and run it with ctrl+enter to see what changes
-      in the generated code and output.
+      The nodes are sorted topologically (using depth first search), making sure
+      inputs are calculated in the right order:
+    </p>
+    <div id="graph"></div>
+    <p>For each processed node, one line of code is generated:</p>
+    <pre id="lines"></pre>
+    <p>
+      The variable numbers are based on the position of a node inside the sorted
+      nodes array.
     </p>
     <p>
-      The key is to first sort nodes by dependency (topoSort), then we can
-      generate the output code line by line. Each node can define its compiled
-      output, which allows compiling to any language.
+      You might now ask yourself what happens when the graph has cycles... This
+      is a topic for another time :)
+    </p>
+    <p>
+      Next, I want to use this tactic to compile a hydra patch to GLSL code!
     </p>
     <details>
       <summary>show page source</summary>
@@ -91,26 +107,20 @@
         };
         return (...args) => new Node(type, args, compile);
       };
-      // sort nodes by dependencies
-      function topoSort(graph) {
-        const sorted = [];
-        const visited = new Set();
-        function dfs(node) {
-          if (!(node instanceof Node) || visited.has(node)) {
-            return; // constant values or already visited nodes
-          }
-          visited.add(node);
-          for (let i in node.ins) {
-            dfs(node.ins[i]);
-          }
-          sorted.push(node);
+      // sort nodes by dependencies (using generator function to be able to step through)
+      function* topoSort(node, visited = new Set()) {
+        if (!(node instanceof Node) || visited.has(node)) {
+          return; // constant values or already visited nodes
         }
-        dfs(graph);
-        return sorted;
+        visited.add(node);
+        for (let input of node.ins) {
+          yield* topoSort(input, visited);
+        }
+        yield node;
       }
       // convert node to code + metadata
       Node.prototype.compile = function () {
-        let nodes = topoSort(this);
+        let nodes = Array.from(topoSort(this));
         const getRef = (input) =>
           typeof input !== "object" ? input : `v${nodes.indexOf(input)}`;
         let lines = [];
@@ -123,8 +133,8 @@
         const last = getRef(nodes[nodes.length - 1]);
         return { lines, last };
       };
-      // the following code uses the above graph lib in a more specific way
-      // arithmetic example
+      // the following code uses the above graph lib
+      // to implement the dummy math language
       const compileSelf = (node, ref, args) =>
         `let ${ref} = lib.${node.type}(${args.join(",")})`;
       const add = register("add", compileSelf);
@@ -141,18 +151,62 @@
       const generated = document.querySelector("#generated");
       const result = document.querySelector("#result");
       const graph = document.querySelector("#graph");
-      input.value = `add(1, 2).mul(20).div(2).add(12)`;
+      input.value = `// ((8+2) * (3+5)) * ((2+3)*4)
+return add(8,2).mul(add(3,5)).mul(add(2,3).mul(4))`;
+      let timeout;
       let update = () => {
-        const node = new Function(`return ${input.value}`)();
-        console.log("node", node);
+        clearTimeout(timeout);
+        const node = new Function(`${input.value}`)();
+        let generator, visited, lines;
+        let start = () => {
+          generator = topoSort(node);
+          visited = [];
+          lines = [];
+          step();
+        };
+        start();
+        function getRef(input) {
+          return typeof input !== "object"
+            ? input
+            : `v${visited.indexOf(input)}`;
+        }
+        function render(current) {
+          renderNode(node, graph, (node) => {
+            if (node.id === current?.id) {
+              node.color = "orchid";
+            } else if (visited.find((v) => v.id === node.id)) {
+              node.color = "darkseagreen";
+            }
+            return node;
+          });
+          document.getElementById("lines").innerText = lines.join("\n");
+        }
+
+        function step() {
+          const res = generator.next();
+          let current = res.value;
+          if (current) {
+            visited.push(current);
+            const args = current.ins.map(getRef);
+            const line = current.compileSelf(current, getRef(current), args);
+            lines.push(line);
+            render(current);
+            timeout = setTimeout(() => step(), 1000);
+          } else if (res.done) {
+            lines.push(`return ${getRef(visited[visited.length - 1])}`);
+            const code = lines.join("\n");
+            const res = new Function("lib", code)(lib);
+            lines.push("// result: " + res);
+            render();
+            timeout = setTimeout(() => start(), 2000);
+          }
+        }
         const unit = node.compile();
         unit.lines.push(`return ${unit.last}`);
         const code = unit.lines.join("\n");
-        console.log("code", code);
         generated.innerText = code;
         const fn = new Function("lib", code);
         const res = fn(lib);
-        console.log("res", res);
         result.innerText = res;
       };
       // update on ctrl+enter
@@ -162,6 +216,104 @@
         }
       });
       update();
+
+      /** graphviz **/
+      function gvjson2dot(json) {
+        const { nodes, edges } = json;
+        let renderProps = (props) =>
+          `[${Object.entries(props)
+            .map(([key, value]) => `${key}="${value}"`)
+            .join(",")}]`;
+        return `digraph {
+            bgcolor="transparent"
+            rankdir="TB"
+            ${nodes
+              .map((node) => `  "${node.id}" ${renderProps(node)}`)
+              .join("\n")}
+            ${edges
+              .map(
+                (edge) =>
+                  `  ${edge.source} -> ${edge.target} ${renderProps(edge)}`
+              )
+              .join("\n")}
+            }`;
+      }
+      function node2gvjson(graph, edit) {
+        let dfs = (node, fn, visited = []) => {
+          if (typeof node !== "object") {
+            return node;
+          }
+          visited.push(node);
+          node.ins = node.ins.map((input) => {
+            if (visited.includes(input)) {
+              return input;
+            }
+            return dfs(input, fn, visited);
+          });
+          node = fn(node, visited);
+          return node;
+        };
+        const nodes = [],
+          edges = [];
+        let style = {
+          color: "white",
+          fontcolor: "white",
+          fontsize: "10",
+          fontname: "monospace",
+        };
+        dfs(graph, (node) => {
+          node.id = nodes.length;
+          let gvnode = {
+            id: node.id,
+            label: `${node.type} ${node.ins
+              .map((input) => (typeof input === "object" ? "_" : input))
+              .join(" ")}`,
+            ordering: "in",
+            width: "0.5",
+            height: "0.4",
+            ...style,
+          };
+          if (edit) {
+            gvnode = edit(gvnode);
+          }
+          nodes.push(gvnode);
+          for (let i in node.ins) {
+            if (typeof node.ins[i] !== "object") {
+              continue;
+            }
+            edges.push({
+              id: edges.length,
+              source: node.ins[i].id,
+              target: node.id,
+              directed: "true",
+              ...style,
+            });
+          }
+          return node;
+        });
+        return { nodes, edges };
+      }
+      function node2dot(node, edit) {
+        const flat = node2gvjson(node, edit);
+        const dot = gvjson2dot(flat);
+        return dot;
+      }
+      async function renderDot(dot, container) {
+        // this breaks my rule of self-contained html :/
+        // but graphviz is just so good..
+        // i don't want to segway into graph layouting rn...
+        // download the file here: https://unpkg.com/@hpcc-js/wasm@2.18.0/dist/graphviz.js
+        // sorry if you're living in 2051 and npm has collapsed already..
+        const { Graphviz } = await import("./graphviz.js");
+        const graphvizLoaded = Graphviz.load();
+        const graphviz = await graphvizLoaded;
+        const svg = await graphviz.layout(dot, "svg", "dot", {});
+        container.innerHTML = svg;
+      }
+      function renderNode(node, container, edit) {
+        const dot = node2dot(node, edit);
+        return renderDot(dot, container);
+      }
 
       document.querySelector("#pre").textContent =
         document.querySelector("html").outerHTML;
