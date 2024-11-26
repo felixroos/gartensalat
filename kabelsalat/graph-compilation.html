@@ -75,11 +75,26 @@
     <pre id="lines"></pre>
     <p>
       The variable numbers are based on the position of a node inside the sorted
-      nodes array.
+      nodes array. You might now ask yourself what happens when the graph has
+      cycles... This is a topic for another time :)
     </p>
     <p>
-      You might now ask yourself what happens when the graph has cycles... This
-      is a topic for another time :)
+      I first got exposed to the idea of graph to code compilation when reading
+      <a
+        href="https://github.com/maximecb/noisecraft"
+        target="_blank"
+        style="color: yellow"
+        >noisecraft</a
+      >
+      by Maxime Chevalier-Boisvert. I've adapted the compilation strategy for
+      live coding in
+      <a
+        href="https://github.com/felixroos/kabelsalat"
+        target="_blank"
+        style="color: yellow"
+        >kabelsalat</a
+      >. Since then, I've used this design pattern in various prototypes, trying
+      to further simplify the idea.
     </p>
     <p>
       Next, I want to use this tactic to compile a hydra patch to GLSL code!
