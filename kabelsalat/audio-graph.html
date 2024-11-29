@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 audio graphs</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      textarea,
+      pre {
+        box-sizing: border-box;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      #generated,
+      #lines {
+        height: 150px;
+      }
+      canvas {
+        max-width: 100%;
+        background-color: #44444490;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 audio graphs</h2>
+    <p>
+      We can use <a href="./graph-compilation.html">graph compilation</a> to
+      generate <a href="/audio-dsp/worklets2.html">audio worklet</a> code as
+      well! It allows us to think of nodes as modules that are connected
+      together, like in a modular synthesizer:
+    </p>
+    <div>
+      <small>💡 hit ctrl+enter to run the code and ctrl+. to stop</small>
+    </div>
+    <textarea id="input" type="text" rows="8" spellcheck="false"></textarea>
+    <div>
+      <span>generated code</span>
+      <a id="worklet-link">run in worklet</a>
+    </div>
+    <pre id="generated"></pre>
+    <canvas id="canvas"></canvas>
+    <p>examples:</p>
+    <ul>
+      <li>
+        <a href="#cmV0dXJuIHNpbmUoMzMwKQ=="> hello sine</a>
+      </li>
+      <li>
+        <a href="#cmV0dXJuIHNpbmUoMzMwKS5tdWwoc2luZSgyKS5hZGQoMSkubXVsKC4yNSkp">
+          tremolo</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IHNhdyA9IHJlZ2lzdGVyKCJzYXciLCAociwgW2ZdKSA9PiAKYGxldCAke3J9ID0gKCgke2Z9KnQlMSkqMiktMWApCnJldHVybiBzYXcoNjApLm11bChzaW5lKDMpLmFkZCgxKS5tdWwoLjI1KSk="
+        >
+          custom node</a
+        >
+      </li>
+    </ul>
+    <p>🐌 Here's how it works in slow motion:</p>
+    <p>
+      The nodes are sorted topologically (using depth first search), making sure
+      inputs are calculated in the right order:
+    </p>
+    <div id="graph"></div>
+    <p>For each processed node, one line of code is generated:</p>
+    <pre id="lines"></pre>
+    <p>
+      The generated code can be used directly as our dsp function inside the
+      worklet (click run in worklet)!
+    </p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      // generic graph lib
+      class Node {
+        constructor(type, ins, compileSelf) {
+          this.type = type;
+          this.ins = ins;
+          this.compileSelf = compileSelf;
+        }
+      }
+      // registers a function on the node class + standalone
+      let register = (type, compile) => {
+        Node.prototype[type] = function (...args) {
+          return new Node(type, [this, ...args], compile);
+        };
+        return (...args) => new Node(type, args, compile);
+      };
+      // sort nodes by dependencies (using generator function to be able to step through)
+      function* topoSort(node, visited = new Set()) {
+        if (!(node instanceof Node) || visited.has(node)) {
+          return; // constant values or already visited nodes
+        }
+        visited.add(node);
+        for (let input of node.ins) {
+          yield* topoSort(input, visited);
+        }
+        yield node;
+      }
+      // convert node to code + metadata
+      Node.prototype.compile = function () {
+        let nodes = Array.from(topoSort(this));
+        const getRef = (input) =>
+          typeof input !== "object" ? input : `v${nodes.indexOf(input)}`;
+        let lines = [];
+        for (let id in nodes) {
+          const node = nodes[id];
+          const args = node.ins.map(getRef);
+          const ref = getRef(node);
+          lines.push(node.compileSelf(ref, args, node));
+        }
+        const last = getRef(nodes[nodes.length - 1]);
+        return { lines, last };
+      };
+      // the following code uses the above graph lib
+      // to implement some simple audio dsp
+      let sine = register(
+        "sine",
+        (r, [f]) => `let ${r} = Math.sin(2*Math.PI*${f}*t)`
+      );
+      const mul = register("mul", (ref, [a, b]) => `let ${ref} = ${a}*${b}`);
+      const add = register("add", (ref, [a, b]) => `let ${ref} = ${a}+${b}`);
+
+      // audio
+
+      // init audio context
+      const ctx = new AudioContext();
+      document.addEventListener("click", function firstClick() {
+        ctx.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+
+      // worklet logic
+      let worklet;
+      async function play(code) {
+        await ctx.resume();
+        stop();
+        worklet = await runWorklet(ctx, `let dsp = t => {${code}}`);
+        worklet.port.onmessage = (e) =>
+          requestAnimationFrame(() => drawBuffer(e.data));
+      }
+      let stop = () => {
+        worklet?.disconnect();
+        worklet?.port.postMessage("stop");
+      };
+      async function runWorklet(ac, code) {
+        const name = `worklet-${Date.now()}`;
+        const workletCode = `// start of user code
+${code}
+// end of user code, I hope you have define an dsp function..
+class MyProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.t = 0;
+    this.active = true;
+    this.framebuffer = new Float32Array(Math.floor(sampleRate/30));
+    this.port.onmessage = (e) => e.data === "stop" && (this.active = false)
+  }
+  process(inputs, outputs, parameters) {
+    const output = outputs[0];
+    for (let i = 0; i < output[0].length; i++) {
+      let out = dsp(this.t/sampleRate)
+      for(let c in output)
+        output[c][i] = out;
+      this.t++;
+      this.framebuffer[this.t%this.framebuffer.length] = out;
+      if(this.t % this.framebuffer.length === 0 && this.t > 0) {
+        this.port.postMessage(this.framebuffer)
+      }
+    }
+    return this.active;
+  }
+}
+registerProcessor('${name}', MyProcessor);`;
+        await ac.resume();
+        const dataURL = `data:text/javascript;base64,${btoa(workletCode)}`;
+        await ac.audioWorklet.addModule(dataURL);
+        const node = new AudioWorkletNode(ac, name);
+        node.connect(ac.destination);
+        return node;
+      }
+
+      const input = document.querySelector("#input");
+      const generated = document.querySelector("#generated");
+      const result = document.querySelector("#result");
+      const graph = document.querySelector("#graph");
+      let timeout;
+      let update = () => {
+        clearTimeout(timeout);
+        const node = new Function(`${input.value}`)();
+        let generator, visited, lines;
+        let start = () => {
+          generator = topoSort(node);
+          visited = [];
+          lines = [];
+          lines.push(`let dsp = t => {`);
+          step();
+        };
+        start();
+        function getRef(input) {
+          return typeof input !== "object"
+            ? input
+            : `v${visited.indexOf(input)}`;
+        }
+        function render(current) {
+          renderNode(node, graph, (node) => {
+            if (node.id === current?.id) {
+              node.color = "orchid";
+            } else if (visited.find((v) => v.id === node.id)) {
+              node.color = "darkseagreen";
+            }
+            return node;
+          });
+          document.getElementById("lines").innerText = lines.join("\n");
+        }
+
+        function step() {
+          const res = generator.next();
+          let current = res.value;
+          if (current) {
+            visited.push(current);
+            const args = current.ins.map(getRef);
+            const line = current.compileSelf(getRef(current), args, current);
+            lines.push(line);
+            render(current);
+            timeout = setTimeout(() => step(), 1000);
+          } else if (res.done) {
+            lines.push(`return ${getRef(visited[visited.length - 1])}`);
+            lines.push(`}`);
+            const code = lines.join("\n");
+            render();
+            timeout = setTimeout(() => start(), 2000);
+          }
+        }
+        const unit = node.compile();
+        unit.lines.push(`return ${unit.last}`);
+        const code = unit.lines.join("\n");
+        const wrapped = `let dsp = t => {\n${code}\n}`;
+        generated.innerText = wrapped;
+        document
+          .getElementById("worklet-link")
+          .setAttribute("href", "/audio-dsp/worklets2.html#" + btoa(wrapped));
+        return code;
+      };
+      // update on ctrl+enter
+      // read base64 code from url
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!");
+      }
+      input.value = urlCode || `return sine(330).mul(sine(2).add(1).mul(.25))`;
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        const code = update();
+        play(code);
+      });
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          const hash = btoa(input.value);
+          let urlCode = window.location.hash.slice(1);
+          if (hash !== urlCode) {
+            window.location.hash = "#" + hash;
+          } else {
+            const code = update();
+            play(code);
+          }
+        }
+        if ((e.ctrlKey || e.altKey) && e.key === ".") {
+          stop();
+        }
+      });
+      update();
+
+      // init canvas
+      const canvas = document.querySelector("#canvas");
+      const drawContext = canvas.getContext("2d");
+      canvas.width = 800;
+      canvas.height = 200;
+      function drawBuffer(samples) {
+        drawContext.clearRect(0, 0, canvas.width, canvas.height);
+        plot(
+          (x) => samples[Math.floor(x)], // this is bad..
+          drawContext,
+          [0, samples.length - 1],
+          [-1, 1],
+          "white",
+          2
+        );
+      }
+
+      // plot function, see /plot.html
+      function plot(
+        fn,
+        ctx,
+        xrange = [-1, 1],
+        yrange = [-1, 1],
+        color = "black",
+        lineWidth = 4
+      ) {
+        // these 3 functions are very good to know..
+        const lerp = (v, min, max) => v * (max - min) + min;
+        const invLerp = (v, min, max) => (v - min) / (max - min);
+        const remap = (v, vmin, vmax, omin, omax) =>
+          lerp(invLerp(v, vmin, vmax), omin, omax);
+        // prepare draw context
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = color;
+        // function ranges
+        const [x0, x1] = xrange;
+        const [y0, y1] = yrange;
+        // draw ranges
+        const [px0, px1] = [0, ctx.canvas.width];
+        const [py0, py1] = [ctx.canvas.height - ctx.lineWidth, ctx.lineWidth];
+        // actual draw logic
+        ctx.beginPath();
+        for (let px = 0; px < ctx.canvas.width; px++) {
+          const x = remap(px, px0, px1, x0, x1);
+          const y = fn(x);
+          const py = remap(y, y0, y1, py0, py1);
+          px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+      /** graphviz **/
+      function gvjson2dot(json) {
+        const { nodes, edges } = json;
+        let renderProps = (props) =>
+          `[${Object.entries(props)
+            .map(([key, value]) => `${key}="${value}"`)
+            .join(",")}]`;
+        return `digraph {
+            bgcolor="transparent"
+            rankdir="TB"
+            ${nodes
+              .map((node) => `  "${node.id}" ${renderProps(node)}`)
+              .join("\n")}
+            ${edges
+              .map(
+                (edge) =>
+                  `  ${edge.source} -> ${edge.target} ${renderProps(edge)}`
+              )
+              .join("\n")}
+            }`;
+      }
+      function node2gvjson(graph, edit) {
+        let dfs = (node, fn, visited = []) => {
+          if (typeof node !== "object") {
+            return node;
+          }
+          visited.push(node);
+          node.ins = node.ins.map((input) => {
+            if (visited.includes(input)) {
+              return input;
+            }
+            return dfs(input, fn, visited);
+          });
+          node = fn(node, visited);
+          return node;
+        };
+        const nodes = [],
+          edges = [];
+        let style = {
+          color: "white",
+          fontcolor: "white",
+          fontsize: "10",
+          fontname: "monospace",
+        };
+        dfs(graph, (node) => {
+          node.id = nodes.length;
+          let gvnode = {
+            id: node.id,
+            label: `${node.type} ${node.ins
+              .map((input) => (typeof input === "object" ? "_" : input))
+              .join(" ")}`,
+            ordering: "in",
+            width: "0.5",
+            height: "0.4",
+            ...style,
+          };
+          if (edit) {
+            gvnode = edit(gvnode);
+          }
+          nodes.push(gvnode);
+          for (let i in node.ins) {
+            if (typeof node.ins[i] !== "object") {
+              continue;
+            }
+            edges.push({
+              id: edges.length,
+              source: node.ins[i].id,
+              target: node.id,
+              directed: "true",
+              ...style,
+            });
+          }
+          return node;
+        });
+        return { nodes, edges };
+      }
+      function node2dot(node, edit) {
+        const flat = node2gvjson(node, edit);
+        const dot = gvjson2dot(flat);
+        return dot;
+      }
+      async function renderDot(dot, container) {
+        // this breaks my rule of self-contained html :/
+        // but graphviz is just so good..
+        // i don't want to segway into graph layouting rn...
+        // download the file here: https://unpkg.com/@hpcc-js/wasm@2.18.0/dist/graphviz.js
+        // sorry if you're living in 2051 and npm has collapsed already..
+        const { Graphviz } = await import("./graphviz.js");
+        const graphvizLoaded = Graphviz.load();
+        const graphviz = await graphvizLoaded;
+        const svg = await graphviz.layout(dot, "svg", "dot", {});
+        container.innerHTML = svg;
+      }
+      function renderNode(node, container, edit) {
+        const dot = node2dot(node, edit);
+        return renderDot(dot, container);
+      }
+
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
