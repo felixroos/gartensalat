@@ -123,6 +123,7 @@
       const drawContext = canvas.getContext("2d");
       canvas.width = 800;
       canvas.height = 200;
+      drawSilence(drawContext);
 
       // init audio context
       const ctx = new AudioContext();
@@ -215,11 +216,19 @@ registerProcessor('${name}', MyProcessor);`;
         plot(
           (x) => samples[Math.floor(x)], // this is bad..
           drawContext,
-          [0, samples.length - 1],
+          [1, samples.length],
           [-1, 1],
           "white",
           2
         );
+      }
+      function drawSilence(ctx, color = "white", lineWidth = 2) {
+        drawContext.strokeStyle = color;
+        drawContext.lineWidth = lineWidth;
+        drawContext.beginPath();
+        drawContext.moveTo(0, canvas.height / 2);
+        drawContext.lineTo(canvas.width, canvas.height / 2);
+        drawContext.stroke();
       }
 
       // plot function, see /plot.html

@@ -180,10 +180,14 @@
       </li>
     </ul>
     <p>
-      Some of these examples are adapted from:
+      Some of these examples are taken from:
       <a href="https://wavepot.com/" style="color: yellow" target="_blank"
         >wavepot</a
-      >
+      >. I've also created a single html version of this way of live coding
+      audio, called
+      <a href="https://github.com/felixroos/doughbeat" target="_blank"
+        >doughbeat</a
+      >.
     </p>
 
     <details>
@@ -293,16 +297,26 @@ registerProcessor('${name}', MyProcessor);`;
       const drawContext = canvas.getContext("2d");
       canvas.width = 800;
       canvas.height = 200;
+      drawSilence(drawContext);
       function drawBuffer(samples) {
         drawContext.clearRect(0, 0, canvas.width, canvas.height);
         plot(
           (x) => samples[Math.floor(x)], // this is bad..
           drawContext,
-          [0, samples.length - 1],
+          [1, samples.length],
           [-1, 1],
           "white",
           2
         );
+      }
+
+      function drawSilence(ctx, color = "white", lineWidth = 2) {
+        drawContext.strokeStyle = color;
+        drawContext.lineWidth = lineWidth;
+        drawContext.beginPath();
+        drawContext.moveTo(0, canvas.height / 2);
+        drawContext.lineTo(canvas.width, canvas.height / 2);
+        drawContext.stroke();
       }
 
       // plot function, see /plot.html
