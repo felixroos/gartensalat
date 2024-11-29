@@ -312,6 +312,8 @@ registerProcessor('${name}', MyProcessor);`;
       const drawContext = canvas.getContext("2d");
       canvas.width = 800;
       canvas.height = 200;
+      drawSilence(drawContext);
+
       function drawBuffer(samples) {
         drawContext.clearRect(0, 0, canvas.width, canvas.height);
         plot(
@@ -322,6 +324,14 @@ registerProcessor('${name}', MyProcessor);`;
           "white",
           2
         );
+      }
+      function drawSilence(ctx, color = "white", lineWidth = 2) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height / 2);
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
       }
 
       // plot function, see /plot.html

@@ -223,12 +223,12 @@ registerProcessor('${name}', MyProcessor);`;
         );
       }
       function drawSilence(ctx, color = "white", lineWidth = 2) {
-        drawContext.strokeStyle = color;
-        drawContext.lineWidth = lineWidth;
-        drawContext.beginPath();
-        drawContext.moveTo(0, canvas.height / 2);
-        drawContext.lineTo(canvas.width, canvas.height / 2);
-        drawContext.stroke();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height / 2);
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
       }
 
       // plot function, see /plot.html
