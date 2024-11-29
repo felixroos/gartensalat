@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 audio buffers</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        overflow: auto;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        background-color: #44444490;
+        border: 0;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+      canvas {
+        max-width: 100%;
+        background-color: #44444490;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 audio buffers</h2>
+    <p>
+      An audio buffer is a list of numbers that describe physical speaker
+      positions or amplitudes. Commonly, the numbers range from -1 to 1. The DAC
+      (digital to analog converter) will read the list at a steady rate, the so
+      called sample rate, converting each number to an appropriate voltage value
+      to move the speaker. In our case, the sample rate is 44100, so we'll read
+      44100 numbers per second from the list. We can describe any sound by
+      mapping from time to amplitude:
+    </p>
+    <div>
+      <small>💡 hit ctrl+enter to update the code.</small>
+    </div>
+    <textarea id="code" spellcheck="false" rows="8"></textarea>
+    <a id="play">play</a> | <a id="stop">stop</a>
+    <canvas id="canvas"></canvas>
+    <p>
+      In the above expression, t is the index of the sample in the list. For now
+      we'll generate a fixed length buffer of 4 seconds. For our sample rate of
+      44100 sample per second, this means we are running the calculation 44100*4
+      = 176400 times, so our variable t ranges from 0 to 176400-1.
+    </p>
+    <p>Here are some examples to try:</p>
+    <ul id="examples"></ul>
+    <ul>
+      <li>
+        <a href="#TWF0aC5zaW4odC80NDEwMCoyKk1hdGguUEkqNDQwKQ==">hello sine</a>
+      </li>
+      <li>
+        <a href="#TWF0aC5zaW4odC80NDEwMCoyKk1hdGguUEkqKDIwK3QvMjAwKSk="
+          >sine sweep</a
+        >
+      </li>
+      <li>
+        <a href="#TWF0aC5zaW4odC80NDEwMCoyKk1hdGguUEkqMjIwKSp0LzQ0MTAwLzQ="
+          >sine fade</a
+        >
+      </li>
+      <li>
+        <a href="#KHQvNDQxMDApKjU1JTEtLjU=">hello saw</a>
+      </li>
+      <li>
+        <a href="#KCh0LzQ0MTAwKjU1KSUxPi41Py0xOjEpLzI=">hello pulse</a>
+      </li>
+      <li>
+        <a
+          href="#KCgoIC8vIGJ5IHN0aW1tZXIgKDIwMTEtMTAtMDMpCnQqKDR8dD4+MTMmMyk+Pih+dD4+MTEmMSkmMTI4fHQqKHQ+PjExJnQ+PjEzKSoofnQ+PjkmMykmMTI3CikgJiAyNTUpIC8gMTI3LjUgLSAxKS80"
+          >bytebeat 1</a
+        >
+      </li>
+      <li>
+        <a
+          href="#KCgoIC8vIGxocGhyIC0gRnJhY3RhbGl6ZWQgUGFzdAoodD4+MTBedD4+MTEpJTUqKCh0Pj4xNCYzXnQ+PjE1JjEpKzEpKnQlOTkrKCgzKyh0Pj4xNCYzKS0odD4+MTYmMSkpLzMqdCU5OSY2NCkKKSAmIDI1NSkgLyAxMjcuNSAtIDEpLzQ="
+          >bytebeat 2</a
+        >
+      </li>
+    </ul>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+
+    <script>
+      // init canvas
+      const canvas = document.querySelector("#canvas");
+      const drawContext = canvas.getContext("2d");
+      canvas.width = 800;
+      canvas.height = 200;
+
+      // init audio context
+      const ctx = new AudioContext();
+      document.addEventListener("click", function firstClick() {
+        ctx.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+      // init buffer
+      const seconds = 4;
+      const sr = ctx.sampleRate;
+      const buffer = ctx.createBuffer(1, sr * seconds, ctx.sampleRate);
+
+      // init code input
+      const input = document.querySelector("#code");
+      document.querySelector("#play").onclick = () => play();
+      document.querySelector("#stop").onclick = () => stop();
+      // read base64 code from url
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!");
+      }
+      input.value = urlCode || `Math.sin(t/44100*2*Math.PI*220)*t/44100/4`;
+
+      function update() {
+        // create sample generator function from user code
+        const fn = new Function("t", `return (${input.value})`);
+        const samples = buffer.getChannelData(0);
+        updateBuffer(samples, fn);
+      }
+      update();
+      let source;
+
+      function play() {
+        ctx.resume();
+        update();
+        source?.stop();
+        source = playBuffer(ctx, buffer, seconds);
+      }
+      let stop = () => source?.stop();
+
+      // live coding / sharing logic
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        play();
+      });
+      input.addEventListener("keydown", async (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          const hash = btoa(input.value);
+          let urlCode = window.location.hash.slice(1);
+          if (hash !== urlCode) {
+            window.location.hash = "#" + hash;
+          } else {
+            play();
+          }
+        }
+        if ((e.ctrlKey || e.altKey) && e.key === ".") {
+          stop();
+        }
+      });
+
+      // play audio buffer
+      function playBuffer(ctx, buffer, duration = 0) {
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        // source.loop = 1;
+        const start = ctx.currentTime + 0.1;
+        source.start(start);
+        source.connect(ctx.destination);
+        if (duration) {
+          source.stop(start + duration);
+        }
+        return source;
+      }
+
+      // fill audio buffer with the given function
+      function updateBuffer(samples, fn) {
+        for (let i = 0; i < samples.length; i++) {
+          samples[i] = fn(i);
+        }
+        drawBuffer(samples);
+      }
+
+      function drawBuffer(samples) {
+        drawContext.clearRect(0, 0, canvas.width, canvas.height);
+        plot(
+          (x) => samples[Math.floor(x)], // this is bad..
+          drawContext,
+          [0, samples.length - 1],
+          [-1, 1],
+          "white",
+          2
+        );
+      }
+
+      // plot function, see /plot.html
+      function plot(
+        fn,
+        ctx,
+        xrange = [-1, 1],
+        yrange = [-1, 1],
+        color = "black",
+        lineWidth = 4
+      ) {
+        // these 3 functions are very good to know..
+        const lerp = (v, min, max) => v * (max - min) + min;
+        const invLerp = (v, min, max) => (v - min) / (max - min);
+        const remap = (v, vmin, vmax, omin, omax) =>
+          lerp(invLerp(v, vmin, vmax), omin, omax);
+        // prepare draw context
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = color;
+        // function ranges
+        const [x0, x1] = xrange;
+        const [y0, y1] = yrange;
+        // draw ranges
+        const [px0, px1] = [0, ctx.canvas.width];
+        const [py0, py1] = [ctx.canvas.height - ctx.lineWidth, ctx.lineWidth];
+        // actual draw logic
+        ctx.beginPath();
+        for (let px = 0; px < ctx.canvas.width; px++) {
+          const x = remap(px, px0, px1, x0, x1);
+          const y = fn(x);
+          const py = remap(y, y0, y1, py0, py1);
+          px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+      const html = document.querySelector("html").outerHTML;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${
+        html.split("\n").length
+      } loc)`;
+    </script>
+  </body>
+</html>

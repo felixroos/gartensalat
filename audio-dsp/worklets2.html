@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 audio worklets II</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        overflow: auto;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        background-color: #44444490;
+        border: 0;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+      canvas {
+        max-width: 100%;
+        background-color: #44444490;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 audio worklets II</h2>
+    <p>
+      In the <a href="/audio-dsp/worklets.html">last post</a>, we've seen how to
+      live code a never ending stream of audio. Now, let's make our user code a
+      bit more expressive. Instead of writing a single expression, we can define
+      a dsp function that runs for every sample. Scaling t to seconds is also
+      very convenient..
+    </p>
+    <div>
+      <small>💡 hit ctrl+enter to update the code.</small>
+    </div>
+    <textarea id="code" spellcheck="false" rows="16"></textarea>
+    <a id="play">play</a> | <a id="stop">stop</a>
+    <canvas id="canvas"></canvas>
+    <p>Here are some examples to try:</p>
+    <ul>
+      <li>
+        <a
+          href="#ZnVuY3Rpb24gZHNwKHQpIHsKICByZXR1cm4gTWF0aC5zaW4odCoyMjAqMipNYXRoLlBJKS8yCn0="
+        >
+          hello sine</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IGRzcCA9ICh0KSA9PiBzYXcoMTEwLCB0KS84Ci8vCi8vIG9zY2lsbGF0b3JzCmxldCBzaW4gPSAoeCwgdCkgPT4gTWF0aC5zaW4oMiAqIE1hdGguUEkgKiB0ICogeCkKbGV0IHNhdyA9ICh4LCB0KSA9PiAoKHggKiB0ICUgMSkgLSAwLjUpICogMgpsZXQgaXNhdyA9IChmLHQpID0+IC1zYXcoZix0KTsKbGV0IHNxciA9ICh4LCB0KSA9PiBzaW4oeCwgdCkgPiAwID8gMSA6IC0xCmxldCBub2lzZSA9ICgpID0+IE1hdGgucmFuZG9tKCkgKiAyIC0gMQ=="
+        >
+          oscillators</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IGRzcCA9IHQgPT4gKHNhdygxMTAsIHQpICsgc2F3KDExMSwgdCkpLzgKLy8KLy8gb3NjaWxsYXRvcnMKbGV0IHNpbiA9ICh4LCB0KSA9PiBNYXRoLnNpbigyICogTWF0aC5QSSAqIHQgKiB4KQpsZXQgc2F3ID0gKHgsIHQpID0+ICgoeCAqIHQgJSAxKSAtIDAuNSkgKiAyCmxldCBpc2F3ID0gKGYsdCkgPT4gLXNhdyhmLHQpCmxldCBzcXIgPSAoeCwgdCkgPT4gc2luKHgsIHQpID4gMCA/IDEgOiAtMQpsZXQgbm9pc2UgPSAoKSA9PiBNYXRoLnJhbmRvbSgpICogMiAtIDE="
+        >
+          oscillators mixing</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IGRzcCA9IHQgPT4gKHNhdygxMTAsIHQpICogc2luKDIsIHQpKS81Ci8vCi8vIG9zY2lsbGF0b3JzCmxldCBzaW4gPSAoeCwgdCkgPT4gTWF0aC5zaW4oMiAqIE1hdGguUEkgKiB0ICogeCkKbGV0IHNhdyA9ICh4LCB0KSA9PiAoKHggKiB0ICUgMSkgLSAwLjUpICogMgpsZXQgaXNhdyA9IChmLHQpID0+IC1zYXcoZix0KQpsZXQgc3FyID0gKHgsIHQpID0+IHNpbih4LCB0KSA+IDAgPyAxIDogLTEKbGV0IG5vaXNlID0gKCkgPT4gTWF0aC5yYW5kb20oKSAqIDIgLSAx"
+        >
+          oscillators modulation</a
+        >
+      </li>
+      <li>
+        <a
+          href="#Y29uc3QgSVNSID0gMS9zYW1wbGVSYXRlCmV4cG9ydCBjbGFzcyBTaW5lT3NjIHsKICBjb25zdHJ1Y3RvcigpIHsKICAgIHRoaXMucGhhc2UgPSAwOwogIH0KCiAgeChmcmVxKSB7CiAgICBsZXQgY3ljbGVQb3MgPSAodGhpcy5waGFzZSkgJSAxOwogICAgdGhpcy5waGFzZSArPSBJU1IgKiBmcmVxOwogICAgcmV0dXJuIE1hdGguc2luKGN5Y2xlUG9zICogMiAqIE1hdGguUEkpOwogIH0KfQpsZXQgb3NjID0gbmV3IFNpbmVPc2MoKQpsZXQgbGZvID0gbmV3IFNpbmVPc2MoKQoKbGV0IGRzcCA9IHQgPT4gb3NjLngoMjIwK2xmby54KDIpKjIwKS8y"
+        >
+          oscillators with phase</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IGJhc3NsaW5lID0gWzU1LDU1LDExMCwxNjVdOwpsZXQgZHNwID0gdCA9PiB7CiAgbGV0IGZyZXEgPSBzZXEoYmFzc2xpbmUsIDIsIHQpOwogIGxldCBiYXNzID0gKHNhdyhmcmVxLCB0KSArIHNhdyhmcmVxKzEsIHQpKS8yOwogIHJldHVybiBiYXNzLzU7Cn0KLy8KLy8gc2VxCmxldCBzZXEgPSAoaXRlbXMsIHNwZWVkLCB0KSA9PiBpdGVtc1tNYXRoLmZsb29yKHQqc3BlZWQpJWl0ZW1zLmxlbmd0aF0KLy8gbW9kdWxhdGlvbgpjb25zdCBub3JtID0gKGJpcG9sYXIpID0+IChiaXBvbGFyICsxKS8yOwpjb25zdCByYW5nZSA9IChub3JtYWxpemVkLCBtaW4sIG1heCkgPT4gbm9ybWFsaXplZCoobWF4LW1pbikrbWluOwpjb25zdCBzaW5tb2QgPSAoZix0LGE9MCxiPTEpID0+IHJhbmdlKG5vcm0oc2luKGYsIHQpKSxhLGIpCmNvbnN0IHNhd21vZCA9IChmLHQsYT0wLGI9MSkgPT4gcmFuZ2Uobm9ybShzYXcoZiwgdCkpLGEsYikKY29uc3Qgc3FybW9kID0gKGYsdCxhPTAsYj0xKSA9PiByYW5nZShub3JtKHNxcihmLCB0KSksYSxiKQpjb25zdCBub2lzZW1vZCA9IChhPTAsYj0xKSA9PiByYW5nZShub3JtKG5vaXNlKCkpLGEsYikKLy8KLy8gb3NjaWxsYXRvcnMKbGV0IHNpbiA9ICh4LCB0KSA9PiBNYXRoLnNpbigyICogTWF0aC5QSSAqIHQgKiB4KQpsZXQgc2F3ID0gKHgsIHQpID0+ICgoeCAqIHQgJSAxKSAtIDAuNSkgKiAyCmxldCBpc2F3ID0gKGYsdCkgPT4gLXNhdyhmLHQpCmxldCBzcXIgPSAoeCwgdCkgPT4gc2luKHgsIHQpID4gMCA/IDEgOiAtMQpsZXQgbm9pc2UgPSAoKSA9PiBNYXRoLnJhbmRvbSgpICogMiAtIDE="
+        >
+          sequences</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IG1pZGkgPSBuID0+IE1hdGgucG93KDIsIChuIC0gNjkpIC8gMTIpICogNDQwOwpsZXQgYmFzc2xpbmUgPSBbNDAsNDMsNDcsNTBdLm1hcChtaWRpKTsKbGV0IGRzcCA9IHQgPT4gewogIGxldCBmcmVxID0gc2VxKGJhc3NsaW5lLCA0LCB0KTsKICBsZXQgYmFzcyA9IChzYXcoZnJlcSwgdCkgKyBzYXcoZnJlcSsxLCB0KSkvMjsKICByZXR1cm4gYmFzcy81Owp9Ci8vCi8vIHNlcQpsZXQgc2VxID0gKGl0ZW1zLCBzcGVlZCwgdCkgPT4gaXRlbXNbTWF0aC5mbG9vcih0KnNwZWVkKSVpdGVtcy5sZW5ndGhdOwovLyBtb2R1bGF0aW9uCmNvbnN0IG5vcm0gPSAoYmlwb2xhcikgPT4gKGJpcG9sYXIgKzEpLzI7CmNvbnN0IHJhbmdlID0gKG5vcm1hbGl6ZWQsIG1pbiwgbWF4KSA9PiBub3JtYWxpemVkKihtYXgtbWluKSttaW47CmNvbnN0IHNpbm1vZCA9IChmLHQsYT0wLGI9MSkgPT4gcmFuZ2Uobm9ybShzaW4oZiwgdCkpLGEsYikKY29uc3Qgc2F3bW9kID0gKGYsdCxhPTAsYj0xKSA9PiByYW5nZShub3JtKHNhdyhmLCB0KSksYSxiKQpjb25zdCBzcXJtb2QgPSAoZix0LGE9MCxiPTEpID0+IHJhbmdlKG5vcm0oc3FyKGYsIHQpKSxhLGIpCmNvbnN0IG5vaXNlbW9kID0gKGE9MCxiPTEpID0+IHJhbmdlKG5vcm0obm9pc2UoKSksYSxiKQovLwovLyBvc2NpbGxhdG9ycwpsZXQgc2luID0gKHgsIHQpID0+IE1hdGguc2luKDIgKiBNYXRoLlBJICogdCAqIHgpCmxldCBzYXcgPSAoeCwgdCkgPT4gKCh4ICogdCAlIDEpIC0gMC41KSAqIDIKbGV0IGlzYXcgPSAoZix0KSA9PiAtc2F3KGYsdCkKbGV0IHNxciA9ICh4LCB0KSA9PiBzaW4oeCwgdCkgPiAwID8gMSA6IC0xCmxldCBub2lzZSA9ICgpID0+IE1hdGgucmFuZG9tKCkgKiAyIC0gMQ=="
+        >
+          sequences with midi numbers</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IGJhc3NsaW5lID0gWzU1LDU1LDExMCwxNjVdOwpsZXQgZHNwID0gdCA9PiB7CiAgbGV0IGZyZXEgPSBzZXEoYmFzc2xpbmUsIDIsIHQpOwogIGxldCBiYXNzID0gKHNhdyhmcmVxLCB0KSArIHNhdyhmcmVxKzEsIHQpKS8yOwogIHJldHVybiBiYXNzLzUgKiBzYXdtb2Qoc2VxKFsyLDRdLDEsdCksdCwxLDApOwp9Ci8vCi8vIHNlcQpsZXQgc2VxID0gKGl0ZW1zLCBzcGVlZCwgdCkgPT4gaXRlbXNbTWF0aC5mbG9vcih0KnNwZWVkKSVpdGVtcy5sZW5ndGhdCi8vIG1vZHVsYXRpb24KY29uc3Qgbm9ybSA9IChiaXBvbGFyKSA9PiAoYmlwb2xhciArMSkvMjsKY29uc3QgcmFuZ2UgPSAobm9ybWFsaXplZCwgbWluLCBtYXgpID0+IG5vcm1hbGl6ZWQqKG1heC1taW4pK21pbjsKY29uc3Qgc2lubW9kID0gKGYsdCxhPTAsYj0xKSA9PiByYW5nZShub3JtKHNpbihmLCB0KSksYSxiKQpjb25zdCBzYXdtb2QgPSAoZix0LGE9MCxiPTEpID0+IHJhbmdlKG5vcm0oc2F3KGYsIHQpKSxhLGIpCmNvbnN0IHNxcm1vZCA9IChmLHQsYT0wLGI9MSkgPT4gcmFuZ2Uobm9ybShzcXIoZiwgdCkpLGEsYikKY29uc3Qgbm9pc2Vtb2QgPSAoYT0wLGI9MSkgPT4gcmFuZ2Uobm9ybShub2lzZSgpKSxhLGIpCi8vIG9zY2lsbGF0b3JzCmxldCBzaW4gPSAoeCwgdCkgPT4gTWF0aC5zaW4oMiAqIE1hdGguUEkgKiB0ICogeCkKbGV0IHNhdyA9ICh4LCB0KSA9PiAoKHggKiB0ICUgMSkgLSAwLjUpICogMgpsZXQgaXNhdyA9IChmLHQpID0+IC1zYXcoZix0KQpsZXQgc3FyID0gKHgsIHQpID0+IHNpbih4LCB0KSA+IDAgPyAxIDogLTEKbGV0IG5vaXNlID0gKCkgPT4gTWF0aC5yYW5kb20oKSAqIDIgLSAx"
+        >
+          envelopes</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IGRzcCA9IHQgPT4gKGhpaGF0KDIsIDYwLCB0Ky4yNSkgKyBraWNrKDUxLCA0NSwgdCkgKyBzbmFyZSgxLDQwLHQrLjUpKS80CmxldCBraWNrID0gKHgseSx0KSA9PiBNYXRoLnNpbih4ICogTWF0aC5leHAoLXQlLjUgKiB5KSk7CmxldCBoaWhhdCA9IChmLGRhbXAsdCkgPT4gaXNhd3htb2QoZixkYW1wLHQpLzIgKiBub2lzZSgpCmxldCBzbmFyZSA9IChmLGRhbXAsdCkgPT4gKHNpbigxMTAsIHQpICogMC4zICsgbm9pc2UoKSAqIDAuNykgKiBpc2F3eG1vZChmLGRhbXAsdCkKbGV0IG5vcm0gPSAoYmlwb2xhcikgPT4gKGJpcG9sYXIgKzEpLzIKbGV0IHJhbmdlID0gKG5vcm1hbGl6ZWQsIG1pbiwgbWF4KSA9PiBub3JtYWxpemVkKihtYXgtbWluKSttaW4KbGV0IHNhd3htb2QgPSAoeCxjLHQsYT0wLGI9MSkgPT4gcmFuZ2Uobm9ybShzYXd4KHgsYyx0KSksYSxiKQpsZXQgaXNhd3htb2QgPSAoeCxjLHQsYT0wLGI9MSkgPT4gcmFuZ2Uobm9ybShpc2F3eCh4LGMsdCkpLGEsYikKbGV0IHNhd3ggPSAoeCxjLHQpID0+IChNYXRoLmV4cCgodCp4KSUxICogYyAtIGMpLTAuNSkqMgpsZXQgc2luID0gKHgsdCkgPT4gTWF0aC5zaW4oeCp0KjIqTWF0aC5QSSkKbGV0IGlzYXd4ID0gKHgsYyx0KSA9PiAoTWF0aC5leHAoLSh0KngpJTEgKiBjKS0wLjUpKjIKbGV0IG5vaXNlID0gKCkgPT4gTWF0aC5yYW5kb20oKSAqIDIgLSAx"
+        >
+          drums</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IGJhc3NsaW5lID0gWzU1LDU1LDExMCwxNjVdOwpsZXQgZHNwID0gdCA9PiB7CiAgY2xvY2sodCkKICBsZXQgZnJlcSA9IHNlcShiYXNzbGluZSwgMik7CiAgbGV0IGJhc3MgPSAoc2F3KGZyZXEpICsgc2F3KGZyZXErMSkpLzI7CiAgcmV0dXJuIGJhc3MvNSAqIHNhd21vZChzZXEoWzIsNF0sMSksLjI1LDEsMCkKKyhoaWhhdCgyLCAzMCwgLjI1KSArIGtpY2soNTEsIDQ1KSkvNAp9CmxldCB0OwpmdW5jdGlvbiBjbG9jayhfdCl7CiAgdCA9IF90Owp9CmxldCBraWNrID0gKHgseSxvZmY9MCkgPT4gTWF0aC5zaW4oeCAqIE1hdGguZXhwKC0odCtvZmYpJS41ICogeSkpOwpsZXQgaGloYXQgPSAoZixkYW1wPTIwLG9mZj0wKSA9PiBpc2F3eG1vZChmLGRhbXAsb2ZmKS8yICogbm9pc2UoKQovLyBzZXEKbGV0IHNlcSA9IChpdGVtcywgc3BlZWQsIG9mZj0wKSA9PiBpdGVtc1tNYXRoLmZsb29yKCh0K29mZikqc3BlZWQpJWl0ZW1zLmxlbmd0aF0KLy8gbW9kdWxhdGlvbgpjb25zdCBub3JtID0gKGJpcG9sYXIpID0+IChiaXBvbGFyICsxKS8yOwpjb25zdCByYW5nZSA9IChub3JtYWxpemVkLCBtaW4sIG1heCkgPT4gbm9ybWFsaXplZCoobWF4LW1pbikrbWluOwpjb25zdCBzaW5tb2QgPSAoZixvZmY9MCxhPTAsYj0xKSA9PiByYW5nZShub3JtKHNpbihmLCBvZmYpKSxhLGIpCmNvbnN0IHNhd21vZCA9IChmLG9mZj0wLGE9MCxiPTEpID0+IHJhbmdlKG5vcm0oc2F3KGYsIG9mZikpLGEsYikKY29uc3Qgc3FybW9kID0gKGYsb2ZmPTAsYT0wLGI9MSkgPT4gcmFuZ2Uobm9ybShzcXIoZiwgb2ZmKSksYSxiKQpjb25zdCBub2lzZW1vZCA9IChhPTAsYj0xKSA9PiByYW5nZShub3JtKG5vaXNlKCkpLGEsYikKY29uc3Qgc2F3eG1vZCA9ICh4LGMsb2ZmPTAsYT0wLGI9MSkgPT4gcmFuZ2Uobm9ybShzYXd4KHgsYyxvZmYpKSxhLGIpCmxldCBpc2F3eG1vZCA9ICh4LGMsb2ZmPTAsYT0wLGI9MSkgPT4gcmFuZ2Uobm9ybShpc2F3eCh4LGMsb2ZmKSksYSxiKQovLyBvc2NpbGxhdG9ycwpsZXQgc2luID0gKHgsIG9mZj0wKSA9PiBNYXRoLnNpbigyICogTWF0aC5QSSAqICh0K29mZikgKiB4KQpsZXQgc2F3ID0gKHgsIG9mZj0wKSA9PiAoKHggKiAodCtvZmYpICUgMSkgLSAwLjUpICogMgpsZXQgc2F3eCA9ICh4LGMsb2ZmPTApID0+IChNYXRoLmV4cCgoKHQrb2ZmKSp4KSUxICogYyAtIGMpLTAuNSkqMgpsZXQgaXNhd3ggPSAoeCxjLG9mZj0wKSA9PiAoTWF0aC5leHAoLSgodCtvZmYpKngpJTEgKiBjKS0wLjUpKjIKbGV0IGlzYXcgPSAoZixvZmY9MCkgPT4gLXNhdyhmLHQrb2ZmKQpsZXQgc3FyID0gKHgsIG9mZj0wKSA9PiBzaW4oeCwgdCtvZmYpID4gMCA/IDEgOiAtMQpsZXQgbm9pc2UgPSAoKSA9PiBNYXRoLnJhbmRvbSgpICogMiAtIDE="
+        >
+          drums + bass</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IGJhc3NsaW5lID0gWzU1LDY2LDExMCwyMjBdOwpsZXQgbHAgPSBMUCgpCmxldCBkc3AgPSAodCkgPT4gewogIGxldCBmcmVxID0gc2VxKGJhc3NsaW5lLCA0LCB0KTsKICBsZXQgc3ludGggPSBzYXcoZnJlcSwgdCk7CiAgcmV0dXJuIGxwKHN5bnRoLCBzYXdtb2QoNCx0LDMsMTAwKSkvOAp9CmxldCBzZXEgPSAoaXRlbXMsIHNwZWVkLCB0KSA9PiBpdGVtc1tNYXRoLmZsb29yKHQqc3BlZWQpJWl0ZW1zLmxlbmd0aF0KZnVuY3Rpb24gTFAoKSB7CiAgdmFyIHZhbHVlID0gMDsKICByZXR1cm4gKHgsIG4pID0+IHZhbHVlICs9ICh4IC0gdmFsdWUpIC8gbjsKfQpsZXQgc2F3ID0gKHgsIHQpID0+ICgoeCAqIHQgJSAxKSAtIDAuNSkgKiAyCmNvbnN0IG5vcm0gPSAoYmlwb2xhcikgPT4gKGJpcG9sYXIgKzEpLzI7CmNvbnN0IHJhbmdlID0gKG5vcm1hbGl6ZWQsIG1pbiwgbWF4KSA9PiBub3JtYWxpemVkKihtYXgtbWluKSttaW47CmxldCBzYXdtb2QgPSAoZix0LGE9MCxiPTEpID0+IHJhbmdlKG5vcm0oc2F3KGYsIHQpKSxhLGIp"
+        >
+          lowpass 1</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IGJhc3NsaW5lID0gWzU1LDY2LDExMCwyMjBdOwpsZXQgbHAgPSBMUCgpCmxldCBkc3AgPSAodCkgPT4gewogIGxldCBmcmVxID0gc2VxKGJhc3NsaW5lLCA0LCB0KTsKICBsZXQgc3ludGggPSBzYXcoZnJlcSwgdCkKICByZXR1cm4gbHAoc3ludGgsc2F3bW9kKDQsdCwzLDEwMCkpLzgKfQpsZXQgc2VxID0gKGl0ZW1zLCBzcGVlZCwgdCkgPT4gaXRlbXNbTWF0aC5mbG9vcih0KnNwZWVkKSVpdGVtcy5sZW5ndGhdCmZ1bmN0aW9uIExQKCkgewogIGxldCB2YWx1ZSA9IDA7CiAgcmV0dXJuICh4LCBuKSA9PiB2YWx1ZSArPSAoeCAtIHZhbHVlKSAvIG47Cn0KbGV0IHNhdyA9ICh4LCB0KSA9PiAoKHggKiB0ICUgMSkgLSAwLjUpICogMgpjb25zdCBub3JtID0gKGJpcG9sYXIpID0+IChiaXBvbGFyICsxKS8yOwpjb25zdCByYW5nZSA9IChub3JtYWxpemVkLCBtaW4sIG1heCkgPT4gbm9ybWFsaXplZCoobWF4LW1pbikrbWluOwpsZXQgc2F3bW9kID0gKGYsdCxhPTAsYj0xKSA9PiByYW5nZShub3JtKHNhdyhmLCB0KSksYSxiKQ=="
+        >
+          lowpass 2</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IGJhc3NsaW5lID0gWzU1LDY2LDExMCwyMjBdOwpsZXQgZHNwID0gKHQpID0+IHsKICBsZXQgZnJlcSA9IHNlcShiYXNzbGluZSwgNCwgdCkKICBsZXQgc3ludGggPSBzYXcoZnJlcSwgdCkKICBsZXQgZGVwdGggPSAxMDsKICBmaWx0ZXIuc2V0X2ZjKDAuMDAxICsgKC1zYXcoNCx0KSsxKS9kZXB0aCkKICBzeW50aCA9IGZpbHRlci5ydW4oc3ludGggKiAwLjUpOwogIHJldHVybiBzeW50aC80Owp9CmxldCBzZXEgPSAoaXRlbXMsIHNwZWVkLCB0KSA9PiBpdGVtc1tNYXRoLmZsb29yKHQqc3BlZWQpJWl0ZW1zLmxlbmd0aF0KbGV0IHNhdyA9ICh4LCB0KSA9PiAoKHggKiB0ICUgMSkgLSAwLjUpICogMgpjbGFzcyBEaW9kZUZpbHRlciB7CiAgY29uc3RydWN0b3IoKSB7CiAgICB0aGlzLmsgPSAwOwogICAgdGhpcy5BID0gMDsKICAgIHRoaXMueiA9IFswLCAwLCAwLCAwLCAwXTsKICAgIHRoaXMuYWg7CiAgICB0aGlzLmJoOwogICAgdGhpcy5mYzsKICAgIHRoaXMuc2V0X3EoMCk7CiAgICB0aGlzLnNldF9ocGYoMC41KTsKICAgIHRoaXMuc2V0X2ZjKDAuNSk7CiAgfQogIHNldF9ocGYoZmMpIHsKICAgIHZhciBLID0gZmMgKiBNYXRoLlBJOwogICAgdGhpcy5haCA9IChLIC0gMikgLyAoSyArIDIpOwogICAgdGhpcy5iaCA9IDIgLyAoSyArIDIpOwogIH0KICByZXNldCgpIHsKICAgIGlmICh0aGlzLmsgPCAxNykgdGhpcy56ID0gWzAsIDAsIDAsIDAsIDBdOwogIH0KICBzZXRfcShxKSB7CiAgICB0aGlzLmsgPSAyMCAqIHE7CiAgICB0aGlzLkEgPSAxICsgMC41ICogdGhpcy5rOwogIH0KICBzZXRfZmMoY3V0b2ZmKSB7CiAgICBjdXRvZmYgPSBjdXRvZmYgKiBjdXRvZmY7CiAgICB0aGlzLmZjID0gY3V0b2ZmIDw9IDAgPyAwLjAyIDogY3V0b2ZmID49IDEuMCA/IDAuOTk5IDogY3V0b2ZmOwogIH0KICBydW4oeCkgewogICAgdmFyIGEgPSBNYXRoLlBJICogdGhpcy5mYzsKICAgIGEgPSAyICogTWF0aC50YW4oMC41ICogYSk7IC8vIGRld2FycGluZywgbm90IHJlcXVpcmVkIHdpdGggMnggb3ZlcnNhbXBsaW5nCiAgICB2YXIgYWludiA9IDEgLyBhOwogICAgdmFyIGEyID0gYSAqIGE7CiAgICB2YXIgYiA9IDIgKiBhICsgMTsKICAgIHZhciBiMiA9IGIgKiBiOwogICAgdmFyIGMgPSAxIC8gKDIgKiBhMiAqIGEyIC0gNCAqIGEyICogYjIgKyBiMiAqIGIyKTsKICAgIHZhciBnMCA9IDIgKiBhMiAqIGEyICogYzsKICAgIHZhciBnID0gZzAgKiB0aGlzLmJoOwogICAgLy8gY3VycmVudCBzdGF0ZQogICAgdmFyIHMwID0KICAgICAgKGEyICogYSAqIHRoaXMuelswXSArCiAgICAgICAgYTIgKiBiICogdGhpcy56WzFdICsKICAgICAgICB0aGlzLnpbMl0gKiAoYjIgLSAyICogYTIpICogYSArCiAgICAgICAgdGhpcy56WzNdICogKGIyIC0gMyAqIGEyKSAqIGIpICoKICAgICAgYzsKICAgIHZhciBzID0gdGhpcy5iaCAqIHMwIC0gdGhpcy56WzRdOwogICAgLy8gc29sdmUgZmVlZGJhY2sgbG9vcCAobGluZWFyKQogICAgdmFyIHk1ID0gKGcgKiB4ICsgcykgLyAoMSArIGcgKiB0aGlzLmspOwogICAgLy8gaW5wdXQgY2xpcHBpbmcKICAgIHZhciB5MCA9IGNsaXAoeCAtIHRoaXMuayAqIHk1KTsKICAgIHk1ID0gZyAqIHkwICsgczsKICAgIC8vIGNvbXB1dGUgaW50ZWdyYXRvciBvdXRwdXRzCiAgICB2YXIgeTQgPSBnMCAqIHkwICsgczA7CiAgICB2YXIgeTMgPSAoYiAqIHk0IC0gdGhpcy56WzNdKSAqIGFpbnY7CiAgICB2YXIgeTIgPSAoYiAqIHkzIC0gYSAqIHk0IC0gdGhpcy56WzJdKSAqIGFpbnY7CiAgICB2YXIgeTEgPSAoYiAqIHkyIC0gYSAqIHkzIC0gdGhpcy56WzFdKSAqIGFpbnY7CiAgICAvLyB1cGRhdGUgZmlsdGVyIHN0YXRlCiAgICB0aGlzLnpbMF0gKz0gNCAqIGEgKiAoeTAgLSB5MSArIHkyKTsKICAgIHRoaXMuelsxXSArPSAyICogYSAqICh5MSAtIDIgKiB5MiArIHkzKTsKICAgIHRoaXMuelsyXSArPSAyICogYSAqICh5MiAtIDIgKiB5MyArIHk0KTsKICAgIHRoaXMuelszXSArPSAyICogYSAqICh5MyAtIDIgKiB5NCk7CiAgICB0aGlzLnpbNF0gPSB0aGlzLmJoICogeTQgKyB0aGlzLmFoICogeTU7CiAgICByZXR1cm4gdGhpcy5BICogeTQ7CiAgfQp9CnZhciBmaWx0ZXIgPSBuZXcgRGlvZGVGaWx0ZXIoKTsKZmlsdGVyLnNldF9xKDAuNjYpOwpmaWx0ZXIuc2V0X2hwZiguMDAwNyk7CmZ1bmN0aW9uIGNsaXAoeCl7CiAgcmV0dXJuIHggLyAoMSArIE1hdGguYWJzKHgpKTsKfQ=="
+        >
+          diode filter</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IGZhc3RfdGFuaCA9ICh4KSA9PiB7CiAgbGV0IHgyID0geCAqIHg7CiAgcmV0dXJuICh4ICogKDI3LjAgKyB4MikpIC8gKDI3LjAgKyA5LjAgKiB4Mik7Cn07CmZ1bmN0aW9uIE1vb2coKSB7CiAgbGV0IHAwLCBwMSwgcDIsIHAzOwogIGxldCBwMzIsIHAzMywgcDM0OwogIHAwID0gcDEgPSBwMiA9IHAzID0gcDMyID0gcDMzID0gcDM0ID0gMDsKICBsZXQgY3V0b2ZmOwogIHJldHVybiAoaW5wdXQsIGMsIHEpID0+IHsKICAgIGN1dG9mZiA9IChjICogMiAqIE1hdGguUEkpIC8gNDQxMDA7CiAgICBjdXRvZmYgPSBjdXRvZmYgPiAxID8gMSA6IGN1dG9mZjsKICAgIGxldCBrID0gcSAqIDQ7CiAgICBsZXQgb3V0ID0gcDMgKiAwLjM2MDg5MSArIHAzMiAqIDAuNDE3MjkgKyBwMzMgKiAwLjE3Nzg5NiArIHAzNCAqIDAuMDQzOTcyNTsKICAgIHAzNCA9IHAzMzsKICAgIHAzMyA9IHAzMjsKICAgIHAzMiA9IHAzOwogICAgcDAgKz0gKGZhc3RfdGFuaChpbnB1dCAtIGsgKiBvdXQpIC0gZmFzdF90YW5oKHAwKSkgKiBjdXRvZmY7CiAgICBwMSArPSAoZmFzdF90YW5oKHAwKSAtIGZhc3RfdGFuaChwMSkpICogY3V0b2ZmOwogICAgcDIgKz0gKGZhc3RfdGFuaChwMSkgLSBmYXN0X3RhbmgocDIpKSAqIGN1dG9mZjsKICAgIHAzICs9IChmYXN0X3RhbmgocDIpIC0gZmFzdF90YW5oKHAzKSkgKiBjdXRvZmY7CiAgICByZXR1cm4gb3V0OwogIH07Cn0KLy8vLy8vLy8vLy8vLwovLy8vLy8vLy8vLy8vCmxldCBiYXNzbGluZSA9IFs1NSw2NiwxMTAsMjIwXTsKbGV0IGxwID0gTW9vZygpOwpsZXQgZHNwID0gKHQpID0+IHsKICBsZXQgZnJlcSA9IHNlcShiYXNzbGluZSwgNCwgdCkKICBsZXQgc3ludGggPSBzYXcoZnJlcSwgdCkKICBsZXQgY3V0b2ZmID0gKC1zYXcoNCx0KSsxKSoyMDAwCiAgc3ludGggPSBscChzeW50aCxjdXRvZmYsLjYpCiAgcmV0dXJuIHN5bnRoLzY7Cn0KbGV0IHNlcSA9IChpdGVtcywgc3BlZWQsIHQpID0+IGl0ZW1zW01hdGguZmxvb3IodCpzcGVlZCklaXRlbXMubGVuZ3RoXQpsZXQgc2F3ID0gKHgsIHQpID0+ICgoeCAqIHQgJSAxKSAtIDAuNSkgKiAy"
+        >
+          ladder filter</a
+        >
+      </li>
+      <li>
+        <a
+          href="#LyohCiAqCiAqIHN0YWdhcyAtIGVhcmx5IG1vcm5pbmcKICoKICovCnZhciBicG0gPSAxMjA7CnZhciB0dW5pbmcgPSA0NDA7CnZhciB0cmFuc3Bvc2UgPSAxMjsKLy8gY29uc3RhbnRzCnZhciB0YXUgPSAyICogTWF0aC5QSTsKLy8gdGltZSBjb2VmZmljaWVudHMKdmFyIHQsIHR0OwovLyBhZGp1c3QgdHVuaW5nIHRvIGJwbQp0dW5pbmcgKj0gMTIwIC8gYnBtOwovLyBwYXR0ZXJucwp2YXIgY2hvcmRzID0gWwogIFs3LCA5LCAxMiwgMTZdLAogIFsyLCA1LCA5LCAxMl0sCiAgWzQsIDcsIDExLCAxNF0sCiAgWzIsIDUsIDksIDEyXSwKXS5tYXAoZnVuY3Rpb24oY2hvcmQpewogIHJldHVybiBjaG9yZC5tYXAoZnVuY3Rpb24obil7CiAgICByZXR1cm4gbm90ZShuKTsKICB9KTsKfSkucmV2ZXJzZSgpOwp2YXIgaGF0X3BhdHRlcm4gPSBbCiAgMC4wLCAwLjAsIDAuNSwgMC4wLCAgMC4wLCAwLjAsIDAuNSwgMC4wLAogIDAuMCwgMC4wLCAwLjUsIDAuMCwgIDAuMCwgMC4wLCAwLjUsIDAuMCwKXTsKdmFyIHBsdWNrZWQgPSBQbHVjayg2MCwgMC45LCAwLjkzLCAxLjAsIDAuOSk7CnZhciBraWNrX25vdGUgPSBub3RlKDIsIC0xKTsKdmFyIGJhc3NfbHAgPSBMUDIoNjIwMCk7CmZ1bmN0aW9uIGRzcCh0KXsKICBjbG9jayh0KTsKICB2YXIgaGF0X25vdGUgPSBub3RlKDksIDEgKyB0cmkoMS82KSAqIDIgfCAwKTsKICB2YXIgYyA9IHNlcXVlbmNlKDEvOCwgY2hvcmRzKTsKICB2YXIgbm9pc2UgPSBOb2lzZSgpOwogIHZhciBhID0gMC45ICogdHJpKDAuMDEsIHQgLyAyICUgKDEpKTsKICB2YXIgYiA9IDAuOCAqIE1hdGguc2luKGEgKiB0YXUgKiB0KTsKICB2YXIgYmFzc19vc2MgPQogICAgMC4xICogc2luKGNbMiArIChNYXRoLmZsb29yKHNpbigoMS84KSAqIDIsIHQpKSldICogKDIgKyAoTWF0aC5mbG9vcih0cmkoMS8yLCB0KSAqIDEpKSkgLyA1KQogICsgMC4xICogdHJpKGNbMiArIChNYXRoLmZsb29yKHNpbigoMS80KSAqIDIsIHQpKSldICogKDIgKyAoTWF0aC5mbG9vcih0cmkoMS80LCB0KSAqIDEpKSkgKiAyKQogIDsKICBiYXNzX29zYyA9IGJhc3NfbHAoYmFzc19vc2MsIDgwICsgdHJpKDQpICogMyk7CiAgdmFyIGJhc3MgPSBhcnAoMS82LCBiYXNzX29zYywgMiwgMjAgKyAodHJpKDEvNCkgKiAxMCkpOwogIC8vIHN5bnRoCiAgdmFyIHN5bnRoX29zYyA9CiAgICB0cmkoY1sxXS8xKQogICsgdHJpKGNbMl0vMSkKICA7CiAgdmFyIHN5bnRoID0gcGx1Y2tlZChhcnAoMS8yLCBzeW50aF9vc2MsIHNlcXVlbmNlKDEvMiwgWzEsIDEsIDEsIDBdKSAqIDg1ICsgKHNpbigwLjUpICogMTApLCAwLjMpKTsKICAvLyBkcnVtcwogIHZhciBoYXRfb3NjID0KICAgIDAuNiAqIHRyaShoYXRfbm90ZSkKICArIDAuMSAqIG5vaXNlCiAgOwogIHZhciBoYXQgPQogICAgc2VxdWVuY2UoMS8xNiwgaGF0X3BhdHRlcm4pCiAgKiBhcnAoMS84LCBoYXRfb3NjLCA0MCArIHRyaSgxLzQpICogMjAsIDMxKQogIDsKICB2YXIga2lja19vc2MgPQogICAgMS4wICogc2luKGtpY2tfbm90ZSkKICA7CiAgdmFyIGtpY2sgPSBhcnAoMS80LCA1MSwgNDUsIDMpOwogIC8vIG1peGVyCiAgcmV0dXJuIDEgKiAoCiAgICAwLjAyOCAqIHN5bnRoCiAgKyAwLjQgKiBoYXQKICArIDAuNSAqIGtpY2sKICArIDAuNiAqIGJhc3MKICApOwp9CmZ1bmN0aW9uIGNsb2NrKF90KXsKICB0ID0gX3Q7CiAgdCAqPSBicG0gLyAxMjA7CiAgdHQgPSB0YXUgKiB0Owp9CmZ1bmN0aW9uIFBsdWNrKGxlbmd0aCwgZHJ5LCB3ZXQsIHRhaWwsIGN1dG9mZil7CiAgbGVuZ3RoID0gbGVuZ3RoIHx8IDQwOwogIHZhciBscCA9IExQKCk7CiAgdmFyIHJiID0gbmV3IFJpbmdCdWZmZXIobGVuZ3RoKTsKICB2YXIgc3VtOwogIHJldHVybiBmdW5jdGlvbihzYW1wbGUpewogICAgc3VtID0gcmIucmVkdWNlKGF2ZXJhZ2UsIHNhbXBsZSk7CiAgICBzYW1wbGUgPQogICAgICBkcnkgKiBzYW1wbGUKICAgICsgd2V0ICogbHAoc3VtLCBjdXRvZmYpCiAgICA7CiAgICByYi5wdXNoKHNhbXBsZSAqIHRhaWwpOwogICAgcmV0dXJuIHNhbXBsZTsKICB9Owp9CmZ1bmN0aW9uIGF2ZXJhZ2UocCwgbil7CiAgcmV0dXJuIChwICsgbikgLyAyOwp9CmZ1bmN0aW9uIHNlcXVlbmNlKG1lYXN1cmUsIHNlcSl7CiAgcmV0dXJuIHNlcVsodCAvIG1lYXN1cmUgLyAyIHwgMCkgJSBzZXEubGVuZ3RoXTsKfQpmdW5jdGlvbiBhcnAobWVhc3VyZSwgeCwgeSwgeil7CiAgdmFyIHRzID0gdCAvIDIgJSBtZWFzdXJlOwogIHJldHVybiBNYXRoLnNpbih4ICogKE1hdGguZXhwKC10cyAqIHkpKSkgKiBNYXRoLmV4cCgtdHMgKiB6KTsKfQpmdW5jdGlvbiBzaW4oZnJlcSwgcGhhc2UpewogIHJldHVybiBNYXRoLnNpbigodCAqIGZyZXEgKyAoMiAtIChwaGFzZSB8fCAwKSAvIDIpKSAqIHRhdSk7Cn0KZnVuY3Rpb24gc2F3KGZyZXEpewogIHJldHVybiAxLTIgKiAodCAlICgxIC8gZnJlcSkpICogZnJlcTsKfQpmdW5jdGlvbiB0cmkoZnJlcSl7CiAgcmV0dXJuIE1hdGguYWJzKDEgLSAoMiAqIHQgKiBmcmVxKSAlIDIpICogMiAtIDE7Cn0KZnVuY3Rpb24gc3FyKGZyZXEpewogIHJldHVybiBzaW4oZnJlcSwgdCkgPiAwID8gMSA6IC0xOwp9CmZ1bmN0aW9uIE5vaXNlKCl7CiAgcmV0dXJuIE1hdGgucmFuZG9tKCkgKiAyIC0gMTsKfQpmdW5jdGlvbiBMUCgpewogIHZhciB2YWx1ZSA9IDA7CiAgcmV0dXJuIGZ1bmN0aW9uKHgsIG4pewogICAgcmV0dXJuIHZhbHVlICs9ICh4IC0gdmFsdWUpIC8gbjsKICB9Owp9CmZ1bmN0aW9uIG5vdGUobiwgb2N0YXZlKXsKICByZXR1cm4gTWF0aC5wb3coMiwgKAogICAgbiArIHRyYW5zcG9zZSAtIDMzICsgKDEyICogKG9jdGF2ZSB8fCAwKSkKICApIC8gMTIpICogdHVuaW5nOyAvLyBBNCB0dW5pbmcKfQpmdW5jdGlvbiBSaW5nQnVmZmVyKGxlbmd0aCl7CiAgdGhpcy5hcnJheSA9IG5ldyBGbG9hdDMyQXJyYXkobGVuZ3RoKTsKICB0aGlzLmxlbmd0aCA9IGxlbmd0aDsKICB0aGlzLnBvcyA9IDA7Cn0KUmluZ0J1ZmZlci5wcm90b3R5cGUucHVzaCA9IGZ1bmN0aW9uKGVsKXsKICB0aGlzLmFycmF5W3RoaXMucG9zKytdID0gZWw7CiAgaWYgKHRoaXMucG9zID09PSB0aGlzLmxlbmd0aCkgewogICAgdGhpcy5wb3MgPSAwOwogIH0KfTsKUmluZ0J1ZmZlci5wcm90b3R5cGUuZm9yRWFjaCA9IGZ1bmN0aW9uKGZuKXsKICB2YXIgaSA9IHRoaXMucG9zOwogIGZvciAoOyBpIDwgdGhpcy5sZW5ndGg7IGkrKykgewogICAgZm4odGhpcy5hcnJheVtpXSk7CiAgfQogIGlmICh0aGlzLnBvcyA+IDApIHsKICAgIGZvciAoaSA9IDA7IGkgPCB0aGlzLnBvczsgaSsrKSB7CiAgICAgIGZuKHRoaXMuYXJyYXlbaV0pOwogICAgfQogIH0KfTsKUmluZ0J1ZmZlci5wcm90b3R5cGUucmVkdWNlID0gZnVuY3Rpb24oZm4sIHZhbCl7CiAgdmFsID0gdmFsIHx8IDA7CiAgdGhpcy5mb3JFYWNoKGZ1bmN0aW9uKGVsKXsKICAgIHZhbCA9IGZuKHZhbCwgZWwpOwogIH0pOwogIHJldHVybiB2YWw7Cn07CmZ1bmN0aW9uIExQMihjdXRvZmYpewogIHZhciBSQyA9IDEgLyAoY3V0b2ZmICogMiAqIE1hdGguUEkpOwogIHZhciBkdCA9IDEgLyAyMDQ4OwogIHZhciBhbHBoYSA9IGR0IC8gKFJDICsgZHQpOwogIHZhciBwcmV2ID0gMDsKICB2YXIgY3VyciA9IDA7CiAgcmV0dXJuIGZ1bmN0aW9uKGZyZXEsIHgpewogICAgY3VyciA9IHByZXYgKyAoIChkdCAvICggKDEvIChmcmVxICogMiAqIE1hdGguUEkpKSArIGR0KSApICogKHggLSBwcmV2KSk7CiAgICBwcmV2ID0gY3VycjsKICAgIHJldHVybiBjdXJyOwogIH07Cn0="
+          >stagas - early morning</a
+        >
+      </li>
+      <li>
+        <a
+          href="#LyohCiAqCiAqIHN0YWdhcyAtIGxhdGUgbW9ybmluZwogKgogKi8KdmFyIGJwbSA9IDEyMDsKdmFyIHR1bmluZyA9IDQ0MDsKdmFyIHRyYW5zcG9zZSA9IDEyOyAvLyBjb25zdGFudHMKdmFyIHRhdSA9IDIgKiBNYXRoLlBJOyAvLyB0aW1lIGNvZWZmaWNpZW50cwp2YXIgdCwgdHQ7IC8vIGFkanVzdCB0dW5pbmcgdG8gYnBtCnR1bmluZyAqPSAxMjAgLyBicG07IC8vIHBhdHRlcm5zCnZhciBjaG9yZHMgPSBbCiAgWzcsIDksIDEyLCAxNl0sCiAgWzIsIDUsIDksIDEyXSwKICBbNCwgNywgMTEsIDE0XSwKICBbMiwgNSwgOSwgMTJdLApdCiAgLm1hcChmdW5jdGlvbiAoY2hvcmQpIHsKICAgIHJldHVybiBjaG9yZC5tYXAoZnVuY3Rpb24gKG4pIHsKICAgICAgcmV0dXJuIG5vdGUobik7CiAgICB9KTsKICB9KQogIC5yZXZlcnNlKCk7CnZhciBoYXRfcGF0dGVybiA9IFsKICAwLjAsIDAuMCwgMC41LCAwLjAsIDAuMCwgMC4wLCAwLjUsIDAuMCwgMC4wLCAwLjAsIDAuNSwgMC4wLCAwLjAsIDAuMCwgMC41LAogIDAuMCwKXTsKdmFyIHBsdWNrZWQgPSBQbHVjayg2MCwgMC45LCAwLjkzLCAxLjAsIDAuOSk7CnZhciBiYXNzX2xwID0gTFAyKDY1MDApOwpmdW5jdGlvbiBkc3AodCkgewogIGNsb2NrKHQpOyAvLyBjaG9yZAogIHZhciBjID0gc2VxdWVuY2UoMSAvIDgsIGNob3Jkcyk7IC8vIG5vaXNlCiAgdmFyIG5vaXNlID0gTm9pc2UoKTsgLy8gYmFzcwogIHZhciBiYXNzX29zYyA9CiAgICAwLjA1ICoKICAgICAgc2luKAogICAgICAgIChjWzIgKyBNYXRoLmZsb29yKHNpbigoMSAvIDgpICogMiwgdCkpXSAqCiAgICAgICAgICAoMiArIE1hdGguZmxvb3IodHJpKDEgLyAyLCB0KSAqIDEpKSkgLwogICAgICAgICAgNQogICAgICApICsKICAgIDAuMDcgKgogICAgICB0cmkoCiAgICAgICAgY1syICsgTWF0aC5mbG9vcihzaW4oKDEgLyA0KSAqIDIsIHQpKV0gKgogICAgICAgICAgKDIgKyBNYXRoLmZsb29yKHRyaSgxIC8gNCwgdCkgKiAxKSkgKgogICAgICAgICAgMwogICAgICApOwogIGJhc3Nfb3NjID0gYmFzc19scChiYXNzX29zYywgMzAgKyB0cmkoNCkgKiAzKTsKICB2YXIgYmFzcyA9IGFycCgxIC8gNiwgYmFzc19vc2MsIDIsIDEwICsgdHJpKDEgLyA0KSAqIDIwKTsgLy8gc3ludGgKICB2YXIgc3ludGhfb3NjID0gdHJpKGNbMV0gLyAxKSArIHRyaShjWzJdIC8gMSk7CiAgdmFyIHN5bnRoID0gcGx1Y2tlZCgKICAgIGFycCgxIC8gMywgc3ludGhfb3NjLCBzZXF1ZW5jZSgxLCBbMSwgMSwgMSwgMF0pICogNDUgKyBzaW4oMC41KSAqIDEwLCAwLjMpCiAgKTsgLy8gZHJ1bXMKICB2YXIgaGF0X25vdGUgPSBub3RlKDksICgxICsgdHJpKDEgLyA2KSAqIDIpIHwgMCk7CiAgdmFyIGhhdF9vc2MgPSAwLjYgKiB0cmkoaGF0X25vdGUpICsgMC4xICogbm9pc2U7CiAgdmFyIGhhdCA9CiAgICBzZXF1ZW5jZSgxIC8gMTYsIGhhdF9wYXR0ZXJuKSAqCiAgICBhcnAoMSAvIDgsIGhhdF9vc2MsIDQwICsgdHJpKDEgLyA0KSAqIDIwLCAzMSk7CiAgdmFyIGtpY2sgPSBhcnAoMSAvIDQsIDUxLCA0NSwgMyk7IC8vIG1peGVyCiAgcmV0dXJuIDEgKiAoMC4wMzQgKiBzeW50aCArIDAuNSAqIGhhdCArIDAuNSAqIGtpY2sgKyAwLjEzICogYmFzcyk7Cn0KZnVuY3Rpb24gY2xvY2soX3QpIHsKICB0ID0gX3Q7CiAgdCAqPSBicG0gLyAxMjA7CiAgdHQgPSB0YXUgKiB0Owp9CmZ1bmN0aW9uIFBsdWNrKGxlbmd0aCwgZHJ5LCB3ZXQsIHRhaWwsIGN1dG9mZikgewogIGxlbmd0aCA9IGxlbmd0aCB8fCA0MDsKICB2YXIgbHAgPSBMUCgpOwogIHZhciByYiA9IG5ldyBSaW5nQnVmZmVyKGxlbmd0aCk7CiAgdmFyIHN1bTsKICByZXR1cm4gZnVuY3Rpb24gKHNhbXBsZSkgewogICAgc3VtID0gcmIucmVkdWNlKGF2ZXJhZ2UsIHNhbXBsZSk7CiAgICBzYW1wbGUgPSBkcnkgKiBzYW1wbGUgKyB3ZXQgKiBscChzdW0sIGN1dG9mZik7CiAgICByYi5wdXNoKHNhbXBsZSAqIHRhaWwpOwogICAgcmV0dXJuIHNhbXBsZTsKICB9Owp9CmZ1bmN0aW9uIGF2ZXJhZ2UocCwgbikgewogIHJldHVybiAocCArIG4pIC8gMjsKfQpmdW5jdGlvbiBzZXF1ZW5jZShtZWFzdXJlLCBzZXEpIHsKICByZXR1cm4gc2VxWygodCAvIG1lYXN1cmUgLyAyKSB8IDApICUgc2VxLmxlbmd0aF07Cn0KZnVuY3Rpb24gYXJwKG1lYXN1cmUsIHgsIHksIHopIHsKICB2YXIgdHMgPSAodCAvIDIpICUgbWVhc3VyZTsKICByZXR1cm4gTWF0aC5zaW4oeCAqIE1hdGguZXhwKC10cyAqIHkpKSAqIE1hdGguZXhwKC10cyAqIHopOwp9CmZ1bmN0aW9uIHNpbihmcmVxLCBwaGFzZSkgewogIHJldHVybiBNYXRoLnNpbigodCAqIGZyZXEgKyAoMiAtIChwaGFzZSB8fCAwKSAvIDIpKSAqIHRhdSk7Cn0KZnVuY3Rpb24gc2F3KGZyZXEpIHsKICByZXR1cm4gMSAtIDIgKiAodCAlICgxIC8gZnJlcSkpICogZnJlcTsKfQpmdW5jdGlvbiB0cmkoZnJlcSkgewogIHJldHVybiBNYXRoLmFicygxIC0gKCgyICogdCAqIGZyZXEpICUgMikpICogMiAtIDE7Cn0KZnVuY3Rpb24gc3FyKGZyZXEpIHsKICByZXR1cm4gc2luKGZyZXEsIHQpID4gMCA/IDEgOiAtMTsKfQpmdW5jdGlvbiBOb2lzZSgpIHsKICByZXR1cm4gTWF0aC5yYW5kb20oKSAqIDIgLSAxOwp9CmZ1bmN0aW9uIExQKCkgewogIHZhciB2YWx1ZSA9IDA7CiAgcmV0dXJuIGZ1bmN0aW9uICh4LCBuKSB7CiAgICByZXR1cm4gKHZhbHVlICs9ICh4IC0gdmFsdWUpIC8gbik7CiAgfTsKfQpmdW5jdGlvbiBub3RlKG4sIG9jdGF2ZSkgewogIHJldHVybiBNYXRoLnBvdygyLCAobiArIHRyYW5zcG9zZSAtIDMzICsgMTIgKiAob2N0YXZlIHx8IDApKSAvIDEyKSAqIHR1bmluZzsgLy8gQTQgdHVuaW5nCn0KZnVuY3Rpb24gUmluZ0J1ZmZlcihsZW5ndGgpIHsKICB0aGlzLmFycmF5ID0gbmV3IEZsb2F0MzJBcnJheShsZW5ndGgpOwogIHRoaXMubGVuZ3RoID0gbGVuZ3RoOwogIHRoaXMucG9zID0gMDsKfQpSaW5nQnVmZmVyLnByb3RvdHlwZS5wdXNoID0gZnVuY3Rpb24gKGVsKSB7CiAgdGhpcy5hcnJheVt0aGlzLnBvcysrXSA9IGVsOwogIGlmICh0aGlzLnBvcyA9PT0gdGhpcy5sZW5ndGgpIHsKICAgIHRoaXMucG9zID0gMDsKICB9Cn07ClJpbmdCdWZmZXIucHJvdG90eXBlLmZvckVhY2ggPSBmdW5jdGlvbiAoZm4pIHsKICB2YXIgaSA9IHRoaXMucG9zOwogIGZvciAoOyBpIDwgdGhpcy5sZW5ndGg7IGkrKykgewogICAgZm4odGhpcy5hcnJheVtpXSk7CiAgfQogIGlmICh0aGlzLnBvcyA+IDApIHsKICAgIGZvciAoaSA9IDA7IGkgPCB0aGlzLnBvczsgaSsrKSB7CiAgICAgIGZuKHRoaXMuYXJyYXlbaV0pOwogICAgfQogIH0KfTsKUmluZ0J1ZmZlci5wcm90b3R5cGUucmVkdWNlID0gZnVuY3Rpb24gKGZuLCB2YWwpIHsKICB2YWwgPSB2YWwgfHwgMDsKICB0aGlzLmZvckVhY2goZnVuY3Rpb24gKGVsKSB7CiAgICB2YWwgPSBmbih2YWwsIGVsKTsKICB9KTsKICByZXR1cm4gdmFsOwp9OwpmdW5jdGlvbiBMUDIoY3V0b2ZmKSB7CiAgdmFyIFJDID0gMSAvIChjdXRvZmYgKiAyICogTWF0aC5QSSk7CiAgdmFyIGR0ID0gMSAvIDIwNDg7CiAgdmFyIGFscGhhID0gZHQgLyAoUkMgKyBkdCk7CiAgdmFyIHByZXYgPSAwOwogIHZhciBjdXJyID0gMDsKICByZXR1cm4gZnVuY3Rpb24gKGZyZXEsIHgpIHsKICAgIGN1cnIgPSBwcmV2ICsgKGR0IC8gKDEgLyAoZnJlcSAqIDIgKiBNYXRoLlBJKSArIGR0KSkgKiAoeCAtIHByZXYpOwogICAgcHJldiA9IGN1cnI7CiAgICByZXR1cm4gY3VycjsKICB9Owp9"
+          >stagas - late morning</a
+        >
+      </li>
+    </ul>
+    <p>
+      Some of these examples are adapted from:
+      <a href="https://wavepot.com/" style="color: yellow" target="_blank"
+        >wavepot</a
+      >
+    </p>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+
+    <script>
+      // init audio context
+      const ctx = new AudioContext();
+      document.addEventListener("click", function firstClick() {
+        ctx.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+
+      // worklet logic
+      let worklet;
+      async function play() {
+        await ctx.resume();
+        stop();
+        worklet = await runWorklet(ctx, input.value);
+        worklet.port.onmessage = (e) =>
+          requestAnimationFrame(() => drawBuffer(e.data));
+      }
+      let stop = () => {
+        worklet?.disconnect();
+        worklet?.port.postMessage("stop");
+      };
+
+      async function runWorklet(ac, code) {
+        const name = `worklet-${Date.now()}`;
+        const workletCode = `// start of user code
+${code}
+// end of user code, I hope you have define an dsp function..
+class MyProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.t = 0;
+    this.active = true;
+    this.framebuffer = new Float32Array(Math.floor(sampleRate/30));
+    this.port.onmessage = (e) => e.data === "stop" && (this.active = false)
+  }
+  process(inputs, outputs, parameters) {
+    const output = outputs[0];
+    for (let i = 0; i < output[0].length; i++) {
+      output.forEach((channel) => {
+        channel[i] = dsp(this.t/sampleRate);
+      });
+      this.t++;
+      this.framebuffer[this.t%this.framebuffer.length] = output[0][i];
+      if(this.t % this.framebuffer.length === 0 && this.t > 0) {
+        this.port.postMessage(this.framebuffer)
+      }
+    }
+    return this.active;
+  }
+}
+registerProcessor('${name}', MyProcessor);`;
+        await ac.resume();
+        const dataURL = `data:text/javascript;base64,${btoa(workletCode)}`;
+        await ac.audioWorklet.addModule(dataURL);
+        const node = new AudioWorkletNode(ac, name);
+        node.connect(ac.destination);
+        return node;
+      }
+
+      // code input / url hash handling
+      const input = document.querySelector("#code");
+      document.querySelector("#play").onclick = () => play();
+      document.querySelector("#stop").onclick = () => stop();
+      // read base64 code from url
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!");
+      }
+      input.value =
+        urlCode ||
+        `function dsp(t) {
+  return Math.sin(t*220*2*Math.PI)/2
+}`;
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        play();
+      });
+      input.addEventListener("keydown", async (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          const hash = btoa(input.value);
+          let urlCode = window.location.hash.slice(1);
+          if (hash !== urlCode) {
+            window.location.hash = "#" + hash;
+          } else {
+            play();
+          }
+        }
+        if ((e.ctrlKey || e.altKey) && e.key === ".") {
+          stop();
+        }
+      });
+
+      // init canvas
+      const canvas = document.querySelector("#canvas");
+      const drawContext = canvas.getContext("2d");
+      canvas.width = 800;
+      canvas.height = 200;
+      function drawBuffer(samples) {
+        drawContext.clearRect(0, 0, canvas.width, canvas.height);
+        plot(
+          (x) => samples[Math.floor(x)], // this is bad..
+          drawContext,
+          [0, samples.length - 1],
+          [-1, 1],
+          "white",
+          2
+        );
+      }
+
+      // plot function, see /plot.html
+      function plot(
+        fn,
+        ctx,
+        xrange = [-1, 1],
+        yrange = [-1, 1],
+        color = "black",
+        lineWidth = 4
+      ) {
+        // these 3 functions are very good to know..
+        const lerp = (v, min, max) => v * (max - min) + min;
+        const invLerp = (v, min, max) => (v - min) / (max - min);
+        const remap = (v, vmin, vmax, omin, omax) =>
+          lerp(invLerp(v, vmin, vmax), omin, omax);
+        // prepare draw context
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = color;
+        // function ranges
+        const [x0, x1] = xrange;
+        const [y0, y1] = yrange;
+        // draw ranges
+        const [px0, px1] = [0, ctx.canvas.width];
+        const [py0, py1] = [ctx.canvas.height - ctx.lineWidth, ctx.lineWidth];
+        // actual draw logic
+        ctx.beginPath();
+        for (let px = 0; px < ctx.canvas.width; px++) {
+          const x = remap(px, px0, px1, x0, x1);
+          const y = fn(x);
+          const py = remap(y, y0, y1, py0, py1);
+          px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
