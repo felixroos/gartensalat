@@ -283,7 +283,7 @@ registerProcessor('${name}', MyProcessor);`;
         urlCode = atob(urlCode);
         console.log("loaded code from url!");
       }
-      input.value = urlCode || `return sine(330).mul(sine(2).add(1).mul(.25))`;
+      input.value = urlCode || `return sine(331).mul(sine(2).add(1).mul(.25))`;
       window.addEventListener("hashchange", function () {
         const urlCode = atob(window.location.hash.slice(1));
         input.value = urlCode;
