@@ -232,11 +232,11 @@ class MyProcessor extends AudioWorkletProcessor {
   process(inputs, outputs, parameters) {
     const output = outputs[0];
     for (let i = 0; i < output[0].length; i++) {
-      output.forEach((channel) => {
-        channel[i] = dsp(this.t/sampleRate);
-      });
+      let out = dsp(this.t/sampleRate)
+      for(let c in output)
+        output[c][i] = out;
       this.t++;
-      this.framebuffer[this.t%this.framebuffer.length] = output[0][i];
+      this.framebuffer[this.t%this.framebuffer.length] = out;
       if(this.t % this.framebuffer.length === 0 && this.t > 0) {
         this.port.postMessage(this.framebuffer)
       }
