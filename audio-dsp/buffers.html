@@ -71,8 +71,8 @@
     <p>
       In the above expression, t is the index of the sample in the list. For now
       we'll generate a fixed length buffer of 4 seconds. For our sample rate of
-      44100 samples per second, this means we are running the calculation 44100*4
-      = 176400 times, so our variable t ranges from 0 to 176400-1.
+      44100 samples per second, this means we are running the calculation
+      44100*4 = 176400 times, so our variable t ranges from 0 to 176400-1.
     </p>
     <p>Here are some examples to try:</p>
     <ul id="examples"></ul>
@@ -109,6 +109,12 @@
         >
       </li>
     </ul>
+    <p>
+      The approach here is very similar to how we can
+      <a href="/fake-shaders.html">generate an image using functions</a>.
+      Instead of filling a buffer that contains a color for each pixel, we fill
+      a buffer that describes a speaker position for each moment in time.
+    </p>
 
     <details>
       <summary id="loc">show page source</summary>
