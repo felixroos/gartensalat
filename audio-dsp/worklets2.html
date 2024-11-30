@@ -55,13 +55,19 @@
     <h2>🌱 audio worklets II</h2>
     <p>
       In the <a href="/audio-dsp/worklets.html">last post</a>, we've seen how to
-      live code a never ending stream of audio. Now, let's make our user code a
-      bit more expressive. Instead of writing a single expression, we can define
-      a dsp function that runs for every sample. Scaling t to seconds is also
-      very convenient..
+      live code a never ending stream of audio. It would only let you write a
+      single expression, which is a bit limiting. Let's open that up:
     </p>
+    <ul>
+      <li>
+        we can now define a function called "dsp", that runs for every sample.
+        This way, we can define functions and variables outside of the "hot
+        path"
+      </li>
+      <li>change the scale of t to be in seconds..</li>
+    </ul>
     <div>
-      <small>💡 hit ctrl+enter to update the code.</small>
+      <small>💡 hit ctrl+enter to update the code & ctrl+. to stop.</small>
     </div>
     <textarea id="code" spellcheck="false" rows="16"></textarea>
     <a id="play">play</a> | <a id="stop">stop</a>
@@ -180,14 +186,15 @@
       </li>
     </ul>
     <p>
-      Some of these examples are taken from:
+      Some of these examples + the idea to define a function called dsp is taken
+      from:
       <a href="https://wavepot.com/" style="color: yellow" target="_blank"
         >wavepot</a
       >. I've also created a single html version of this way of live coding
       audio, called
       <a href="https://github.com/felixroos/doughbeat" target="_blank"
         >doughbeat</a
-      >.
+      >, you can find a lot more examples there.
     </p>
 
     <details>
