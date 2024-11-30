@@ -99,7 +99,8 @@
             updateHash(input.value);
             onUpdate(input.value, false);
           }
-          if ((e.ctrlKey || e.altKey) && e.key === ".") {
+          if ((e.ctrlKey || e.altKey) && e.code === "Period") {
+            e.preventDefault();
             onStop();
           }
         });

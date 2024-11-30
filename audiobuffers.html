@@ -127,7 +127,8 @@ playSamples(samples)`;
           console.log("math", math);
           update(input.value, { SR, playSamples, fill, ...math });
         }
-        if ((e.ctrlKey || e.altKey) && e.key === ".") {
+        if ((e.ctrlKey || e.altKey) && e.key === "Period") {
+          e.preventDefault();
           source?.stop();
         }
       });
