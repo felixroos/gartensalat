@@ -39,15 +39,17 @@
         color: cyan;
         font-size: 1em;
       }
-      #content {
+      iframe {
         flex-grow: 1;
         overflow: auto;
-        padding: 10px;
+        padding: 0px;
+        border: 0;
+        background-color: white;
       }
     </style>
   </head>
   <body>
-    <div id="content"></div>
+    <iframe id="iframe"></iframe>
     <details>
       <summary>edit HTML</summary>
       <textarea id="editor" rows="16" spellcheck="false"></textarea>
@@ -55,6 +57,16 @@
   </body>
   <script>
     const editor = document.getElementById("editor");
+    const iframe = document.getElementById("iframe");
+    const html_base64 = (code) => btoa(unescape(encodeURIComponent(code)));
+    const base64_html = (base64) => decodeURIComponent(escape(atob(base64)));
+    const getCodeFromHash = () => base64_html(window.location.hash.slice(1));
+
+    let render = (code = editor.value) => {
+      const base64 = html_base64(code);
+      const dataUrl = `data:text/html;charset=utf-8;base64,${base64}`;
+      iframe.src = dataUrl;
+    };
 
     const fallbackCode = `<h1>hello</h1>
 <p>you can edit the content of this page at the bottom of the page.</p>
@@ -63,41 +75,21 @@
 <p>If it doesn't get sent to the server, the owner of the server won't be able to scrape your content (for example, AI companies)</p>
 <p>Also, it's pretty cool that you can morph any page that was created this way and create your own version, without the need to download / change / upload it.</p>`;
 
-    const getCodeFromHash = () =>
-      decodeURIComponent(atob(window.location.hash.slice(1)));
     const code = getCodeFromHash() || fallbackCode;
-    const content = document.getElementById("content");
     editor.value = code;
-    let update = () => {
-      content.innerText = "";
-      const temp = document.createElement("div");
-      temp.innerHTML = editor.value;
-      Array.from(temp.childNodes).forEach((node) => {
-        if (node.tagName === "SCRIPT") {
-          const script = document.createElement("script");
-          if (node.src) {
-            script.src = node.src;
-          } else {
-            script.textContent = node.textContent;
-          }
-          content.appendChild(script);
-        } else {
-          content.appendChild(node);
-        }
-      });
-    };
-    update();
+    render();
+
     editor.addEventListener("input", () => {
-      const encoded = encodeURIComponent(editor.value);
-      window.location.hash = "#" + btoa(encoded);
-      update();
+      window.location.hash = "#" + html_base64(editor.value);
+      // render();
     });
+
     window.addEventListener("hashchange", function () {
       const urlCode = getCodeFromHash();
       if (urlCode) {
         editor.value = urlCode;
       }
-      update();
+      render();
     });
   </script>
 </html>
