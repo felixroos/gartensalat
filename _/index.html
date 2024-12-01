@@ -45,6 +45,7 @@
     <details>
       <summary>edit HTML</summary>
       <textarea id="editor" rows="16" spellcheck="false"></textarea>
+      <span>press ctrl+enter to update</span>
     </details>
   </body>
   <script>
@@ -66,11 +67,6 @@
     editor.value = code;
     render();
 
-    editor.addEventListener("input", () => {
-      window.location.hash = "#" + html_base64(editor.value);
-      // render();
-    });
-
     window.addEventListener("hashchange", function () {
       const urlCode = getCodeFromHash();
       if (urlCode) {
@@ -78,5 +74,14 @@
       }
       render();
     });
+
+    editor.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+        window.location.hash = "#" + html_base64(editor.value);
+      }
+    });
+    /* editor.addEventListener("input", () => {
+      window.location.hash = "#" + html_base64(editor.value);
+    }); */
   </script>
 </html>
