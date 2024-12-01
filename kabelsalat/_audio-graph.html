@@ -73,16 +73,23 @@
     <p>examples:</p>
     <ul>
       <li>
-        <a href="#c2luZSgzMzApLm11bChzaW5lKDIpLmFkZCgxKS5tdWwoLjI1KSkub3V0KCk=">
+        <a href="#c2luKDMzMCkubXVsKHNpbigyKS5hZGQoMSkubXVsKC4yNSkpLm91dCgp">
           tremolo</a
         >
       </li>
       <li>
         <a
-          href="#bGV0IHNhdyA9IHJlZ2lzdGVyTm9kZSgic2F3IiwgKHIsIFtmXSkgPT4gCmBsZXQgJHtyfSA9ICgoJHtmfSp0JTEpKjIpLTFgKQpzYXcoNjApLm11bChzaW5lKDMpLmFkZCgxKS5tdWwoLjI1KSkub3V0KCk="
+          href="#Ly8gcmVnaXN0ZXJOb2RlIGxldHMgdXMgZGVmaW5lIG91ciBvd24gbm9kZQpsZXQgc2F3ID0gcmVnaXN0ZXJOb2RlKCJzYXciLCB7CiAvLyBoZXJlIHdlIGRlZmluZSBob3cgdGhlIG5vZGUgc2hvdWxkIGJlIGNvbXBpbGVkCiBwcm9jZXNzOiAociwgW2ZdKSA9PiBgbGV0ICR7cn0gPSAoKCR7Zn0qdCUxKSoyKS0xYAp9KQoKc2F3KDYwKS5tdWwoc2luKDMpLmFkZCgxKS5tdWwoLjI1KSkub3V0KCk="
         >
-          custom saw</a
+          custom saw node</a
         >
+      </li>
+      <li>
+        <a
+          href="#bGV0IGZtMiA9IHJlZ2lzdGVyKCJmbTIiLCAoZnJlcSwgZm1oLCBmbWkpID0+IHsKICBsZXQgbW9kZnJlcSA9IG4oZnJlcSkubXVsKGZtaCk7CiAgbGV0IG1vZGdhaW4gPSBtb2RmcmVxLm11bChmbWkpOwogIHJldHVybiBzaW5lKG1vZGZyZXEpLm11bChtb2RnYWluKS5zaW5lKCk7Cn0pOwoKZm0yKDU5LjQsIDEuMDEsIHNpbmUoMC41KS5yYW5nZSg0LCAzMCkpLm11bCguNSkub3V0KCk7Cg=="
+        >
+          custom FM node
+        </a>
       </li>
     </ul>
     <p>🐌 Here's how it works in slow motion:</p>
@@ -107,10 +114,12 @@
     <script>
       // generic graph lib
       class Node {
-        constructor(type, ins, compileSelf) {
+        constructor(type, ins, { process, init, define }) {
           this.type = type;
           this.ins = ins;
-          this.compileSelf = compileSelf;
+          this.define = define;
+          this.init = init;
+          this.process = process;
         }
       }
       // registers a function on the node class + standalone
@@ -140,26 +149,67 @@
         const getRef = (input) =>
           typeof input !== "object" ? input : `v${nodes.indexOf(input)}`;
         let lines = [];
+        let setup = [];
+        let definitions = [];
         for (let id in nodes) {
           const node = nodes[id];
           const args = node.ins.map(getRef);
           const ref = getRef(node);
-          lines.push(node.compileSelf(ref, args, node));
+          if (!definitions.includes(node.type) && node.define) {
+            setup.push(node.define);
+            definitions.push(node.type);
+          }
+          if (node.init) {
+            setup.push(node.init(ref));
+          }
+          lines.push(node.process(ref, args, node));
         }
         const last = getRef(nodes[nodes.length - 1]);
-        return { lines, last };
+        return { lines, setup, last };
       };
       // the following code uses the above graph lib
       // to implement some simple audio dsp
-      let sine = registerNode(
-        "sine",
-        (r, [f]) => `let ${r} = Math.sin(2*Math.PI*${f}*t)`
-      );
-      const n = registerNode("n", (ref, [a = 0]) => `let ${ref}=${a}`);
-      const mul = registerNode("mul", (ref, [a, b]) => `let ${ref}=${a}*${b}`);
-      const div = registerNode("div", (ref, [a, b]) => `let ${ref}=${a}/${b}`);
-      const add = registerNode("add", (ref, [a, b]) => `let ${ref}=${a}+${b}`);
-      const sub = registerNode("sub", (ref, [a, b]) => `let ${ref}=${a}-${b}`);
+      const n = registerNode("n", {
+        process: (ref, [a = 0]) => `let ${ref} = ${a}`,
+      });
+      const mul = registerNode("mul", {
+        process: (ref, [a, b]) => `let ${ref} = ${a}*${b}`,
+      });
+      const div = registerNode("div", {
+        process: (ref, [a, b]) => `let ${ref} = ${a}/${b}`,
+      });
+      const add = registerNode("add", {
+        process: (ref, [a, b]) => `let ${ref} = ${a}+${b}`,
+      });
+      const sub = registerNode("sub", {
+        process: (ref, [a, b]) => `let ${ref} = ${a}-${b}`,
+      });
+      const range = registerNode("range", {
+        process: (ref, [bipolar = 0, min = 1, max = 1]) => {
+          const unipolar = `((${bipolar} + 1) * 0.5)`;
+          return `let ${ref} = ${unipolar} * (${max} - ${min}) + ${min}`;
+        },
+      });
+      // stateless sine oscillator
+      let sin = registerNode("sin", {
+        process: (r, [f]) => `let ${r} = Math.sin(t*${f}*2*Math.PI)`,
+      });
+      // stateful sine oscillator
+      let sine = registerNode("sine", {
+        define: `class SineOsc {
+  constructor() {
+    this.phase = 0;
+    this.ISR = 1/sampleRate;
+  }
+  update(freq) {
+    let cyclePos = (this.phase) % 1;
+    this.phase += this.ISR * freq;
+    return Math.sin(cyclePos * 2 * Math.PI);
+  }
+}`,
+        init: (r) => `let _${r} = new SineOsc()`,
+        process: (r, [f]) => `let ${r} = _${r}.update(${f})`,
+      });
 
       // audio
 
@@ -266,7 +316,7 @@ registerProcessor('${name}', MyProcessor);`;
           if (current) {
             visited.push(current);
             const args = current.ins.map(getRef);
-            const line = current.compileSelf(getRef(current), args, current);
+            const line = current.process(getRef(current), args, current);
             lines.push(line);
             render(current);
             timeout = setTimeout(() => step(), 1000);
@@ -279,9 +329,10 @@ registerProcessor('${name}', MyProcessor);`;
           }
         }
         const unit = node.compile();
+        const setupCode = unit.setup.join("\n");
         unit.lines.push(`return ${unit.last}`);
         const code = unit.lines.join("\n  ");
-        const wrapped = `let dsp = t => {\n  ${code}\n}`;
+        const wrapped = `${setupCode}\nlet dsp = t => {\n  ${code}\n}`;
         generated.innerText = wrapped;
         document
           .getElementById("worklet-link")
@@ -295,7 +346,7 @@ registerProcessor('${name}', MyProcessor);`;
         urlCode = atob(urlCode);
         console.log("loaded code from url!");
       }
-      input.value = urlCode || `sine(330).mul(sine(2).add(1).mul(.25)).out()`;
+      input.value = urlCode || `sin(330).mul(sin(2).add(1).mul(.25)).out()`;
       window.addEventListener("hashchange", function () {
         const urlCode = atob(window.location.hash.slice(1));
         input.value = urlCode;
