@@ -16,15 +16,8 @@
         padding: 0;
         margin: 0;
       }
-      @font-face {
-        font-family: "FontWithASyntaxHighlighter";
-        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
-          format("woff2");
-      }
-      pre,
-      textarea {
+      #editor {
         font-size: 12px;
-        font-family: "FontWithASyntaxHighlighter", monospace;
         padding: 8px;
         border: 0;
         outline: none;
@@ -35,16 +28,15 @@
         color: white;
         box-sizing: border-box;
       }
-      a {
-        color: cyan;
-        font-size: 1em;
-      }
       iframe {
         flex-grow: 1;
         overflow: auto;
         padding: 0px;
         border: 0;
         background-color: white;
+      }
+      summary {
+        cursor: pointer;
       }
     </style>
   </head>
@@ -68,14 +60,9 @@
       iframe.src = dataUrl;
     };
 
-    const fallbackCode = `<h1>hello</h1>
-<p>you can edit the content of this page at the bottom of the page.</p>
-<p>why? idk my main idea was to create a html page where the content was entirely inside the URL hash, so the server wouldn't see it.</p>
-<p>because, when you visit a website, the hash part of the URL won't get sent to the server..</p>
-<p>If it doesn't get sent to the server, the owner of the server won't be able to scrape your content (for example, AI companies)</p>
-<p>Also, it's pretty cool that you can morph any page that was created this way and create your own version, without the need to download / change / upload it.</p>`;
+    const fallbackHash = `PGgxPldlbGNvbWUgdG8gXzwvaDE+CjxwPnRoaXMgaXMgYW4gZXhwZXJpbWVudCB0byBjcmVhdGUgYSBsb2NhbC1vbmx5IGh0bWwgZWRpdG9yLi4geW91IGNhbiBlZGl0IHRoZSBmaWxlIGF0IHRoZSBib3R0b20gb2YgdGhlIHBhZ2UuPC9wPgo8aDI+d2hhdCBkbyB5b3UgbWVhbiBieSBsb2NhbC1vbmx5PzwvaDI+CjxwPnRoZSBpZGVhIGlzIHRvIGNyZWF0ZSBhIGh0bWwgcGFnZSB3aGVyZSB0aGUgY29udGVudCBpcyBlbnRpcmVseSBpbnNpZGUgdGhlIFVSTCBoYXNoLCBzbyB0aGUgc2VydmVyIGRvZXNuJ3Qgc2VlIGl0LjwvcD4KPHA+YmVjYXVzZSwgd2hlbiB5b3UgdmlzaXQgYSB3ZWJzaXRlLCB0aGUgaGFzaCBwYXJ0IG9mIHRoZSBVUkwgd29uJ3QgZ2V0IHNlbnQgdG8gdGhlIHNlcnZlci4uPC9wPgo8cD5JZiBpdCBkb2Vzbid0IGdldCBzZW50IHRvIHRoZSBzZXJ2ZXIsIHRoZSBvd25lciBvZiB0aGUgc2VydmVyIHdvbid0IGJlIGFibGUgdG8gc2NyYXBlIHlvdXIgY29udGVudCAoZm9yIGV4YW1wbGUsIEFJIGNvbXBhbmllcyk8L3A+CjxwPkFsc28sIGl0J3MgcHJldHR5IGNvb2wgdGhhdCB5b3UgY2FuIG1vcnBoIGFueSBwYWdlIHRoYXQgd2FzIGNyZWF0ZWQgdGhpcyB3YXkgYW5kIGNyZWF0ZSB5b3VyIG93biB2ZXJzaW9uLjwvcD4KPGgyPkhvdyBkb2VzIGl0IHdvcms/PC9oMj4KPHVsPgo8bGk+VGhlIGNvbnRlbnQgb2YgdGhlIHBhZ2UgaXMgZW5jb2RlZCBhcyBiYXNlNjQgYW5kIHN0b3JlZCBpbiB0aGUgVVJMIGFmdGVyIHRoZSBoYXNoIHN5bWJvbC48L2xpPgo8bGk+VGhlIHBhZ2UgaXMgcmVuZGVyZWQgaW5zaWRlIGFuIGlmcmFtZSwgd2hlcmUgdGhlIHNyYyBpcyBhIGRhdGEgdXJsLCB1c2luZyB0aGUgYmFzZTY0IGVuY29kaW5nIG9mIHRoZSBodG1sLiAKPGxpPlRoaXMgd2F5LCB0aGUgY29udGVudCBvbmx5IGV4aXN0cyBvbiB5b3VyIGRldmljZSwgd2l0aG91dCBsZWFraW5nIGludG8gdGhlIHdlYi48L2xpPiAKPGxpPldoZW4geW91IHNoYXJlIHRoZSBsaW5rIG9ubGluZSwgdGhlIGNvbnRlbnQgd2lsbCBiZSBsb2NhdGVkIGFzIGJhc2U2NCBpbnNpZGUgdGhlIGxpbmssIHdoZXJldmVyIHlvdSBwb3N0IGl0LjwvbGk+CjwvdWw+`;
 
-    const code = getCodeFromHash() || fallbackCode;
+    const code = getCodeFromHash() || base64_html(fallbackHash);
     editor.value = code;
     render();
 
