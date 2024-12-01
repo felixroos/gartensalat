@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 audio graphs II</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        box-sizing: border-box;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      canvas {
+        max-width: 100%;
+        background-color: #44444490;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 audio graphs II</h2>
+    <p>
+      In the <a href="/kabelsalat/audio-graph.html">last post</a>, we were
+      generating worklet code from a graph. Let's improve the language a bit..
+    </p>
+    <div>
+      <small>💡 hit ctrl+enter to run the code and ctrl+. to stop</small>
+    </div>
+    <textarea id="input" type="text" rows="8" spellcheck="false"></textarea>
+    <div style="display: flex; justify-content: space-between">
+      <div><a id="play">play</a> | <a id="stop">stop</a></div>
+      <div>
+        <a id="worklet-link">open as worklet</a>
+      </div>
+    </div>
+    <pre id="generated"></pre>
+    <canvas id="canvas"></canvas>
+    <p>examples:</p>
+    <ul>
+      <li>
+        <a href="#c2luZSgzMzApLm11bChzaW5lKDIpLmFkZCgxKS5tdWwoLjI1KSkub3V0KCk=">
+          tremolo</a
+        >
+      </li>
+      <li>
+        <a
+          href="#bGV0IHNhdyA9IHJlZ2lzdGVyTm9kZSgic2F3IiwgKHIsIFtmXSkgPT4gCmBsZXQgJHtyfSA9ICgoJHtmfSp0JTEpKjIpLTFgKQpzYXcoNjApLm11bChzaW5lKDMpLmFkZCgxKS5tdWwoLjI1KSkub3V0KCk="
+        >
+          custom saw</a
+        >
+      </li>
+    </ul>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      // generic graph lib
+      class Node {
+        constructor(type, ins, compileSelf) {
+          this.type = type;
+          this.ins = ins;
+          this.compileSelf = compileSelf;
+        }
+      }
+      // registers a function on the node class + standalone
+      let register = (name, fn) => {
+        Node.prototype[name] = function (...args) {
+          return fn(this, ...args);
+        };
+        return fn;
+      };
+      let registerNode = (name, config) =>
+        register(name, (...args) => new Node(name, args, config));
+
+      // sort nodes by dependencies (using generator function to be able to step through)
+      function* topoSort(node, visited = new Set()) {
+        if (!(node instanceof Node) || visited.has(node)) {
+          return; // constant values or already visited nodes
+        }
+        visited.add(node);
+        for (let input of node.ins) {
+          yield* topoSort(input, visited);
+        }
+        yield node;
+      }
+      // convert node to code + metadata
+      Node.prototype.compile = function () {
+        let nodes = Array.from(topoSort(this));
+        const getRef = (input) =>
+          typeof input !== "object" ? input : `v${nodes.indexOf(input)}`;
+        let lines = [];
+        for (let id in nodes) {
+          const node = nodes[id];
+          const args = node.ins.map(getRef);
+          const ref = getRef(node);
+          lines.push(node.compileSelf(ref, args, node));
+        }
+        const last = getRef(nodes[nodes.length - 1]);
+        return { lines, last };
+      };
+      // the following code uses the above graph lib
+      // to implement some simple audio dsp
+      let sine = registerNode(
+        "sine",
+        (r, [f]) => `let ${r} = Math.sin(2*Math.PI*${f}*t)`
+      );
+      const n = registerNode("n", (ref, [a = 0]) => `let ${ref}=${a}`);
+      const mul = registerNode("mul", (ref, [a, b]) => `let ${ref}=${a}*${b}`);
+      const div = registerNode("div", (ref, [a, b]) => `let ${ref}=${a}/${b}`);
+      const add = registerNode("add", (ref, [a, b]) => `let ${ref}=${a}+${b}`);
+      const sub = registerNode("sub", (ref, [a, b]) => `let ${ref}=${a}-${b}`);
+
+      // audio
+
+      // init audio context
+      const ctx = new AudioContext();
+      document.addEventListener("click", function firstClick() {
+        ctx.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+
+      // worklet logic
+      let worklet;
+      async function play(code) {
+        await ctx.resume();
+        stop();
+        worklet = await runWorklet(ctx, code);
+        worklet.port.onmessage = (e) =>
+          requestAnimationFrame(() => drawBuffer(e.data));
+      }
+      let stop = () => {
+        worklet?.disconnect();
+        worklet?.port.postMessage("stop");
+      };
+      async function runWorklet(ac, code) {
+        const name = `worklet-${Date.now()}`;
+        const workletCode = `// start of user code
+${code}
+// end of user code, I hope you have define an dsp function..
+class MyProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.t = 0;
+    this.active = true;
+    this.framebuffer = new Float32Array(Math.floor(sampleRate/30));
+    this.port.onmessage = (e) => e.data === "stop" && (this.active = false)
+  }
+  process(inputs, outputs, parameters) {
+    const output = outputs[0];
+    for (let i = 0; i < output[0].length; i++) {
+      let out = dsp(this.t/sampleRate)
+      for(let c in output)
+        output[c][i] = out;
+      this.t++;
+      this.framebuffer[this.t%this.framebuffer.length] = out;
+      if(this.t % this.framebuffer.length === 0 && this.t > 0) {
+        this.port.postMessage(this.framebuffer)
+      }
+    }
+    return this.active;
+  }
+}
+registerProcessor('${name}', MyProcessor);`;
+        await ac.resume();
+        const dataURL = `data:text/javascript;base64,${btoa(workletCode)}`;
+        await ac.audioWorklet.addModule(dataURL);
+        const node = new AudioWorkletNode(ac, name);
+        node.connect(ac.destination);
+        return node;
+      }
+
+      const input = document.querySelector("#input");
+      const generated = document.querySelector("#generated");
+      const result = document.querySelector("#result");
+      const graph = document.querySelector("#graph");
+      document.querySelector("#play").onclick = () => play(update());
+      document.querySelector("#stop").onclick = () => stop();
+      let timeout;
+      let update = () => {
+        let node;
+        Node.prototype.out = function () {
+          node = this;
+        };
+        new Function(input.value)();
+        const unit = node.compile();
+        unit.lines.push(`return ${unit.last}`);
+        const code = unit.lines.join("\n  ");
+        const wrapped = `let dsp = t => {\n  ${code}\n}`;
+        generated.innerText = wrapped;
+        document
+          .getElementById("worklet-link")
+          .setAttribute("href", "/audio-dsp/worklets2.html#" + btoa(wrapped));
+        return wrapped;
+      };
+      // update on ctrl+enter
+      // read base64 code from url
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!");
+      }
+      input.value = urlCode || `sine(330).mul(sine(2).add(1).mul(.25)).out()`;
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        const code = update();
+        play(code);
+      });
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          const hash = btoa(input.value);
+          let urlCode = window.location.hash.slice(1);
+          if (hash !== urlCode) {
+            window.location.hash = "#" + hash;
+          } else {
+            const code = update();
+            play(code);
+          }
+        }
+        if ((e.ctrlKey || e.altKey) && e.code === "Period") {
+          e.preventDefault();
+          stop();
+        }
+      });
+      update();
+
+      // init canvas
+      const canvas = document.querySelector("#canvas");
+      const drawContext = canvas.getContext("2d");
+      canvas.width = 800;
+      canvas.height = 200;
+      drawSilence(drawContext);
+
+      function drawBuffer(samples) {
+        drawContext.clearRect(0, 0, canvas.width, canvas.height);
+        plot(
+          (x) => samples[Math.floor(x)], // this is bad..
+          drawContext,
+          [0, samples.length - 1],
+          [-1, 1],
+          "white",
+          2
+        );
+      }
+      function drawSilence(ctx, color = "white", lineWidth = 2) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height / 2);
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
+      }
+
+      // plot function, see /plot.html
+      function plot(
+        fn,
+        ctx,
+        xrange = [-1, 1],
+        yrange = [-1, 1],
+        color = "black",
+        lineWidth = 4
+      ) {
+        // these 3 functions are very good to know..
+        const lerp = (v, min, max) => v * (max - min) + min;
+        const invLerp = (v, min, max) => (v - min) / (max - min);
+        const remap = (v, vmin, vmax, omin, omax) =>
+          lerp(invLerp(v, vmin, vmax), omin, omax);
+        // prepare draw context
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = color;
+        // function ranges
+        const [x0, x1] = xrange;
+        const [y0, y1] = yrange;
+        // draw ranges
+        const [px0, px1] = [0, ctx.canvas.width];
+        const [py0, py1] = [ctx.canvas.height - ctx.lineWidth, ctx.lineWidth];
+        // actual draw logic
+        ctx.beginPath();
+        for (let px = 0; px < ctx.canvas.width; px++) {
+          const x = remap(px, px0, px1, x0, x1);
+          const y = fn(x);
+          const py = remap(y, y0, y1, py0, py1);
+          px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>

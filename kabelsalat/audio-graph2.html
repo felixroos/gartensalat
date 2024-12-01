@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 audio graph II</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        overflow: auto;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        background-color: #44444490;
+        border: 0;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+      canvas {
+        max-width: 100%;
+        background-color: #44444490;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 audio graph II</h2>
+    <div>
+      <small>💡 hit ctrl+enter to update the code & ctrl+. to stop.</small>
+    </div>
+    <textarea id="code" spellcheck="false" rows="16"></textarea>
+    <a id="play">play</a> | <a id="stop">stop</a>
+    <canvas id="canvas"></canvas>
+    <p>examples</p>
+    <ul>
+      <li>
+        <a href="#c2luZShbMTE5LDEyMV0pLm91dCgpCg==">hello sines</a>
+      </li>
+      <li>
+        <a href="#c2luZShbMTIxLDIzOV0pLm11bChzaW5lKDYwKSkub3V0KCk="
+          >wandering sines</a
+        >
+      </li>
+      <li>
+        <a
+          href="#cHVsc2UoWzYwLDYxXSxzaW5lKFsuNCwuNl0pLnJhbmdlKC4wNSwuOCkpCi5hZGQoc2luZSgxMTkpLm11bCguOSkpCi5tdWwoLjUpLm91dCgp"
+          >wandering pulses</a
+        >
+      </li>
+      <li>
+        <a
+          href="#c2F3KFs1NSwxMTAsMjIwLDMzMF0pLmxwZiggc2luZSguMjUpLnJhbmdlKC4zLC43KSApCi5taXgoMikKLm11bChpbXB1bHNlKDQpLnBlcmMoLjEpLmxhZyguMDUpKQouYWRkKHg9PnguZGVsYXkoc2F3KC4wMSkucmFuZ2UoLjAwNSwuMDIpKS5tdWwoLjkpKQouYWRkKHg9PnguZGVsYXkoLjMpLm11bCguNykpCi5mb2xkKCkKLm11bCguNikKLm91dCgp"
+          >distorted guitar</a
+        >
+      </li>
+    </ul>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+
+    <script>
+      // init audio context
+      const ctx = new AudioContext();
+      document.addEventListener("click", function firstClick() {
+        ctx.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+
+      const prelude = `// graph lib (a variant of @kabelsalat/core)
+class Node {
+  constructor(type, ins) {
+    this.type = type;
+    let maxExpansions = 1;
+    this.ins = ins.map((input) => {
+      input = this.parseInput(input);
+      if (input.type === "poly") {
+        maxExpansions = Math.max(maxExpansions, input.ins.length);
+      }
+      return input;
+    });
+    if (maxExpansions > 1) {
+      // multichannel expansion
+      this.type = "poly";
+      this.ins = Array(maxExpansions)
+        .fill(0)
+        .map((_, i) => {
+          const clone = new this.constructor(type, []);
+          clone.ins = ins.map((input) => {
+            input = clone.parseInput(input);
+            if (input.type === "poly") {
+              return input.ins[i % input.ins.length];
+            }
+            return input;
+          });
+          return clone;
+        });
+    }
+  }
+  parseInput(input) {
+    if (typeof input === "function") {
+      input = input(this); // lambda feedback
+    }
+    if (Array.isArray(input)) {
+      input = new Node("poly", input); // interpret Arrays as poly nodes
+    }
+    return input;
+  }
+}
+let register = (type, fn) => {
+  Node.prototype[type] = function (...args) {
+    return fn(this, ...args);
+  };
+  return fn;
+}
+let registerNode = (type, nodeClass = Node) => register(type, (...args) => new nodeClass(type, args));
+
+function topoSort(graph) {
+  const sorted = [];
+  const visited = new Set();
+  function dfs(node) {
+    if (!(node instanceof Node) || visited.has(node)) {
+      return; // constant values or already visited nodes
+    }
+    visited.add(node);
+    for (let i in node.ins) {
+      dfs(node.ins[i]);
+    }
+    sorted.push(node);
+  }
+  dfs(graph);
+  return sorted;
+}
+Node.prototype.compile = function () {
+  let nodes = topoSort(this);
+  const getRef = (input) =>
+    !(input instanceof Node) ? input : \`r[\${nodes.indexOf(input)}]\`;
+  let lines = [];
+  for (let id in nodes) {
+    const args = nodes[id].ins.map(getRef).join(",");
+    lines.push(\`r[\${id}] = nodes[\${id}].update(\${args}); // \${nodes[id].type}\`);
+  }
+  let channels;
+  if (this.type === "poly") {
+    channels = [this.ins[0], this.ins[1]];
+  } else {
+    channels = [this, this];
+  }
+  channels = channels.map(getRef);
+  lines.push(\`o[0] = \${channels[0]}; // out 0\`);
+  lines.push(\`o[1] = \${channels[1]}; // out 1\`);
+  const code = lines.join('\\n');
+  console.log(code);
+  let update = new Function("nodes", "time", "r", "o", code);
+  let r = new Array(nodes.length).fill(0);
+  let dsp = (t, o) => update(nodes, t, r, o);
+  return dsp;
+};
+
+const SAMPLE_RATE = sampleRate;
+const ISR = 1 / SAMPLE_RATE;
+
+
+const pulse = registerNode(
+  "pulse",
+  class extends Node {
+    phase = 0;
+    update(freq, duty = 0.5) {
+      this.phase += ISR * freq;
+      let cyclePos = this.phase % 1;
+      return cyclePos < duty ? 1 : -1;
+    }
+  }
+);
+const sine = registerNode(
+  "sine",
+  class extends Node {
+    phase = 0;
+    update = (freq) => Math.sin((this.phase += 2 * Math.PI * freq * ISR));
+  }
+);
+const add = registerNode(
+  "add",
+  class extends Node {
+    update = (a, b) => a + b;
+  }
+);
+const mul = registerNode(
+  "mul",
+  class extends Node {
+    update = (a, b) => a * b;
+  }
+);
+const dust = registerNode(
+  "dust",
+  class extends Node {
+    update = (density) => (Math.random() < density * ISR ? Math.random() : 0);
+  }
+);
+const range = registerNode(
+  "range",
+  class extends Node {
+    update(input, min, max) {
+      const uni = (input + 1) * 0.5;
+      return uni * (max - min) + min;
+    }
+  }
+);
+const impulse = registerNode(
+  "impulse",
+  class extends Node {
+    phase = 1;
+    update(freq) {
+      this.phase += ISR * freq;
+      let v = this.phase >= 1 ? 1 : 0;
+      this.phase = this.phase % 1;
+      return v;
+    }
+  }
+);
+
+const lpf = registerNode(
+  "lpf",
+  class extends Node {
+    s0 = 0;
+    s1 = 0;
+    update(s, cutoff, resonance = 0) {
+      // Out of bound values can produce NaNs
+      cutoff = Math.min(cutoff, 1);
+      resonance = Math.max(resonance, 0);
+      var c = Math.pow(0.5, (1 - cutoff) / 0.125);
+      var r = Math.pow(0.5, (resonance + 0.125) / 0.125);
+      var mrc = 1 - r * c;
+      var v0 = this.s0;
+      var v1 = this.s1;
+      // Apply the filter to the sample
+      v0 = mrc * v0 - c * v1 + c * s;
+      v1 = mrc * v1 + c * v0;
+      s = v1;
+      this.s0 = v0;
+      this.s1 = v1;
+      return s;
+    }
+  }
+);
+function lerp(x, y0, y1) {
+  if (x >= 1) return y1;
+
+  return y0 + x * (y1 - y0);
+}
+const adsr = registerNode(
+  "adsr",
+  class extends Node {
+    state = "off";
+    startTime = 0;
+    startVal = 0;
+
+    constructor(type, ins) {
+      ins.unshift("time");
+      super(type, ins);
+    }
+    update(curTime, gate, attack, decay, susVal, release) {
+      switch (this.state) {
+        case "off": {
+          if (gate > 0) {
+            this.state = "attack";
+            this.startTime = curTime;
+            this.startVal = 0;
+          }
+          return 0;
+        }
+        case "attack": {
+          let time = curTime - this.startTime;
+          if (time > attack) {
+            this.state = "decay";
+            this.startTime = curTime;
+            return 1;
+          }
+          return lerp(time / attack, this.startVal, 1);
+        }
+        case "decay": {
+          let time = curTime - this.startTime;
+          let curVal = lerp(time / decay, 1, susVal);
+          if (gate <= 0) {
+            this.state = "release";
+            this.startTime = curTime;
+            this.startVal = curVal;
+            return curVal;
+          }
+          if (time > decay) {
+            this.state = "sustain";
+            this.startTime = curTime;
+            return susVal;
+          }
+          return curVal;
+        }
+        case "sustain": {
+          if (gate <= 0) {
+            this.state = "release";
+            this.startTime = curTime;
+            this.startVal = susVal;
+          }
+          return susVal;
+        }
+        case "release": {
+          let time = curTime - this.startTime;
+          if (time > release) {
+            this.state = "off";
+            return 0;
+          }
+          let curVal = lerp(time / release, this.startVal, 0);
+          if (gate > 0) {
+            this.state = "attack";
+            this.startTime = curTime;
+            this.startVal = curVal;
+          }
+          return curVal;
+        }
+      }
+      throw "invalid envelope state";
+    }
+  }
+);
+export class Delay extends Node {
+  writeIdx = 0;
+  readIdx = 0;
+  constructor(type, ins) {
+    super(type, ins);
+    const MAX_DELAY_TIME = 10;
+    this.buffer = new Float32Array(MAX_DELAY_TIME * SAMPLE_RATE);
+    this.buffer.fill(0);
+  }
+  write(s, delayTime) {
+    this.writeIdx = (this.writeIdx + 1) % this.buffer.length;
+    this.buffer[this.writeIdx] = s;
+    // Calculate how far in the past to read
+    let numSamples = Math.min(
+      Math.floor(SAMPLE_RATE * delayTime),
+      this.buffer.length - 1
+    );
+    this.readIdx = this.writeIdx - numSamples;
+    // If past the start of the buffer, wrap around
+    if (this.readIdx < 0) this.readIdx += this.buffer.length;
+  }
+  update(input, delayTime) {
+    this.write(input, delayTime);
+    return this.buffer[this.readIdx];
+  }
+}
+const delay = registerNode("delay", Delay)
+
+const saw = registerNode("saw", class extends Node { 
+phase = 0
+update = (freq) => {
+  this.phase += ISR * freq;
+  return (this.phase % 1) * 2 - 1;
+}
+})
+
+export let ad = register(
+  "ad",
+  (gate = 0, attack = 0.02, decay = 0.1) => gate.adsr(attack, decay, 0, decay)
+);
+
+let sum = (inputs) => inputs.reduce((acc, input) => acc.add(input), add(0,0));
+
+let mix = register("mix", (input, channels = 1) => {
+  if (![1, 2].includes(channels)) {
+    channels = 2;
+    console.warn("mix only supports 1 or 2 channels atm.. falling back to 2");
+  }
+  if (input.type !== "poly") {
+    return input;
+  }
+  if (channels === 2) {
+    const panned = input.ins.map((inlet, i, ins) => {
+      // we can do this at eval time: channels are fixed!
+      const pos = (i / (ins.length - 1)) * 2 - 1;
+      const deg = ((pos + 1) * Math.PI) / 4;
+      const stereo = inlet.mul([Math.cos(deg), Math.sin(deg)]);
+      return stereo;
+    });
+    return sum(panned);
+  }
+  return sum(input.ins);
+});
+let perc = register("perc", (gate, decay) => gate.adsr(0, 0, 1, decay));
+let lag = registerNode("lag", class extends Node {
+  lagUnit = 4410;
+  s = 0;
+  update(input, rate) {
+    // Remap so the useful range is around [0, 1]
+    rate = rate * this.lagUnit;
+    if (rate < 1) rate = 1;
+    this.s += (1 / rate) * (input - this.s);
+    return this.s;
+  }
+})
+let fold = registerNode(
+  "fold",
+  class extends Node {
+    update(input = 0, rate = 0) {
+      if (rate < 0) rate = 0;
+      rate = rate + 1;
+      input = input * rate;
+      return (
+        4 *
+        (Math.abs(0.25 * input + 0.25 - Math.round(0.25 * input + 0.25)) - 0.25)
+      );
+    }
+  }
+);
+
+let dsp;
+Node.prototype.out = function () {
+  dsp = this.compile();
+};
+`;
+      // worklet logic
+      let worklet;
+      async function play() {
+        await ctx.resume();
+        stop();
+        const code = `${prelude}\n${input.value}`;
+        worklet = await runWorklet(ctx, code);
+        worklet.port.onmessage = (e) =>
+          requestAnimationFrame(() => {
+            drawBuffer(e.data[0], [-4, 1]);
+            drawBuffer(e.data[1], [-1, 4], false);
+          });
+      }
+      let stop = () => {
+        worklet?.disconnect();
+        worklet?.port.postMessage("stop");
+      };
+
+      async function runWorklet(ac, code) {
+        const name = `worklet-${Date.now()}`;
+        const workletCode = `// start of user code
+${code}
+// end of user code, I hope you have define an dsp function..
+class MyProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.t = 0;
+    this.o = [0, 0];
+    this.active = true;
+    this.frames = Math.floor(sampleRate/30);
+    this.framebuffers = [
+      new Float32Array(this.frames),
+      new Float32Array(this.frames)
+    ];
+    this.port.onmessage = (e) => e.data === "stop" && (this.active = false)
+  }
+  process(inputs, outputs, parameters) {
+    const output = outputs[0];
+    for (let i = 0; i < output[0].length; i++) {
+      dsp(this.t/sampleRate, this.o) // fills o
+      output[0][i] = this.o[0];
+      output[1][i] = this.o[1];
+      this.t++;
+      this.framebuffers[0][this.t%this.frames] = this.o[0];
+      this.framebuffers[1][this.t%this.frames] = this.o[1];
+      if(this.t % this.frames === 0 && this.t > 0) {
+        this.port.postMessage(this.framebuffers)
+      }
+    }
+    return this.active;
+  }
+}
+registerProcessor('${name}', MyProcessor);`;
+        await ac.resume();
+        const dataURL = `data:text/javascript;base64,${btoa(workletCode)}`;
+        await ac.audioWorklet.addModule(dataURL);
+        const node = new AudioWorkletNode(ac, name, {
+          outputChannelCount: [2],
+        });
+        node.connect(ac.destination);
+        return node;
+      }
+
+      // code input / url hash handling
+      const input = document.querySelector("#code");
+      document.querySelector("#play").onclick = () => play();
+      document.querySelector("#stop").onclick = () => stop();
+      // read base64 code from url
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!");
+      }
+      const initialCode = `Y29uc3Qgc2luZSA9IHJlZ2lzdGVyKAogICJzaW5lIiwKICBjbGFzcyBleHRlbmRzIE5vZGUgewogICAgcGhhc2UgPSAwOwogICAgdXBkYXRlID0gKGZyZXEpID0+IE1hdGguc2luKCh0aGlzLnBoYXNlICs9IDIgKiBNYXRoLlBJICogZnJlcSAqIElTUikpOwogIH0KKTsKY29uc3QgbXVsID0gcmVnaXN0ZXIoCiAgIm11bCIsCiAgY2xhc3MgZXh0ZW5kcyBOb2RlIHsKICAgIHVwZGF0ZSA9IChhLCBiKSA9PiBhICogYjsKICB9Cik7CmNvbnN0IHJhbmdlID0gcmVnaXN0ZXIoCiAgInJhbmdlIiwKICBjbGFzcyBleHRlbmRzIE5vZGUgewogICAgdXBkYXRlKGlucHV0LCBtaW4sIG1heCkgewogICAgICBjb25zdCB1bmkgPSAoaW5wdXQgKyAxKSAqIDAuNTsKICAgICAgcmV0dXJuIHVuaSAqIChtYXggLSBtaW4pICsgbWluOwogICAgfQogIH0KKTsKY29uc3QgbHBmID0gcmVnaXN0ZXIoCiAgImxwZiIsCiAgY2xhc3MgZXh0ZW5kcyBOb2RlIHsKICAgIHMwID0gMDsKICAgIHMxID0gMDsKICAgIHVwZGF0ZShzLCBjdXRvZmYsIHJlc29uYW5jZSA9IDApIHsKICAgICAgLy8gT3V0IG9mIGJvdW5kIHZhbHVlcyBjYW4gcHJvZHVjZSBOYU5zCiAgICAgIGN1dG9mZiA9IE1hdGgubWluKGN1dG9mZiwgMSk7CiAgICAgIHJlc29uYW5jZSA9IE1hdGgubWF4KHJlc29uYW5jZSwgMCk7CiAgICAgIHZhciBjID0gTWF0aC5wb3coMC41LCAoMSAtIGN1dG9mZikgLyAwLjEyNSk7CiAgICAgIHZhciByID0gTWF0aC5wb3coMC41LCAocmVzb25hbmNlICsgMC4xMjUpIC8gMC4xMjUpOwogICAgICB2YXIgbXJjID0gMSAtIHIgKiBjOwogICAgICB2YXIgdjAgPSB0aGlzLnMwOwogICAgICB2YXIgdjEgPSB0aGlzLnMxOwogICAgICAvLyBBcHBseSB0aGUgZmlsdGVyIHRvIHRoZSBzYW1wbGUKICAgICAgdjAgPSBtcmMgKiB2MCAtIGMgKiB2MSArIGMgKiBzOwogICAgICB2MSA9IG1yYyAqIHYxICsgYyAqIHYwOwogICAgICBzID0gdjE7CiAgICAgIHRoaXMuczAgPSB2MDsKICAgICAgdGhpcy5zMSA9IHYxOwogICAgICByZXR1cm4gczsKICAgIH0KICB9Cik7CmNvbnN0IHNhdyA9IHJlZ2lzdGVyKAogICJzYXciLAogIGNsYXNzIGV4dGVuZHMgTm9kZSB7CiAgICBwaGFzZSA9IDA7CiAgICB1cGRhdGUgPSAoZnJlcSkgPT4gewogICAgICB0aGlzLnBoYXNlICs9IElTUiAqIGZyZXE7CiAgICAgIHJldHVybiAodGhpcy5waGFzZSAlIDEpICogMiAtIDE7CiAgICB9OwogIH0KKTsKCi8vIGVuZCBvZiBsaWIKCnNhdyg2MCkKLmxwZihzaW5lKDEpLnJhbmdlKDAuMiwgMC44KSkKLm11bCguNCkKLm91dCgpOwo=`;
+      input.value = urlCode || atob(initialCode);
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        play();
+      });
+      input.addEventListener("keydown", async (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          const hash = btoa(input.value);
+          let urlCode = window.location.hash.slice(1);
+          if (hash !== urlCode) {
+            window.location.hash = "#" + hash;
+          } else {
+            play();
+          }
+        }
+        if ((e.ctrlKey || e.altKey) && e.code === "Period") {
+          e.preventDefault();
+          stop();
+        }
+      });
+
+      // init canvas
+      const canvas = document.querySelector("#canvas");
+      const drawContext = canvas.getContext("2d");
+      canvas.width = 800;
+      canvas.height = 200;
+      drawSilence(drawContext);
+      function drawBuffer(samples, range = [-1, 1], clear = true) {
+        clear && drawContext.clearRect(0, 0, canvas.width, canvas.height);
+        plot(
+          (x) => samples[Math.floor(x)], // this is bad..
+          drawContext,
+          [1, samples.length],
+          range,
+          "white",
+          2
+        );
+      }
+
+      function drawSilence(ctx, color = "white", lineWidth = 2) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height / 2);
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
+      }
+
+      // plot function, see /plot.html
+      function plot(
+        fn,
+        ctx,
+        xrange = [-1, 1],
+        yrange = [-1, 1],
+        color = "black",
+        lineWidth = 4
+      ) {
+        // these 3 functions are very good to know..
+        const lerp = (v, min, max) => v * (max - min) + min;
+        const invLerp = (v, min, max) => (v - min) / (max - min);
+        const remap = (v, vmin, vmax, omin, omax) =>
+          lerp(invLerp(v, vmin, vmax), omin, omax);
+        // prepare draw context
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = color;
+        // function ranges
+        const [x0, x1] = xrange;
+        const [y0, y1] = yrange;
+        // draw ranges
+        const [px0, px1] = [0, ctx.canvas.width];
+        const [py0, py1] = [ctx.canvas.height - ctx.lineWidth, ctx.lineWidth];
+        // actual draw logic
+        ctx.beginPath();
+        for (let px = 0; px < ctx.canvas.width; px++) {
+          const x = remap(px, px0, px1, x0, x1);
+          const y = fn(x);
+          const py = remap(y, y0, y1, py0, py1);
+          px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
