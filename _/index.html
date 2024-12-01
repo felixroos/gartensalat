@@ -1,0 +1,86 @@
+<html>
+  <head>
+    <title>_</title>
+    <style>
+      body {
+        background-color: #222;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+        padding: 0;
+        margin: 0;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre,
+      textarea {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      #content {
+        flex-grow: 1;
+        overflow: auto;
+        padding: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="content"></div>
+    <details>
+      <summary>edit HTML</summary>
+      <textarea id="editor" rows="16"></textarea>
+    </details>
+  </body>
+  <script>
+    const editor = document.getElementById("editor");
+    const fallbackCode = "<h1>fill me with content</h1>";
+    const code = atob(window.location.hash.slice(1)) || fallbackCode;
+    const content = document.getElementById("content");
+    editor.value = code;
+    let update = () => {
+      content.innerText = "";
+      const temp = document.createElement("div");
+      temp.innerHTML = editor.value;
+      Array.from(temp.childNodes).forEach((node) => {
+        if (node.tagName === "SCRIPT") {
+          const script = document.createElement("script");
+          if (node.src) {
+            script.src = node.src;
+          } else {
+            script.textContent = node.textContent;
+          }
+          content.appendChild(script);
+        } else {
+          content.appendChild(node);
+        }
+      });
+    };
+    update();
+    editor.addEventListener("input", () => {
+      window.location.hash = "#" + btoa(editor.value);
+      update();
+    });
+  </script>
+</html>
