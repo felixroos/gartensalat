@@ -56,7 +56,8 @@
   <script>
     const editor = document.getElementById("editor");
     const fallbackCode = "<h1>fill me with content</h1>";
-    const code = atob(window.location.hash.slice(1)) || fallbackCode;
+    const code =
+      decodeURIComponent(atob(window.location.hash.slice(1))) || fallbackCode;
     const content = document.getElementById("content");
     editor.value = code;
     let update = () => {
@@ -79,7 +80,8 @@
     };
     update();
     editor.addEventListener("input", () => {
-      window.location.hash = "#" + btoa(editor.value);
+      const encoded = encodeURIComponent(editor.value);
+      window.location.hash = "#" + btoa(encoded);
       update();
     });
   </script>
