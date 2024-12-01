@@ -55,9 +55,17 @@
   </body>
   <script>
     const editor = document.getElementById("editor");
-    const fallbackCode = "<h1>fill me with content</h1>";
-    const code =
-      decodeURIComponent(atob(window.location.hash.slice(1))) || fallbackCode;
+
+    const fallbackCode = `<h1>hello</h1>
+<p>you can edit the content of this page at the bottom of the page.</p>
+<p>why? idk my main idea was to create a html page where the content was entirely inside the URL hash, so the server wouldn't see it.</p>
+<p>because, when you visit a website, the hash part of the URL won't get sent to the server..</p>
+<p>If it doesn't get sent to the server, the owner of the server won't be able to scrape your content (for example, AI companies)</p>
+<p>Also, it's pretty cool that you can morph any page that was created this way and create your own version, without the need to download / change / upload it.</p>`;
+
+    const getCodeFromHash = () =>
+      decodeURIComponent(atob(window.location.hash.slice(1)));
+    const code = getCodeFromHash() || fallbackCode;
     const content = document.getElementById("content");
     editor.value = code;
     let update = () => {
@@ -82,6 +90,13 @@
     editor.addEventListener("input", () => {
       const encoded = encodeURIComponent(editor.value);
       window.location.hash = "#" + btoa(encoded);
+      update();
+    });
+    window.addEventListener("hashchange", function () {
+      const urlCode = getCodeFromHash();
+      if (urlCode) {
+        editor.value = urlCode;
+      }
       update();
     });
   </script>
