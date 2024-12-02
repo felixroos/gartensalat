@@ -135,8 +135,8 @@
         };
         return fn;
       };
-      let registerNode = (name, config) =>
-        register(name, (...args) => new Node(name, args, config));
+      let registerNode = (name, compileSelf) =>
+        register(name, (...args) => new Node(name, args, compileSelf));
 
       // sort nodes by dependencies (using generator function to be able to step through)
       function* topoSort(node, visited = new Set()) {
