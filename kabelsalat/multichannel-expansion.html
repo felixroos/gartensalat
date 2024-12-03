@@ -23,6 +23,11 @@
       a {
         color: cyan;
         font-size: 1em;
+        cursor: pointer;
+      }
+      #next,
+      #prev {
+        user-select: none;
       }
       textarea,
       pre {
@@ -38,6 +43,7 @@
         width: 100%;
         margin-top: 8px;
         box-sizing: border-box;
+        margin: 0;
       }
       #lines {
         height: 200px;
@@ -46,43 +52,86 @@
       #graph {
         max-width: 100%;
         background-color: #44444490;
-        overflow: auto;
         max-height: 500px;
+        display: flex;
+      }
+      #graph {
+        overflow: auto;
+        justify-content: center;
+        padding: 10px;
       }
     </style>
   </head>
   <body>
     <h2>🌱 multichannel expansion</h2>
     <p>
-      <a href="./graph-compiler.html">a graph compiler</a>
+      After setting up an
+      <a href="/kabelsalat/audio-graph.html">audio graph</a>, I want to add a
+      very handy feature: multichannel expansion. The idea comes from
+      <a
+        href="https://doc.sccode.org/Guides/Multichannel-Expansion.html"
+        target="_blank"
+        style="color: yellow"
+        >SuperCollider</a
+      >, and it basically let's you pass a list of nodes to a single node input,
+      causing it to split the graph.
     </p>
-    <label
-      >editable code:
-      <textarea id="input" type="text" rows="4" spellcheck="false"></textarea>
-    </label>
-    <label
-      >generated code:
-      <pre id="generated"></pre>
-    </label>
+    <p>
+      examples:
+      <a href="#cmV0dXJuIHNpbmUoWzExOSwxMjFdKS5tdWwoLjUp">hello sines</a>
+      <a
+        href="#cmV0dXJuIHNpbmUoMTgwKQoubXVsKCBzaW5lKFsxLCAxLjVdKSApIC8vIGFtcGxpdHVkZSBtb2QKLm11bCguNSk="
+        >amplitude modulation</a
+      >
+      <a
+        href="#cmV0dXJuIHNpbmUoWzE3OSwgMjExXSkKLm11bCggc2luZShbMSwgMS41XSkgKSAvLyBhbXBsaXR1ZGUgbW9kCi5tdWwoLjUp"
+      >
+        2 expansions
+      </a>
+      <a
+        href="#Ly8gaGFuZGxlIHdpdGggY2FyZQpsZXQgZHJpZnQgPSAxLjAxIC8vIGYgZmFjdG9yCmxldCBkYW1wID0gLjggLy8gYW1wIGZhY3RvcgpsZXQgYmFzZSA9IDU5IC8vIHJvb3QgZnJlcQpsZXQgTiA9IDYgLy8gcGFydGlhbHMKbGV0IG9mZnNldCA9IDI7IC8vIHBhcnRpYWwgb2Zmc2V0CmxldCBmaWxsID0gKGZuLG89MCkgPT4gCkFycmF5LmZyb20oe2xlbmd0aDpOfSwoXyxpKT0+Zm4oaSsxK28pKQoKcmV0dXJuIHNpbmUoZmlsbChuID0+IG4qYmFzZSpkcmlmdCoqKG4tb2Zmc2V0KSxvZmZzZXQpKQoubXVsKGZpbGwobiA9PiBkYW1wKipuKSkKLm1peCgxKQouZGl2KE4p"
+        >harmonic oscillator</a
+      >
+    </p>
+    <div>
+      <small>💡 hit ctrl+enter to update the code & ctrl+. to stop</small>
+    </div>
+    <textarea id="input" type="text" rows="10" spellcheck="false"></textarea>
+    <a id="play">play</a> | <a id="stop">stop</a>
+    <pre id="generated"></pre>
     <canvas id="canvas"></canvas>
-    <p>🐌 Here's how it works in slow motion:</p>
+    <a id="prev" style="color: orchid">contract</a> | <a id="next">expand</a>
     <div id="graph"></div>
     <p>
+      Click "expand" to see each step of the expansion in action or "contract"
+      to go back one step. It looks kind of like a zip fastener.
+    </p>
+    <p>
+      If the graph returns more than 2 channels, they will be downmixed to
+      stereo by default. (You can also use .mix(n) to manually do that).
+    </p>
+    <p>
+      We are now approaching the featureset of
       <a
         href="https://github.com/felixroos/kabelsalat"
         target="_blank"
         style="color: yellow"
         >kabelsalat</a
-      >
+      >. Next up are feedback loops.
     </p>
     <details>
-      <summary>show page source</summary>
+      <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
     </details>
     <p>
       <a href="/">back to garten.salat</a>
     </p>
     <script>
+      // these variables are for the stepwise viz (very dirty hack)
+      let expansions = 0;
+      let step = -1;
+      let nextStep = 1;
+
       // generic graph lib
       class Node {
         constructor(type, ins) {
@@ -95,7 +144,11 @@
             }
             return input;
           });
+          if (step !== -1 && expansions >= step) {
+            return; // dirty hack for viz (not needed otherwise)
+          }
           if (maxExpansions > 0) {
+            expansions++; // dirty hack for viz (not needed otherwise)
             // multichannel expansion
             this.type = "poly";
             this.ins = Array(maxExpansions)
@@ -181,7 +234,8 @@
             "mix only supports 1 or 2 channels atm.. falling back to 2"
           );
         }
-        if (input.type !== "poly") {
+        if (input.type !== "poly" || input.ins.length === channels) {
+          // no need to mix when not multichannel or same channel count as given
           return input;
         }
         if (channels === 2) {
@@ -201,9 +255,18 @@
       const generated = document.querySelector("#generated");
       const result = document.querySelector("#result");
       const graph = document.querySelector("#graph");
-      input.value = `return sine([121,182,241]).mul(.2)`;
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!");
+      }
+      input.value = urlCode || `return sine([119,121]).mul(.5)`;
+
+      let activeCode = input.value;
       let update = () => {
-        let node = new Function(input.value)();
+        step = -1; // disable dirty little hack
+        activeCode = input.value;
+        let node = new Function(activeCode)();
         if (node.type !== "poly") {
           node = poly(node, node);
         } else if (node.ins.length > 2) {
@@ -212,16 +275,52 @@
         }
         const unit = node.compile();
         const code = unit.lines.join("\n");
-        generated.innerText = code;
-        console.log("code", code);
-        return code;
+        nextStep = 1;
+        renderStep(0);
+        const wrapped = `let dsp = (t,o) => {\n${code}\n}`;
+        generated.innerText = wrapped;
+        return wrapped;
       };
+
+      let renderStep = (_step = 0) => {
+        step = Math.max(_step, 0);
+        step = Math.min(step, nextStep);
+        expansions = 0;
+        let vizNode = new Function(activeCode)();
+        let nodes = Array.from(topoSort(vizNode));
+        renderNode(vizNode, graph, (gvnode) => {
+          const node = nodes[gvnode.id];
+          if (node.type === "poly") {
+            gvnode.color = "orchid";
+          } else if (node.ins.find((input) => input?.type === "poly")) {
+            gvnode.color = "cyan";
+          }
+          return gvnode;
+        });
+
+        if (!nodes.slice(0, -1).find((node) => node.type === "poly")) {
+          nextStep = step; // cannot step more
+          console.log("done expanding");
+        } else {
+          nextStep = step + 1; // at least one more...
+        }
+      };
+      document.getElementById("prev").onclick = () => renderStep(step - 1);
+      document.getElementById("next").onclick = () => renderStep(step + 1);
+      document.getElementById("play").onclick = () => play(update());
+      document.getElementById("stop").onclick = () => stop();
+
       // update on ctrl+enter
       input.addEventListener("keydown", (e) => {
         if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
-          const code = update();
-          const wrapped = `let dsp = (t,o) => {\n${code}\n}`;
-          play(wrapped);
+          const hash = btoa(input.value);
+          let urlCode = window.location.hash.slice(1);
+          if (hash !== urlCode) {
+            window.location.hash = "#" + hash;
+          } else {
+            const code = update();
+            play(code);
+          }
         }
         if ((e.ctrlKey || e.altKey) && e.code === "Period") {
           e.preventDefault();
@@ -229,6 +328,12 @@
         }
       });
       update();
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        const code = update();
+        play(code);
+      });
 
       // audio
 
@@ -321,9 +426,15 @@ registerProcessor('${name}', MyProcessor);`;
       function drawSilence(ctx, color = "white", lineWidth = 2) {
         ctx.strokeStyle = color;
         ctx.lineWidth = lineWidth;
+        const ly = canvas.height / 4;
+        const ry = (canvas.height * 3) / 4;
         ctx.beginPath();
-        ctx.moveTo(0, canvas.height / 2);
-        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.moveTo(0, ly);
+        ctx.lineTo(canvas.width, ly);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, ry);
+        ctx.lineTo(canvas.width, ry);
         ctx.stroke();
       }
 
@@ -409,7 +520,11 @@ registerProcessor('${name}', MyProcessor);`;
           let gvnode = {
             id: node.id,
             label: `${node.type} ${node.ins
-              .map((input) => (typeof input === "object" ? "_" : input))
+              .map((input) => {
+                if (typeof input === "object") return "_";
+                if (typeof input === "number") return input.toFixed(2);
+                return input;
+              })
               .join(" ")}`,
             ordering: "in",
             width: "0.5",
@@ -458,8 +573,10 @@ registerProcessor('${name}', MyProcessor);`;
         return renderDot(dot, container);
       }
 
-      document.querySelector("#pre").textContent =
-        document.querySelector("html").outerHTML;
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
     </script>
   </body>
 </html>
