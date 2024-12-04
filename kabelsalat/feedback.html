@@ -45,7 +45,8 @@
         box-sizing: border-box;
         margin: 0;
       }
-      #lines {
+      #lines,
+      #generated {
         height: 200px;
       }
       canvas,
@@ -65,13 +66,41 @@
   <body>
     <h2>🌱 graph feedback</h2>
     <p>
-      Feedback opens many doors in audio synthesis. Adding it to the
-      <a href="/kabelsalat/audio-graph.html">audio graph</a> is simpler than it
-      sounds.
+      Further improving the
+      <a href="/kabelsalat/audio-graph.html">audio graph</a>, I want to add
+      feedback. Feedback happens when the output of something is routed back to
+      its input. In a graph, this creates a cycle. It opens many doors in audio
+      synthesis. After trying various ways, I've found a surprisingly simple
+      solution. Instead of declaring a variable for each generated line of code,
+      we have a global memory (r) that is read from and written to. To actually
+      create a cycle in the graph, we can pass a function as an input, which
+      will receive the node itself as an argument:
     </p>
-    <!-- #cmV0dXJuIGFkZCh4PT54LCAxODAvNDQxMDApCi5tdWwoMipNYXRoLlBJKS5zaW4oKQoubXVsKC4zKQ== -->
-    <!-- #cmV0dXJuIG4oMjEwKS5hZGQoc2luZSg0KS5tdWwoMykpCi5kaXYoNDQxMDApLmFkZCh4PT54KQoubXVsKDIqTWF0aC5QSSkuc2luKCkKLm11bCguMyk= -->
-    <!-- #bGV0IHBoYXNvciA9IHJlZ2lzdGVyKCdwaGFzb3InLCAoZikgPT4gbihmKQouZGl2KDQ0MTAwKS5hZGQoeD0+eCkpCgpyZXR1cm4gbigyMTApLmFkZChzaW5lKDQpLm11bCgzKSkKLnBoYXNvcigpLm11bCgyKk1hdGguUEkpLnNpbigpLm11bCguMyk= -->
+    <p>
+      examples:
+      <a
+        href="#bGV0IHBoYXNvciA9IHJlZ2lzdGVyKCdwaGFzb3InLCAKZiA9PiBhZGQoeD0+eCwgZGl2KGYsNDQxMDApKS5tb2QoMSkpCgpyZXR1cm4gcGhhc29yKDYxKS5hZGQocGhhc29yKDYwKSkuZGl2KDIp"
+        >phasor node</a
+      >
+      |
+      <a
+        href="#bGV0IHBoYXNvciA9IHJlZ2lzdGVyKCdwaGFzb3InLCAKZiA9PiBhZGQoeD0+eCwgZGl2KGYsNDQxMDApKS5tb2QoMSkpCmxldCBzaW5lID0gcmVnaXN0ZXIoJ3NpbmUnLApmID0+IHBoYXNvcihmKS5tdWwoMipNYXRoLlBJKS5zaW4oKSkKCnJldHVybiBzaW5lKHNpbmUoNCkubXVsKDMpLmFkZCgzMzApKS5kaXYoMik="
+      >
+        sine from phasor
+      </a>
+      |
+      <a
+        href="#bGV0IHBoYXNvciA9IHJlZ2lzdGVyKCdwaGFzb3InLCAKZiA9PiBhZGQoeD0+eCwgZGl2KGYsNDQxMDApKS5tb2QoMSkpCmxldCBzaW5lID0gcmVnaXN0ZXIoJ3NpbmUnLApmID0+IHBoYXNvcihmKS5tdWwoMipNYXRoLlBJKS5zaW4oKSkKCnJldHVybiBzaW5lKFsyMTEsMzMxLDQ1MV0pCi5tdWwoWy4zLC4yLC4xXSkubWl4KDEp"
+        >multichannel sine</a
+      >
+      |
+      <a
+        href="#bGV0IHBoYXNvciA9IHJlZ2lzdGVyKCdwaGFzb3InLCBmID0+IGFkZCh4PT54LCBkaXYoZiw0NDEwMCkpKQpsZXQgc2luZSA9IHJlZ2lzdGVyKCdzaW5lJywgZiA9PiBwaGFzb3IoZikubXVsKDIqTWF0aC5QSSkuc2luKCkpCmxldCBzYXcgPSByZWdpc3Rlcignc2F3JywgZiA9PiBwaGFzb3IoZikubW9kKDEpLnN1YiguNSkubXVsKDIpKQoKcmV0dXJuIHNpbmUoWy4wMSwuMDMsLjA1XSkKLm11bCgxMCkuYWRkKFs4OSwxMjAsMTYxXSkKLnNhdygpLm11bCguMikubWl4KDEp"
+        >drifting saws</a
+      >
+      |
+      <a href="#cmV0dXJuIGFkZCh4PT54LC4wMDIpLm1vZCgxKS5kaXYoMik=">simple saw</a>
+    </p>
     <div>
       <small>💡 hit ctrl+enter to update the code & ctrl+. to stop</small>
     </div>
@@ -81,13 +110,25 @@
     <canvas id="canvas"></canvas>
     <div id="graph"></div>
     <p>
-      We are now approaching the featureset of
-      <a
-        href="https://github.com/felixroos/kabelsalat"
-        target="_blank"
-        style="color: yellow"
-        >kabelsalat</a
-      >. Next up are feedback loops.
+      when using variables (like let v1 = ...), feedback is not possible,
+      because we would reference a variable that has not been declared yet. with
+      a global memory, we automatically reference the value from the previous
+      run. if i were a poet, i would say something like "the essence of time and
+      space is feedback". It's also interesting that we don't need t anymore. we
+      need nothing but basic arithmetic to implement oscillators now.
+    </p>
+    <p>
+      I very much enjoy the simplicity of the code that plugs a node to itself:
+    </p>
+    <pre>
+if (typeof input === "function") {
+  input = input(this); // lambda feedback
+}
+    </pre>
+    <p>
+      Next up, I want to mix this with the ability to declare node classes than
+      can manage their own state, allowing us to create more interesting
+      patches.
     </p>
     <details>
       <summary id="loc">show page source</summary>
@@ -97,11 +138,6 @@
       <a href="/">back to garten.salat</a>
     </p>
     <script>
-      // these variables are for the stepwise viz (very dirty hack)
-      let expansions = 0;
-      let step = -1;
-      let nextStep = 1;
-
       // generic graph lib
       class Node {
         constructor(type, ins) {
@@ -114,11 +150,7 @@
             }
             return input;
           });
-          if (step !== -1 && expansions >= step) {
-            return; // dirty hack for viz (not needed otherwise)
-          }
           if (maxExpansions > 0) {
-            expansions++; // dirty hack for viz (not needed otherwise)
             // multichannel expansion
             this.type = "poly";
             this.ins = Array(maxExpansions)
@@ -179,7 +211,7 @@
           const args = node.ins.map(getRef);
           const ref = getRef(node);
           const compileSelf = registry.get(node.type);
-          lines.push(compileSelf(ref, args));
+          lines.push(`${compileSelf(ref, args)} // ${node.type}`);
         }
         const last = getRef(nodes[nodes.length - 1]);
         return { lines, last, nodes };
@@ -187,10 +219,6 @@
       // the following code uses the above graph lib
       // to implement the dummy math language
 
-      let sine = registerNode(
-        "sine",
-        (r, [f]) => `${r} = Math.sin(2*Math.PI*${f}*t)`
-      );
       const n = registerNode("n", (r, [a = 0]) => `${r} = ${a}`);
       const mul = registerNode("mul", (r, [a, b]) => `${r} = ${a}*${b}`);
       const div = registerNode("div", (r, [a, b]) => `${r} = ${a}/${b}`);
@@ -235,8 +263,7 @@
         urlCode = atob(urlCode);
         console.log("loaded code from url!");
       }
-      input.value =
-        urlCode || `return add(x=>x, .004)\n.mod(2).sub(1).mul(.124)`;
+      input.value = urlCode || `return add(x=>x,.002).mod(1).div(2)`;
 
       let activeCode = input.value;
       let update = () => {
@@ -249,42 +276,15 @@
           console.warn("channel overflow: mixing down to 2");
           node = node.mix(2);
         }
+        renderNode(node, graph);
         const unit = node.compile();
         const code = unit.lines.join("\n");
-        nextStep = 1;
-        renderStep(0);
         const wrapped = `let r = Array(${unit.nodes.length}).fill(0);
-let id=x=>x;
-let dsp = (t,o) => {\n${code}\n};`;
+let dsp = (_,o) => {\n${code}\n};`;
         generated.innerText = wrapped;
         return wrapped;
       };
 
-      let renderStep = (_step = 0) => {
-        step = Math.max(_step, 0);
-        step = Math.min(step, nextStep);
-        expansions = 0;
-        let vizNode = new Function(activeCode)();
-        let nodes = Array.from(topoSort(vizNode));
-        renderNode(vizNode, graph, (gvnode) => {
-          const node = nodes[gvnode.id];
-          if (node.type === "poly") {
-            gvnode.color = "orchid";
-          } else if (node.ins.find((input) => input?.type === "poly")) {
-            gvnode.color = "cyan";
-          }
-          return gvnode;
-        });
-
-        if (!nodes.slice(0, -1).find((node) => node.type === "poly")) {
-          nextStep = step; // cannot step more
-          console.log("done expanding");
-        } else {
-          nextStep = step + 1; // at least one more...
-        }
-      };
-      /* document.getElementById("prev").onclick = () => renderStep(step - 1);
-      document.getElementById("next").onclick = () => renderStep(step + 1); */
       document.getElementById("play").onclick = () => play(update());
       document.getElementById("stop").onclick = () => stop();
 
@@ -363,8 +363,9 @@ class MyProcessor extends AudioWorkletProcessor {
       output[0][i] = this.o[0];
       output[1][i] = this.o[1];
       this.t++;
-      this.framebuffers[0][this.t%this.frames] = this.o[0];
-      this.framebuffers[1][this.t%this.frames] = this.o[1];
+      const frame = this.t%this.frames;
+      this.framebuffers[0][frame] = this.o[0];
+      this.framebuffers[1][frame] = this.o[1];
       if(this.t % this.frames === 0 && this.t > 0) {
         this.port.postMessage(this.framebuffers)
       }
