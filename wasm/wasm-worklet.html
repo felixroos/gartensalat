@@ -69,7 +69,7 @@
       to generate it.. this is the assemblyscript code:
     </p>
     <pre>
-export function saw(t: f64, f: f64): f64 {
+function saw(t: f64, f: f64): f64 {
   return (((f * t) % 1.0) - 0.5) * 2.0;
 }
 export function dsp(t: f64): f64 {
@@ -136,15 +136,13 @@ export function dsp(t: f64): f64 {
       input.value =
         urlCode ||
         `(module
- (type $0 (func (param f64 f64) (result f64)))
- (type $1 (func (param f64) (result f64)))
+ (type $0 (func (param f64) (result f64)))
  (memory $0 0)
- (export "saw" (func $module/saw))
  (export "dsp" (func $module/dsp))
  (export "memory" (memory $0))
- (func $module/saw (param $0 f64) (param $1 f64) (result f64)
-  local.get $1
+ (func $module/dsp (param $0 f64) (result f64)
   local.get $0
+  f64.const 61
   f64.mul
   local.tee $0
   local.get $0
@@ -154,16 +152,8 @@ export function dsp(t: f64): f64 {
   f64.copysign
   f64.const -0.5
   f64.add
-  f64.const 2
-  f64.mul
  )
- (func $module/dsp (param $0 f64) (result f64)
-  (call saw (local.get $0) (f64.const 61.0))
-  f64.const 0.5
-  f64.mul
- )
-)
-`;
+)`;
       window.addEventListener("hashchange", function () {
         const urlCode = from_base64(window.location.hash.slice(1));
         input.value = urlCode;
