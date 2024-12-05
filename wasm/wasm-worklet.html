@@ -152,8 +152,13 @@ export function dsp(t: f64): f64 {
   f64.copysign
   f64.const -0.5
   f64.add
+  f64.const 2
+  f64.mul
+  f64.const 0.5
+  f64.mul
  )
-)`;
+)
+`;
       window.addEventListener("hashchange", function () {
         const urlCode = from_base64(window.location.hash.slice(1));
         input.value = urlCode;
