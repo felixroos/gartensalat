@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 polar functions</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      canvas {
+        width: 500px;
+        max-width: 100%;
+      }
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 polar functions</h2>
+    <p>
+      Today I want to have a break from audio synthesis.. Instead let's draw
+      some lines in polar coordinates:
+    </p>
+    <canvas id="plot"></canvas>
+    <textarea id="input" type="text" rows="4"></textarea>
+    <p>
+      examples:
+      <a
+        href="#dGFuKGEqMipQSSoxK3QpKnNpbih0Ki4xKQp0YW4oYSoyKlBJKjIrdC8yKSpjb3ModCouMikKdGFuKGEqMipQSSozK3QvMykqdGFuKHQqLjMp"
+        >too much tan</a
+      >
+      <a href="#dC8yJTEKdC8zJTEKdC80JTEKdC81JTEKdC82JTE=">concentric</a>
+      <a
+        href="#TWF0aC5zaW4oYSoyKk1hdGguUEkqMit0KQpNYXRoLmNvcyhhKjIqTWF0aC5QSSoyK3QvMikKTWF0aC5jb3MoYSoyKk1hdGguUEkqMit0LzMp"
+        >flower</a
+      >
+      <a
+        href="#TWF0aC5zaW4oYSoyKk1hdGguUEkqMioodCUxMCkpCk1hdGguY29zKGEqMipNYXRoLlBJKjIqKHQlMTApKQ=="
+        >supercurl</a
+      >
+      <a href="#CgooYSt0LzQpKjMlMSt0YW4odCkvMg==">fanzoom</a>
+    </p>
+    <p>these are the rules:</p>
+    <ul>
+      <li>each line is one function</li>
+      <li>a = angle from 0 to 1</li>
+      <li>t = time in seconds</li>
+      <li>i = angle from 0 to 360</li>
+      <li>the calculated value is the radius</li>
+      <li>1 radius unit = canvas.height</li>
+    </ul>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script>
+      const canvas = document.querySelector("#plot");
+      // make sure canvas is sharp
+      canvas.style.width = canvas.width;
+      canvas.style.height = canvas.height;
+      canvas.width *= window.devicePixelRatio;
+      canvas.height *= window.devicePixelRatio;
+      // define plot ranges
+      const xrange = [-Math.PI * 2, Math.PI * 2];
+      const yrange = [-1, 1];
+      // live coding
+      const input = document.querySelector("#input");
+      const ctx = canvas.getContext("2d");
+
+      ctx.fillStyle = "white";
+      let polar = (a, r, cx, cy) => {
+        const x = Math.sin(a * Math.PI * 2) * r + cx;
+        const y = Math.cos(a * Math.PI * 2) * r + cy;
+        return [x, y];
+      };
+
+      function plotPolar(fn, ms, ctx, color, rfactor = 1) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        let t = ms / 1000;
+        let a = 0,
+          i = 0,
+          cx = canvas.width / 2,
+          cy = canvas.height / 2;
+        ctx.moveTo(cx, cy);
+        ctx.beginPath();
+        while (a <= 1) {
+          const r = fn(a, t, i) * rfactor;
+          ctx.lineTo(...polar(a, r, cx, cy));
+          a += 1 / 360;
+          i++;
+        }
+        const r = fn(a, t, i) * rfactor;
+        ctx.lineTo(...polar(a, r, cx, cy)); // close path
+        ctx.stroke();
+      }
+
+      let frame;
+      Object.assign(window, { ...Math });
+      const onPlot = () => {
+        window.location.hash = "#" + btoa(input.value);
+        frame && clearAnimationFrame(frame);
+        const rfactor = Math.min(canvas.height, canvas.width) / 2 - 4;
+        const colors = ["cyan", "magenta", "yellow", "white"];
+        const lines = input.value.split("\n");
+        const prelude = `const {${Object.getOwnPropertyNames(Math)}} = Math;\n`;
+        const fns = lines.map(
+          (line) => new Function("a", "t", "i", `${prelude}return ${line}`)
+        );
+        requestAnimationFrame(function render() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          const ms = performance.now();
+          for (let i in fns) {
+            plotPolar(fns[i], ms, ctx, colors[i % colors.length], rfactor);
+          }
+          requestAnimationFrame(render);
+        });
+      };
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!", urlCode);
+      }
+      // initial value
+      input.value =
+        urlCode ||
+        `tan(a*2*PI*1+t)*sin(t*.1)
+tan(a*2*PI*2+t/2)*cos(t*.2)
+tan(a*2*PI*3+t/3)*tan(t*.3)`;
+
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        onPlot();
+      });
+
+      onPlot(); // initial render
+      input.addEventListener("input", onPlot); // rerender on change
+
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
