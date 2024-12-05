@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 compiling wasm</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      canvas {
+        width: 500px;
+        max-width: 100%;
+      }
+      textarea,
+      pre,
+      #output {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 webassembly text</h2>
+    <p>I've found out how to compile wasm (WebAssembly) on the fly:</p>
+    <textarea id="input" type="text" rows="16" spellcheck="false"></textarea>
+    <div id="output"></div>
+    <br />
+    <p>
+      I am using a single file build of
+      <a href="https://github.com/dy/watr" target="_blank" style="color: yellow"
+        >watr</a
+      >, which is a very lightweight WAT (WebAssembly Text) compiler.
+    </p>
+    <p>Next, I want to use this to do some audio dsp.</p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+
+    <script type="module">
+      import { compile } from "./watr.mjs";
+
+      const input = document.querySelector("#input");
+      const output = document.querySelector("#output");
+
+      function update() {
+        window.location.hash = "#" + btoa(input.value);
+        const buffer = compile(input.value);
+        const module = new WebAssembly.Module(buffer);
+        const instance = new WebAssembly.Instance(module);
+        const { main } = instance.exports;
+        const res = main();
+        output.innerText = `result: ${res}`;
+      }
+
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!", urlCode);
+      }
+      input.value =
+        urlCode ||
+        `(module
+  (func (export "double")
+    (param f64) (result f64)
+    (f64.mul (local.get 0) (f64.const 2))
+  )
+  (func (export "main")
+    (result f64)
+    (call double (f64.const 5.0))
+  )
+)`;
+
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        update();
+      });
+      update();
+      input.addEventListener("input", update);
+
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>

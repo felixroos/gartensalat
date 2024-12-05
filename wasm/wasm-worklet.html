@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 wasm worklet</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      canvas {
+        width: 500px;
+        background-color: #44444490;
+        max-width: 100%;
+      }
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 wasm worklet</h2>
+    <p>
+      Now let's use <a href="/wasm/watr.html">wasm text</a> to calculate audio
+      samples:
+    </p>
+    <textarea id="input" type="text" rows="32" spellcheck="false"></textarea>
+    <a id="play">play</a> | <a id="stop">stop</a>
+    <canvas id="canvas"></canvas>
+    <p>
+      The compiled WASM buffer is sent to the audio worklet via postMessage to
+      then be instantiated on the audio thread.
+    </p>
+    <p>
+      I have to admit I cheated a bit to get the wat.. I've used
+      <a
+        href="https://www.assemblyscript.org/"
+        target="_blank"
+        style="color: yellow"
+        >assemblyscript</a
+      >
+      to generate it.. this is the assemblyscript code:
+    </p>
+    <pre>
+export function saw(t: f64, f: f64): f64 {
+  return (((f * t) % 1.0) - 0.5) * 2.0;
+}
+export function dsp(t: f64): f64 {
+  return saw(t, 61.0);
+}
+    </pre>
+    <p>
+      I'll try to familiarize myself with this language.. maybe it could be a
+      compilation target for the
+      <a href="/kabelsalat/graph-compilation.html">graph compiler</a>
+    </p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+
+    <script type="module">
+      import { compile } from "./watr.mjs";
+
+      const input = document.querySelector("#input");
+      const to_base64 = (str) => btoa(unescape(encodeURIComponent(str)));
+      const from_base64 = (base64) => decodeURIComponent(escape(atob(base64)));
+
+      // init canvas
+      const canvas = document.querySelector("#canvas");
+      const drawContext = canvas.getContext("2d");
+      canvas.width = 800;
+      canvas.height = 200;
+      drawSilence(drawContext);
+
+      // init audio
+      const ac = new AudioContext();
+      document.addEventListener("click", function firstClick() {
+        ac.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+
+      // worklet play / stop
+      let worklet;
+      async function update() {
+        if (!worklet) {
+          worklet = await runWasmWorklet(ac);
+          worklet.port.onmessage = (e) => drawBuffer(e.data);
+        }
+        window.location.hash = "#" + to_base64(input.value);
+        worklet.port.postMessage({ wasm: compile(input.value) });
+      }
+      function stop() {
+        worklet?.disconnect();
+        worklet?.port.postMessage("stop");
+        worklet = undefined;
+      }
+      document.querySelector("#play").onclick = () => update();
+      document.querySelector("#stop").onclick = () => stop();
+
+      // live coding
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = from_base64(urlCode);
+        console.log("loaded code from url!", urlCode);
+      }
+      input.value =
+        urlCode ||
+        `(module
+ (type $0 (func (param f64 f64) (result f64)))
+ (type $1 (func (param f64) (result f64)))
+ (memory $0 0)
+ (export "saw" (func $module/saw))
+ (export "dsp" (func $module/dsp))
+ (export "memory" (memory $0))
+ (func $module/saw (param $0 f64) (param $1 f64) (result f64)
+  local.get $1
+  local.get $0
+  f64.mul
+  local.tee $0
+  local.get $0
+  f64.trunc
+  f64.sub
+  local.get $0
+  f64.copysign
+  f64.const -0.5
+  f64.add
+  f64.const 2
+  f64.mul
+ )
+ (func $module/dsp (param $0 f64) (result f64)
+  (call saw (local.get $0) (f64.const 61.0))
+  f64.const 0.5
+  f64.mul
+ )
+)
+`;
+      window.addEventListener("hashchange", function () {
+        const urlCode = from_base64(window.location.hash.slice(1));
+        input.value = urlCode;
+        update();
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          update();
+        }
+        if ((e.ctrlKey || e.altKey) && e.code === "Period") {
+          e.preventDefault();
+          stop();
+        }
+      });
+
+      // worklet that uses incoming wasm as sample generator
+      async function runWasmWorklet(ac) {
+        const name = `worklet-${Date.now()}`;
+        const workletCode = `
+class MyProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.t = 0;
+    this.active = true;
+    this.framebuffer = new Float32Array(Math.floor(sampleRate/30));
+    this.port.onmessage = (e) => {
+      e.data === "stop" && (this.active = false)
+      e.data.wasm && WebAssembly.instantiate(e.data.wasm, this.importObject).then((result) => {
+        this.dsp = result.instance.exports.dsp;
+      });
+    }
+  }
+  process(inputs, outputs, parameters) {
+    if (this.dsp && outputs[0][0]) {
+      const output = outputs[0];
+      for (let i = 0; i < output[0].length; i++) {
+        const out = this.dsp(this.t/44100);
+        for(let c in output)
+          output[c][i] = out;
+        this.t++;
+        this.framebuffer[this.t%this.framebuffer.length] = out;
+        if(this.t % this.framebuffer.length === 0 && this.t > 0) {
+          this.port.postMessage(this.framebuffer)
+        }
+      }
+    }
+    return this.active;
+  }
+}
+registerProcessor('${name}', MyProcessor);`;
+        await ac.resume();
+        const dataURL = `data:text/javascript;base64,${to_base64(workletCode)}`;
+        await ac.audioWorklet.addModule(dataURL);
+        const node = new AudioWorkletNode(ac, name);
+        node.connect(ac.destination);
+        return node;
+      }
+
+      // viz
+      function drawBuffer(samples) {
+        drawContext.clearRect(0, 0, canvas.width, canvas.height);
+        plot(
+          (x) => samples[Math.floor(x)], // this is bad..
+          drawContext,
+          [1, samples.length],
+          [-1, 1],
+          "white",
+          2
+        );
+      }
+      function drawSilence(ctx, color = "white", lineWidth = 2) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height / 2);
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
+      }
+
+      // plot function, see /plot.html
+      function plot(
+        fn,
+        ctx,
+        xrange = [-1, 1],
+        yrange = [-1, 1],
+        color = "black",
+        lineWidth = 4
+      ) {
+        // these 3 functions are very good to know..
+        const lerp = (v, min, max) => v * (max - min) + min;
+        const invLerp = (v, min, max) => (v - min) / (max - min);
+        const remap = (v, vmin, vmax, omin, omax) =>
+          lerp(invLerp(v, vmin, vmax), omin, omax);
+        // prepare draw context
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = color;
+        // function ranges
+        const [x0, x1] = xrange;
+        const [y0, y1] = yrange;
+        // draw ranges
+        const [px0, px1] = [0, ctx.canvas.width];
+        const [py0, py1] = [ctx.canvas.height - ctx.lineWidth, ctx.lineWidth];
+        // actual draw logic
+        ctx.beginPath();
+        for (let px = 0; px < ctx.canvas.width; px++) {
+          const x = remap(px, px0, px1, x0, x1);
+          const y = fn(x);
+          const py = remap(y, y0, y1, py0, py1);
+          px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
