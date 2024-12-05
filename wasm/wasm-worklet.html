@@ -165,8 +165,13 @@ export function dsp(t: f64): f64 {
 
       input.addEventListener("keydown", (e) => {
         if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
-          window.location.hash = "#" + to_base64(input.value);
-          update();
+          const hash = to_base64(input.value);
+          let urlCode = window.location.hash.slice(1);
+          if (hash !== urlCode) {
+            window.location.hash = "#" + hash;
+          } else {
+            update();
+          }
         }
         if ((e.ctrlKey || e.altKey) && e.code === "Period") {
           e.preventDefault();
