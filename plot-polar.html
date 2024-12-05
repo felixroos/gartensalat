@@ -89,14 +89,10 @@
       canvas.style.height = canvas.height;
       canvas.width *= window.devicePixelRatio;
       canvas.height *= window.devicePixelRatio;
-      // define plot ranges
-      const xrange = [-Math.PI * 2, Math.PI * 2];
-      const yrange = [-1, 1];
-      // live coding
+
       const input = document.querySelector("#input");
       const ctx = canvas.getContext("2d");
 
-      ctx.fillStyle = "white";
       let polar = (a, r, cx, cy) => {
         const x = Math.sin(a * Math.PI * 2) * r + cx;
         const y = Math.cos(a * Math.PI * 2) * r + cy;
@@ -150,7 +146,6 @@
         urlCode = atob(urlCode);
         console.log("loaded code from url!", urlCode);
       }
-      // initial value
       input.value =
         urlCode ||
         `tan(a*2*PI*1+t)*sin(t*.1)
@@ -166,6 +161,7 @@ tan(a*2*PI*3+t/3)*tan(t*.3)`;
       onPlot(); // initial render
       input.addEventListener("input", onPlot); // rerender on change
 
+      // render source code
       const html = document.querySelector("html").outerHTML;
       const loc = html.split("\n").length;
       document.querySelector("#pre").textContent = html;
