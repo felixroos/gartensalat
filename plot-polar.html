@@ -66,6 +66,10 @@
         >supercurl</a
       >
       <a href="#CgooYSt0LzQpKjMlMSt0YW4odCkvMg==">fanzoom</a>
+      <a
+        href="#KGFicyhzaW4oNCpQSSphKSkrYWJzKGNvcygzKlBJKmEpKSkvMgooYWJzKHNpbig0KlBJKmEpKSthYnMoY29zKDMqUEkqYSkpKS8uMQo="
+        >butterfly</a
+      >
     </p>
     <p>these are the rules:</p>
     <ul>
@@ -129,14 +133,15 @@
         const colors = ["cyan", "magenta", "yellow", "white"];
         const lines = input.value.split("\n");
         const prelude = `const {${Object.getOwnPropertyNames(Math)}} = Math;\n`;
-        const fns = lines.map(
-          (line) => new Function("a", "t", "i", `${prelude}return ${line}`)
+        const fns = lines.map((line) =>
+          line ? new Function("a", "t", "i", `${prelude}return ${line}`) : false
         );
         requestAnimationFrame(function render() {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           const ms = performance.now();
           for (let i in fns) {
-            plotPolar(fns[i], ms, ctx, colors[i % colors.length], rfactor);
+            fns[i] &&
+              plotPolar(fns[i], ms, ctx, colors[i % colors.length], rfactor);
           }
           requestAnimationFrame(render);
         });

@@ -1,0 +1,330 @@
+this is what happens after i try to install npm dependencies in my old blog:
+
+<pre>
+blog % npm i
+npm WARN old lockfile 
+npm WARN old lockfile The package-lock.json file was created with an old version of npm,
+npm WARN old lockfile so supplemental metadata must be fetched from the registry.
+npm WARN old lockfile 
+npm WARN old lockfile This is a one-time fix-up, please be patient...
+npm WARN old lockfile 
+npm WARN old lockfile bb-chord-symbol: No matching version found for bb-chord-symbol@1.0.10.
+npm WARN old lockfile     at module.exports (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/npm-pick-manifest/lib/index.js:209:23)
+npm WARN old lockfile     at RegistryFetcher.manifest (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/pacote/lib/registry.js:119:22)
+npm WARN old lockfile     at async Array.<anonymous> (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/build-ideal-tree.js:727:24)
+npm WARN old lockfile  Could not fetch metadata for bb-chord-symbol@1.0.10 bb-chord-symbol: No matching version found for bb-chord-symbol@1.0.10.
+npm WARN old lockfile     at module.exports (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/npm-pick-manifest/lib/index.js:209:23)
+npm WARN old lockfile     at RegistryFetcher.manifest (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/pacote/lib/registry.js:119:22)
+npm WARN old lockfile     at async Array.<anonymous> (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/build-ideal-tree.js:727:24) {
+npm WARN old lockfile   code: 'ETARGET',
+npm WARN old lockfile   type: 'version',
+npm WARN old lockfile   wanted: '1.0.10',
+npm WARN old lockfile   versions: [],
+npm WARN old lockfile   distTags: undefined,
+npm WARN old lockfile   defaultTag: 'latest'
+npm WARN old lockfile }
+npm WARN old lockfile bounding-boxes: No matching version found for bounding-boxes@3.2.0.
+npm WARN old lockfile     at module.exports (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/npm-pick-manifest/lib/index.js:209:23)
+npm WARN old lockfile     at RegistryFetcher.manifest (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/pacote/lib/registry.js:119:22)
+npm WARN old lockfile     at async Array.<anonymous> (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/build-ideal-tree.js:727:24)
+npm WARN old lockfile  Could not fetch metadata for bounding-boxes@3.2.0 bounding-boxes: No matching version found for bounding-boxes@3.2.0.
+npm WARN old lockfile     at module.exports (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/npm-pick-manifest/lib/index.js:209:23)
+npm WARN old lockfile     at RegistryFetcher.manifest (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/pacote/lib/registry.js:119:22)
+npm WARN old lockfile     at async Array.<anonymous> (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/build-ideal-tree.js:727:24) {
+npm WARN old lockfile   code: 'ETARGET',
+npm WARN old lockfile   type: 'version',
+npm WARN old lockfile   wanted: '3.2.0',
+npm WARN old lockfile   versions: [],
+npm WARN old lockfile   distTags: undefined,
+npm WARN old lockfile   defaultTag: 'latest'
+npm WARN old lockfile }
+npm WARN deprecated is-data-descriptor@0.1.4: Please upgrade to v0.1.5
+npm WARN deprecated is-accessor-descriptor@0.1.6: Please upgrade to v0.1.7
+npm WARN deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm WARN deprecated is-data-descriptor@1.0.0: Please upgrade to v1.0.1
+npm WARN deprecated is-accessor-descriptor@1.0.0: Please upgrade to v1.0.1
+npm WARN deprecated is-data-descriptor@1.0.0: Please upgrade to v1.0.1
+npm WARN deprecated is-accessor-descriptor@1.0.0: Please upgrade to v1.0.1
+npm WARN deprecated is-data-descriptor@1.0.0: Please upgrade to v1.0.1
+npm WARN deprecated is-accessor-descriptor@1.0.0: Please upgrade to v1.0.1
+npm WARN deprecated is-accessor-descriptor@1.0.0: Please upgrade to v1.0.1
+npm WARN deprecated is-data-descriptor@1.0.0: Please upgrade to v1.0.1
+npm WARN deprecated stable@0.1.8: Modern JS already guarantees Array#sort() is a stable sort, so this library is deprecated. See the compatibility table on MDN: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort#browser_compatibility
+npm WARN deprecated source-map-url@0.4.1: See https://github.com/lydell/source-map-url#deprecated
+npm WARN deprecated move-concurrently@1.0.1: This package is no longer supported.
+npm WARN deprecated @babel/plugin-proposal-numeric-separator@7.12.13: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-numeric-separator instead.
+npm WARN deprecated @babel/plugin-proposal-export-namespace-from@7.12.13: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-export-namespace-from instead.
+npm WARN deprecated @babel/plugin-proposal-unicode-property-regex@7.12.13: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-unicode-property-regex instead.
+npm WARN deprecated request-promise-native@1.0.9: request-promise-native has been deprecated because it extends the now deprecated request package, see https://github.com/request/request/issues/3142
+npm WARN deprecated figgy-pudding@3.5.2: This module is no longer supported.
+npm WARN deprecated @hapi/bourne@1.3.2: This version has been deprecated and is no longer supported or maintained
+npm WARN deprecated @hapi/topo@3.1.6: This version has been deprecated and is no longer supported or maintained
+npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm WARN deprecated rimraf@2.6.3: Rimraf versions prior to v4 are no longer supported
+npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm WARN deprecated urix@0.1.0: Please see https://github.com/lydell/urix#deprecated
+npm WARN deprecated trim@0.0.1: Use String.prototype.trim() instead
+npm WARN deprecated npmlog@4.1.2: This package is no longer supported.
+npm WARN deprecated har-validator@5.1.5: this library is no longer supported
+npm WARN deprecated @babel/plugin-proposal-object-rest-spread@7.12.1: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-object-rest-spread instead.
+npm WARN deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+npm WARN deprecated copy-concurrently@1.0.5: This package is no longer supported.
+npm WARN deprecated abab@2.0.5: Use your platform's native atob() and btoa() methods instead
+npm WARN deprecated resolve-url@0.2.1: https://github.com/lydell/resolve-url#deprecated
+npm WARN deprecated are-we-there-yet@1.1.5: This package is no longer supported.
+npm WARN deprecated source-map-resolve@0.5.3: See https://github.com/lydell/source-map-resolve#deprecated
+npm WARN deprecated glob@7.1.6: Glob versions prior to v9 are no longer supported
+npm WARN deprecated domexception@2.0.1: Use your platform's native DOMException instead
+npm WARN deprecated w3c-hr-time@1.0.2: Use your platform's native performance.now() and performance.timeOrigin.
+npm WARN deprecated q@1.5.1: You or someone you depend on is using Q, the JavaScript Promise library that gave JavaScript developers strong feelings about promises. They can almost certainly migrate to the native JavaScript promise now. Thank you literally everyone for joining me in this bet against the odds. Be excellent to each other.
+npm WARN deprecated 
+npm WARN deprecated (For a CapTP with native promises, see @endo/eventual-send and @endo/captp)
+npm WARN deprecated fs-write-stream-atomic@1.0.10: This package is no longer supported.
+npm WARN deprecated cheerio-select-tmp@0.1.1: Use cheerio-select instead
+npm WARN deprecated sane@4.1.0: some dependency vulnerabilities fixed, support for node < 10 dropped, and newer ECMAScript syntax/features added
+npm WARN deprecated fsevents@1.2.13: Upgrade to fsevents v2 to mitigate potential security issues
+npm WARN deprecated fsevents@1.2.13: Upgrade to fsevents v2 to mitigate potential security issues
+npm WARN deprecated querystring@0.2.0: The querystring API is considered Legacy. new code should use the URLSearchParams API instead.
+npm WARN deprecated babel-eslint@10.1.0: babel-eslint is now @babel/eslint-parser. This package will no longer receive updates.
+npm WARN deprecated @hapi/address@2.1.4: Moved to 'npm install @sideway/address'
+npm WARN deprecated uuid@3.4.0: Please upgrade  to version 7 or higher.  Older versions may use Math.random() in certain circumstances, which is known to be problematic.  See https://v8.dev/blog/math-random for details.
+npm WARN deprecated gauge@2.7.4: This package is no longer supported.
+npm WARN deprecated request@2.88.2: request has been deprecated, see https://github.com/request/request/issues/3142
+npm WARN deprecated @hapi/hoek@8.5.1: This version has been deprecated and is no longer supported or maintained
+npm WARN deprecated @hapi/joi@15.1.1: Switch to 'npm install joi'
+npm WARN deprecated svgo@1.3.2: This SVGO version is no longer supported. Upgrade to v2.x.x.
+npm WARN deprecated react-use-gesture@7.0.16: This package is no longer maintained. Please use @use-gesture/react instead
+npm WARN deprecated react-three-fiber@4.2.21: react-three-fiber has been deprecated, please use @react-three/fiber from now on
+npm WARN deprecated html-pdf@2.2.0: Please migrate your projects to a newer library like puppeteer
+npm WARN deprecated string-similarity@1.2.2: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm WARN deprecated phin@2.9.3: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm WARN deprecated phantomjs-prebuilt@2.1.16: this package is now deprecated
+npm WARN deprecated devcert@1.1.3: critical regex denial of service bug fixed in 1.2.1 patch
+npm WARN deprecated core-js@3.8.3: core-js@<3.23.3 is no longer maintained and not recommended for usage due to the number of issues. Because of the V8 engine whims, feature detection in old core-js versions could cause a slowdown up to 100x even if nothing is polyfilled. Some versions have web compatibility issues. Please, upgrade your dependencies to the actual version of core-js.
+npm WARN deprecated gatsby-image@2.11.0: gatsby-image is now gatsby-plugin-image: https://npm.im/gatsby-plugin-image. This package will no longer receive updates.
+npm WARN deprecated eslint-loader@2.2.1: This loader has been deprecated. Please use eslint-webpack-plugin
+npm WARN deprecated express-graphql@0.9.0: This package is no longer maintained. We recommend using `graphql-http` instead. Please consult the migration document https://github.com/graphql/graphql-http#migrating-express-grpahql.
+npm WARN deprecated async-cache@1.1.0: No longer maintained. Use [lru-cache](http://npm.im/lru-cache) version 7.6 or higher, and provide an asynchronous `fetchMethod` option.
+npm WARN deprecated @types/vfile-message@2.0.0: This is a stub types definition. vfile-message provides its own type definitions, so you do not need this installed.
+npm WARN deprecated @babel/plugin-proposal-async-generator-functions@7.12.13: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-async-generator-functions instead.
+npm WARN deprecated @babel/plugin-proposal-class-properties@7.12.13: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-class-properties instead.
+npm WARN deprecated @babel/plugin-proposal-nullish-coalescing-operator@7.12.13: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-nullish-coalescing-operator instead.
+npm WARN deprecated axios@0.19.2: Critical security vulnerability fixed in v0.21.1. For more information, see https://github.com/axios/axios/pull/3410
+npm WARN deprecated @babel/plugin-proposal-dynamic-import@7.12.16: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-dynamic-import instead.
+npm WARN deprecated @babel/plugin-proposal-logical-assignment-operators@7.12.13: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-logical-assignment-operators instead.
+npm WARN deprecated @babel/plugin-proposal-object-rest-spread@7.12.13: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-object-rest-spread instead.
+npm WARN deprecated @babel/plugin-proposal-private-methods@7.12.13: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-private-methods instead.
+npm WARN deprecated @babel/plugin-proposal-json-strings@7.12.13: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-json-strings instead.
+npm WARN deprecated @babel/plugin-proposal-optional-catch-binding@7.12.13: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-optional-catch-binding instead.
+npm WARN deprecated @babel/plugin-proposal-optional-chaining@7.12.16: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-optional-chaining instead.
+npm WARN deprecated @material-ui/styles@4.11.3: Material UI v4 doesn't receive active development since September 2021. See the guide https://mui.com/material-ui/migration/migration-v4/ to upgrade to v5.
+npm WARN deprecated gatsby-recipes@0.9.2: gatsby-recipes has been removed from gatsby/gatsby-cli >=4.5.0. Update to gatsby@latest/gatsby-cli@latest to use versions without gatsby-recipes. This package will no longer receive updates.
+npm WARN deprecated highlight.js@9.15.10: Version no longer supported. Upgrade to @latest
+npm WARN deprecated highlight.js@9.15.10: Version no longer supported. Upgrade to @latest
+npm WARN deprecated eslint@6.8.0: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+npm WARN deprecated core-js-pure@3.10.0: core-js-pure@<3.23.3 is no longer maintained and not recommended for usage due to the number of issues. Because of the V8 engine whims, feature detection in old core-js versions could cause a slowdown up to 100x even if nothing is polyfilled. Some versions have web compatibility issues. Please, upgrade your dependencies to the actual version of core-js-pure.
+npm WARN deprecated @material-ui/core@4.11.3: Material UI v4 doesn't receive active development since September 2021. See the guide https://mui.com/material-ui/migration/migration-v4/ to upgrade to v5.
+npm WARN deprecated @material-ui/icons@4.11.2: You can now upgrade to @mui/icons. See the guide: https://mui.com/guides/migration-v4/
+npm WARN deprecated @material-ui/system@4.11.3: You can now upgrade to @mui/system. See the guide: https://mui.com/guides/migration-v4/
+npm WARN deprecated @babel/plugin-proposal-object-rest-spread@7.10.4: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-object-rest-spread instead.
+npm ERR! code E404
+npm ERR! 404 Not Found - GET https://registry.npmjs.org/bounding-boxes/-/bounding-boxes-3.2.0.tgz - Not found
+npm ERR! 404 
+npm ERR! 404  'bounding-boxes@https://registry.npmjs.org/bounding-boxes/-/bounding-boxes-3.2.0.tgz' is not in this registry.
+npm ERR! 404 
+npm ERR! 404 Note that you can also install from a
+npm ERR! 404 tarball, folder, http url, or git url.
+
+npm ERR! A complete log of this run can be found in: /Users/felix/.npm/_logs/2024-12-05T16_52_17_858Z-debug-0.log
+</pre>
+
+delete package-lock.json
+
+
+<pre>
+  npm i
+  npm ERR! code ERESOLVE
+  npm ERR! ERESOLVE unable to resolve dependency tree
+  npm ERR! 
+  npm ERR! While resolving: gatsby-starter-blog-theme@0.0.1
+  npm ERR! Found: three@0.116.1
+  npm ERR! node_modules/three
+  npm ERR!   three@"^0.116.1" from the root project
+  npm ERR! 
+  npm ERR! Could not resolve dependency:
+  npm ERR! peer three@">= 0.157.0 < 0.171.0" from postprocessing@6.36.4
+  npm ERR! node_modules/postprocessing
+  npm ERR!   postprocessing@"^6.21.2" from the root project
+  npm ERR! 
+  npm ERR! Fix the upstream dependency conflict, or retry
+  npm ERR! this command with --force or --legacy-peer-deps
+  npm ERR! to accept an incorrect (and potentially broken) dependency resolution.
+  npm ERR! 
+  npm ERR! 
+  npm ERR! For a full report see:
+  npm ERR! /Users/felix/.npm/_logs/2024-12-05T16_57_22_382Z-eresolve-report.txt
+  
+  npm ERR! A complete log of this run can be found in: /Users/felix/.npm/_logs/2024-12-05T16_57_22_382Z-debug-0.log
+</pre>
+
+
+npm i --legacy-peer-deps
+
+<pre>
+  npm i --legacy-peer-deps
+  npm ERR! code ENOVERSIONS
+  npm ERR! No versions available for bb-chord-symbol
+  
+  npm ERR! A complete log of this run can be found in: /Users/felix/.npm/_logs/2024-12-05T16_57_50_852Z-debug-0.log
+</pre>
+
+somebody took their package offline.. remove package and comment out places where it's used..
+
+
+
+<pre>
+  npm i --legacy-peer-deps
+  npm WARN deprecated @types/vfile-message@2.0.0: This is a stub types definition. vfile-message provides its own type definitions, so you do not need this installed.
+  npm WARN deprecated string-similarity@1.2.2: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+  npm WARN deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+  npm WARN deprecated source-map-url@0.4.1: See https://github.com/lydell/source-map-url#deprecated
+  npm WARN deprecated move-concurrently@1.0.1: This package is no longer supported.
+  npm WARN deprecated stable@0.1.8: Modern JS already guarantees Array#sort() is a stable sort, so this library is deprecated. See the compatibility table on MDN: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort#browser_compatibility
+  npm WARN deprecated phin@2.9.3: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+  npm WARN deprecated @babel/plugin-proposal-numeric-separator@7.18.6: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-numeric-separator instead.
+  npm WARN deprecated @babel/plugin-proposal-class-properties@7.18.6: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-class-properties instead.
+  npm WARN deprecated @babel/plugin-proposal-nullish-coalescing-operator@7.18.6: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-nullish-coalescing-operator instead.
+  npm WARN deprecated figgy-pudding@3.5.2: This module is no longer supported.
+  npm WARN deprecated @hapi/bourne@1.3.2: This version has been deprecated and is no longer supported or maintained
+  npm WARN deprecated @hapi/topo@3.1.6: This version has been deprecated and is no longer supported or maintained
+  npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+  npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+  npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+  npm WARN deprecated rimraf@2.6.3: Rimraf versions prior to v4 are no longer supported
+  npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+  npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+  npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+  npm WARN deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+  npm WARN deprecated urix@0.1.0: Please see https://github.com/lydell/urix#deprecated
+  npm WARN deprecated npmlog@4.1.2: This package is no longer supported.
+  npm WARN deprecated har-validator@5.1.5: this library is no longer supported
+  npm WARN deprecated trim@0.0.1: Use String.prototype.trim() instead
+  npm WARN deprecated eslint-loader@2.2.1: This loader has been deprecated. Please use eslint-webpack-plugin
+  npm WARN deprecated @babel/plugin-proposal-object-rest-spread@7.12.1: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-object-rest-spread instead.
+  npm WARN deprecated @babel/plugin-proposal-object-rest-spread@7.10.4: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-object-rest-spread instead.
+  npm WARN deprecated copy-concurrently@1.0.5: This package is no longer supported.
+  npm WARN deprecated abab@2.0.6: Use your platform's native atob() and btoa() methods instead
+  npm WARN deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+  npm WARN deprecated @babel/plugin-proposal-optional-chaining@7.21.0: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-optional-chaining instead.
+  npm WARN deprecated resolve-url@0.2.1: https://github.com/lydell/resolve-url#deprecated
+  npm WARN deprecated are-we-there-yet@1.1.7: This package is no longer supported.
+  npm WARN deprecated source-map-resolve@0.5.3: See https://github.com/lydell/source-map-resolve#deprecated
+  npm WARN deprecated querystring@0.2.1: The querystring API is considered Legacy. new code should use the URLSearchParams API instead.
+  npm WARN deprecated domexception@2.0.1: Use your platform's native DOMException instead
+  npm WARN deprecated @babel/plugin-proposal-object-rest-spread@7.20.7: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-object-rest-spread instead.
+  npm WARN deprecated glob@7.1.6: Glob versions prior to v9 are no longer supported
+  npm WARN deprecated w3c-hr-time@1.0.2: Use your platform's native performance.now() and performance.timeOrigin.
+  npm WARN deprecated q@1.5.1: You or someone you depend on is using Q, the JavaScript Promise library that gave JavaScript developers strong feelings about promises. They can almost certainly migrate to the native JavaScript promise now. Thank you literally everyone for joining me in this bet against the odds. Be excellent to each other.
+  npm WARN deprecated 
+  npm WARN deprecated (For a CapTP with native promises, see @endo/eventual-send and @endo/captp)
+  npm WARN deprecated fs-write-stream-atomic@1.0.10: This package is no longer supported.
+  npm WARN deprecated sane@4.1.0: some dependency vulnerabilities fixed, support for node < 10 dropped, and newer ECMAScript syntax/features added
+  npm WARN deprecated fsevents@1.2.13: Upgrade to fsevents v2 to mitigate potential security issues
+  npm WARN deprecated fsevents@1.2.13: Upgrade to fsevents v2 to mitigate potential security issues
+  npm WARN deprecated gatsby-image@2.11.0: gatsby-image is now gatsby-plugin-image: https://npm.im/gatsby-plugin-image. This package will no longer receive updates.
+  npm WARN deprecated babel-eslint@10.1.0: babel-eslint is now @babel/eslint-parser. This package will no longer receive updates.
+  npm WARN deprecated @hapi/address@2.1.4: Moved to 'npm install @sideway/address'
+  npm WARN deprecated uuid@3.4.0: Please upgrade  to version 7 or higher.  Older versions may use Math.random() in certain circumstances, which is known to be problematic.  See https://v8.dev/blog/math-random for details.
+  npm WARN deprecated gauge@2.7.4: This package is no longer supported.
+  npm WARN deprecated async-cache@1.1.0: No longer maintained. Use [lru-cache](http://npm.im/lru-cache) version 7.6 or higher, and provide an asynchronous `fetchMethod` option.
+  npm WARN deprecated request@2.88.2: request has been deprecated, see https://github.com/request/request/issues/3142
+  npm WARN deprecated @hapi/hoek@8.5.1: This version has been deprecated and is no longer supported or maintained
+  npm WARN deprecated phantomjs-prebuilt@2.1.16: this package is now deprecated
+  npm WARN deprecated axios@0.19.2: Critical security vulnerability fixed in v0.21.1. For more information, see https://github.com/axios/axios/pull/3410
+  npm WARN deprecated react-use-gesture@7.0.16: This package is no longer maintained. Please use @use-gesture/react instead
+  npm WARN deprecated html-pdf@2.2.0: Please migrate your projects to a newer library like puppeteer
+  npm WARN deprecated @hapi/joi@15.1.1: Switch to 'npm install joi'
+  npm WARN deprecated express-graphql@0.9.0: This package is no longer maintained. We recommend using `graphql-http` instead. Please consult the migration document https://github.com/graphql/graphql-http#migrating-express-grpahql.
+  npm WARN deprecated react-three-fiber@4.2.21: react-three-fiber has been deprecated, please use @react-three/fiber from now on
+  npm WARN deprecated svgo@1.3.2: This SVGO version is no longer supported. Upgrade to v2.x.x.
+  npm WARN deprecated highlight.js@9.15.10: Version no longer supported. Upgrade to @latest
+  npm WARN deprecated highlight.js@9.15.10: Version no longer supported. Upgrade to @latest
+  npm WARN deprecated eslint@6.8.0: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+  npm WARN deprecated @mdx-js/util@2.0.0: Deprecated
+  npm WARN deprecated subscriptions-transport-ws@0.9.19: The `subscriptions-transport-ws` package is no longer maintained. We recommend you use `graphql-ws` instead. For help migrating Apollo software to `graphql-ws`, see https://www.apollographql.com/docs/apollo-server/data/subscriptions/#switching-from-subscriptions-transport-ws    For general help using `graphql-ws`, see https://github.com/enisdenjo/graphql-ws/blob/master/README.md
+  npm WARN deprecated @material-ui/styles@4.11.5: Material UI v4 doesn't receive active development since September 2021. See the guide https://mui.com/material-ui/migration/migration-v4/ to upgrade to v5.
+  npm WARN deprecated gatsby-recipes@0.9.3: gatsby-recipes has been removed from gatsby/gatsby-cli >=4.5.0. Update to gatsby@latest/gatsby-cli@latest to use versions without gatsby-recipes. This package will no longer receive updates.
+  npm WARN deprecated @material-ui/core@4.12.4: Material UI v4 doesn't receive active development since September 2021. See the guide https://mui.com/material-ui/migration/migration-v4/ to upgrade to v5.
+  npm ERR! code 1
+  npm ERR! path /Users/felix/projects/blog/node_modules/sharp
+  npm ERR! command failed
+  npm ERR! command sh -c (node install/libvips && node install/dll-copy && prebuild-install) || (node-gyp rebuild && node install/dll-copy)
+  npm ERR! CC(target) Release/obj.target/nothing/../node-addon-api/nothing.o
+  npm ERR!   LIBTOOL-STATIC Release/nothing.a
+  npm ERR!   TOUCH Release/obj.target/libvips-cpp.stamp
+  npm ERR!   CXX(target) Release/obj.target/sharp/src/common.o
+  npm ERR! info sharp Downloading https://github.com/lovell/sharp-libvips/releases/download/v8.10.5/libvips-8.10.5-darwin-arm64v8.tar.br
+  npm ERR! ERR! sharp Prebuilt libvips 8.10.5 binaries are not yet available for darwin-arm64v8
+  npm ERR! info sharp Attempting to build from source via node-gyp but this may fail due to the above error
+  npm ERR! info sharp Please see https://sharp.pixelplumbing.com/install for required dependencies
+  npm ERR! gyp info it worked if it ends with ok
+  npm ERR! gyp info using node-gyp@10.0.1
+  npm ERR! gyp info using node@20.10.0 | darwin | arm64
+  npm ERR! gyp info find Python using Python version 3.12.4 found at "/Users/felix/.pyenv/versions/3.12.4/bin/python3"
+  npm ERR! gyp info spawn /Users/felix/.pyenv/versions/3.12.4/bin/python3
+  npm ERR! gyp info spawn args [
+  npm ERR! gyp info spawn args '/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/node-gyp/gyp/gyp_main.py',
+  npm ERR! gyp info spawn args 'binding.gyp',
+  npm ERR! gyp info spawn args '-f',
+  npm ERR! gyp info spawn args 'make',
+  npm ERR! gyp info spawn args '-I',
+  npm ERR! gyp info spawn args '/Users/felix/projects/blog/node_modules/sharp/build/config.gypi',
+  npm ERR! gyp info spawn args '-I',
+  npm ERR! gyp info spawn args '/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/node-gyp/addon.gypi',
+  npm ERR! gyp info spawn args '-I',
+  npm ERR! gyp info spawn args '/Users/felix/Library/Caches/node-gyp/20.10.0/include/node/common.gypi',
+  npm ERR! gyp info spawn args '-Dlibrary=shared_library',
+  npm ERR! gyp info spawn args '-Dvisibility=default',
+  npm ERR! gyp info spawn args '-Dnode_root_dir=/Users/felix/Library/Caches/node-gyp/20.10.0',
+  npm ERR! gyp info spawn args '-Dnode_gyp_dir=/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/node-gyp',
+  npm ERR! gyp info spawn args '-Dnode_lib_file=/Users/felix/Library/Caches/node-gyp/20.10.0/<(target_arch)/node.lib',
+  npm ERR! gyp info spawn args '-Dmodule_root_dir=/Users/felix/projects/blog/node_modules/sharp',
+  npm ERR! gyp info spawn args '-Dnode_engine=v8',
+  npm ERR! gyp info spawn args '--depth=.',
+  npm ERR! gyp info spawn args '--no-parallel',
+  npm ERR! gyp info spawn args '--generator-output',
+  npm ERR! gyp info spawn args 'build',
+  npm ERR! gyp info spawn args '-Goutput_dir=.'
+  npm ERR! gyp info spawn args ]
+  npm ERR! <string>:103: SyntaxWarning: invalid escape sequence '\/'
+  npm ERR! gyp info spawn make
+  npm ERR! gyp info spawn args [ 'BUILDTYPE=Release', '-C', 'build' ]
+  npm ERR! warning: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/libtool: archive library: Release/nothing.a the table of contents is empty (no object file members in the library define global symbols)
+  npm ERR! ../src/common.cc:24:10: fatal error: 'vips/vips8' file not found
+  npm ERR! #include <vips/vips8>
+  npm ERR!          ^~~~~~~~~~~~
+  npm ERR! 1 error generated.
+  npm ERR! make: *** [Release/obj.target/sharp/src/common.o] Error 1
+  npm ERR! gyp ERR! build error 
+  npm ERR! gyp ERR! stack Error: `make` failed with exit code: 2
+  npm ERR! gyp ERR! stack at ChildProcess.<anonymous> (/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/node-gyp/lib/build.js:209:23)
+  npm ERR! gyp ERR! System Darwin 23.5.0
+  npm ERR! gyp ERR! command "/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/bin/node" "/Users/felix/Library/Application Support/fnm/node-versions/v20.10.0/installation/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js" "rebuild"
+  npm ERR! gyp ERR! cwd /Users/felix/projects/blog/node_modules/sharp
+  npm ERR! gyp ERR! node -v v20.10.0
+  npm ERR! gyp ERR! node-gyp -v v10.0.1
+  npm ERR! gyp ERR! not ok
+  
+  npm ERR! A complete log of this run can be found in: /Users/felix/.npm/_logs/2024-12-05T17_00_42_869Z-debug-0.log
+</pre>
+
+sharp package doesn't compile on my system.. why is sharp needed.. try "npm ls sharp" and "npm explain sharp", but both dont work
+try switching to node 14, running npm i
+
+that actually worked for the install. but running the dev server fails with a log thats so long i don't want to bother
+ok, so trying to revert package-lock
