@@ -523,7 +523,7 @@ registerProcessor('${name}', MyProcessor);`;
         // i don't want to segway into graph layouting rn...
         // download the file here: https://unpkg.com/@hpcc-js/wasm@2.18.0/dist/graphviz.js
         // sorry if you're living in 2051 and npm has collapsed already..
-        const { Graphviz } = await import("./graphviz.js");
+        const { Graphviz } = await import("/libs/@hpcc-js/wasm-graphviz/graphviz.js");
         const graphvizLoaded = Graphviz.load();
         const graphviz = await graphvizLoaded;
         const svg = await graphviz.layout(dot, "svg", "dot", {});
