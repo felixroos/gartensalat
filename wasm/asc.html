@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 assemblyscript</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      canvas {
+        width: 500px;
+        max-width: 100%;
+      }
+      #wat {
+        max-height: 300px;
+        overflow: auto;
+      }
+      textarea,
+      pre,
+      #output {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 assemblyscript</h2>
+    <p>
+      ! this will only work locally for the moment, as i've gitignored the
+      asc.mjs file !
+    </p>
+    <p>
+      There's a higher level way to build to WASM in the browser, which is
+      AssemblyScript:
+    </p>
+    <div>
+      <small>💡 hit ctrl+enter to compile and run the code</small>
+    </div>
+    <textarea id="input" type="text" rows="16" spellcheck="false"></textarea>
+    <div><a id="compile">compile</a> (downloads ~10MB compiler)</div>
+    <pre id="wat"></pre>
+    <pre id="result"></pre>
+    <br />
+    <p>
+      I am using my own single file build of
+      <a
+        href="https://github.com/AssemblyScript/assemblyscript"
+        target="_blank"
+        style="color: yellow"
+        >assemblyscript</a
+      >. It's around 10MB, so I'll probably only use this only to prebuild wasm,
+      and not as a live code compiler.
+    </p>
+    <p>Next, I want to use this to do some audio dsp.</p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+
+    <script type="module">
+      import { compile } from "./watr.mjs";
+
+      const input = document.querySelector("#input");
+      const to_base64 = (str) => btoa(unescape(encodeURIComponent(str)));
+      const from_base64 = (base64) => decodeURIComponent(escape(atob(base64)));
+      const wat = document.querySelector("#wat");
+      const result = document.querySelector("#result");
+      const compileButton = document.querySelector("#compile");
+
+      async function update() {
+        window.location.hash = "#" + btoa(input.value);
+
+        const output = await compileAssemblyScript(input.value);
+        console.log("output", output);
+        // const res = await runAsc(input.value);
+        wat.innerText = output["module.wat"];
+
+        const wasm = await WebAssembly.instantiate(output["module.wasm"], {});
+        const main = wasm.instance.exports.main;
+        const res = main();
+        console.log("res", res);
+
+        /* const buffer = compile(input.value);
+        const module = new WebAssembly.Module(buffer);
+        const instance = new WebAssembly.Instance(module);
+        const { main } = instance.exports;
+        const res = main(); */
+        result.innerText = `result: ${res}`;
+      }
+      compileButton.addEventListener("click", () => update());
+
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!", urlCode);
+      }
+      input.value =
+        urlCode ||
+        `export function main(): f64 {
+return 42;
+}`;
+
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        update();
+      });
+      // update();
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          const hash = to_base64(input.value);
+          let urlCode = window.location.hash.slice(1);
+          if (hash !== urlCode) {
+            window.location.hash = "#" + hash;
+          } else {
+            update();
+          }
+        }
+      });
+
+      async function compileAssemblyScript(
+        code,
+        files //: { [name: string]: string }
+      ) {
+        const asc = await import("./asc.mjs");
+        const output = Object.create({
+          stdout: asc.createMemoryStream(),
+          stderr: asc.createMemoryStream(),
+        });
+        const sources = {
+          "index.ts": code,
+          ...(files || {}),
+        };
+        const { error } = await asc.main(
+          [
+            "--textFile",
+            "module.wat",
+            "--outFile",
+            "module.wasm",
+            "--bindings",
+            "raw -03",
+            "--runtime",
+            "stub",
+            "index.ts",
+          ],
+          {
+            stdout: output.stdout,
+            stderr: output.stderr,
+            readFile: (name) =>
+              sources.hasOwnProperty(name) ? sources[name] : null,
+            writeFile: (name, contents) => (output[name] = contents),
+            listFiles: () => [],
+          }
+        );
+        if (error) {
+          const message = `${error.message}: ${output.stderr.toString()}`;
+          throw new Error(message);
+        }
+        return output;
+      }
+
+      /* async function runAsc(code) {
+        const output = await compileAssemblyScript(code);
+
+        const wasm = await WebAssembly.instantiate(output.binary, {});
+        const main = wasm.instance.exports.main;
+        const result = main();
+        return result;
+      } */
+
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
