@@ -30,9 +30,11 @@
         background-color: #44444490;
         max-width: 100%;
       }
-      textarea,
       pre {
         font-family: "FontWithASyntaxHighlighter", monospace;
+      }
+      textarea,
+      pre {
         padding: 8px;
         font-size: 12px;
         border: 0;
@@ -48,7 +50,7 @@
   <body>
     <h2>🌱 wasm worklet</h2>
     <p>
-      Now let's use <a href="/wasm/watr.html">wasm text</a> to calculate audio
+      Now let's use <a href="/wasm/wabt.html">WAT</a> to calculate audio
       samples:
     </p>
     <div>
@@ -92,8 +94,6 @@ export function dsp(t: f64): f64 {
     <a href="/">back to garten.salat</a>
 
     <script type="module">
-      import { compile } from "./watr.mjs";
-
       const input = document.querySelector("#input");
       const to_base64 = (str) => btoa(unescape(encodeURIComponent(str)));
       const from_base64 = (base64) => decodeURIComponent(escape(atob(base64)));
@@ -112,6 +112,17 @@ export function dsp(t: f64): f64 {
         document.removeEventListener("click", firstClick);
       });
 
+      // wat compilation
+      let wabtPromise;
+      async function compileWat(wat) {
+        wabtPromise =
+          wabtPromise ||
+          import("/libs/wabt.js/index.js").then((m) => m.default());
+        const wabt = await wabtPromise;
+        const { buffer } = wabt.parseWat("main.wasm", wat).toBinary({});
+        return buffer;
+      }
+
       // worklet play / stop
       let worklet;
       async function update() {
@@ -119,7 +130,9 @@ export function dsp(t: f64): f64 {
           worklet = await runWasmWorklet(ac);
           worklet.port.onmessage = (e) => drawBuffer(e.data);
         }
-        worklet.port.postMessage({ wasm: compile(input.value) });
+        const buffer = await compileWat(input.value);
+        console.log("compilation done...");
+        worklet.port.postMessage({ wasm: buffer });
       }
       function stop() {
         worklet?.disconnect();
@@ -133,7 +146,7 @@ export function dsp(t: f64): f64 {
       let urlCode = window.location.hash.slice(1);
       if (urlCode) {
         urlCode = from_base64(urlCode);
-        console.log("loaded code from url!", urlCode);
+        console.log("loaded code from url!");
       }
       const initialCode = `(func (export "dsp") (param $0 f64) (result f64)
   local.get $0
@@ -188,8 +201,12 @@ class MyProcessor extends AudioWorkletProcessor {
     this.framebuffer = new Float32Array(Math.floor(sampleRate/30));
     this.port.onmessage = (e) => {
       e.data === "stop" && (this.active = false)
-      e.data.wasm && WebAssembly.instantiate(e.data.wasm, this.importObject).then((result) => {
+      e.data.wasm && WebAssembly.instantiate(e.data.wasm, {
+            environment: { SAMPLERATE: globalThis.sampleRate },
+            env: { abort: () => console.log("abort.. what now?") }
+      }).then((result) => {
         this.dsp = result.instance.exports.dsp;
+        //this.dsp = result.instance.exports.p;
       });
     }
   }
