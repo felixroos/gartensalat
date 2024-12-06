@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 compiling wasm: wabt</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      canvas {
+        width: 500px;
+        max-width: 100%;
+      }
+      textarea,
+      pre,
+      #output {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 compiling wasm: wabt</h2>
+    <p>
+      Here's another, probably more accurate way to compile wasm:
+      <a href="https://github.com/AssemblyScript/wabt.js">wabt.js</a>
+    </p>
+    <textarea id="input" type="text" rows="16" spellcheck="false"></textarea>
+    <div id="output"></div>
+    <p>
+      I've added this because I've noticed watr wasn't able to compile some
+      things I threw at it.
+    </p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+
+    <script type="module">
+      const input = document.querySelector("#input");
+      const output = document.querySelector("#output");
+
+      let wabtPromise;
+      async function compileWat(wat) {
+        wabtPromise =
+          wabtPromise ||
+          import("/libs/wabt.js/index.js").then((m) => m.default());
+        const wabt = await wabtPromise;
+        const { buffer } = wabt.parseWat("main.wasm", wat).toBinary({});
+        return buffer;
+      }
+
+      async function update() {
+        window.location.hash = "#" + btoa(input.value);
+        const buffer = await compileWat(input.value);
+        const module = new WebAssembly.Module(buffer);
+        const instance = new WebAssembly.Instance(module);
+        const { main } = instance.exports;
+        const res = main();
+        output.innerText = `result: ${res}`;
+      }
+
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!", urlCode);
+      }
+      input.value =
+        urlCode ||
+        `(module
+ (type $0 (func (result f64)))
+ (memory $0 0)
+ (export "main" (func $index/main))
+ (export "memory" (memory $0))
+ (func $index/main (result f64)
+  f64.const 42
+ )
+)
+`;
+
+      window.addEventListener("hashchange", function () {
+        const urlCode = atob(window.location.hash.slice(1));
+        input.value = urlCode;
+        update();
+      });
+      update();
+      input.addEventListener("input", update);
+
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
