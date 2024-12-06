@@ -66,7 +66,7 @@
         style="color: yellow"
         >assemblyscript</a
       >
-      to generate it.. this is the assemblyscript code:
+      to generate it (with some edits).. this is the assemblyscript code:
     </p>
     <pre>
 function saw(t: f64, f: f64): f64 {
@@ -132,12 +132,7 @@ export function dsp(t: f64): f64 {
         urlCode = from_base64(urlCode);
         console.log("loaded code from url!", urlCode);
       }
-      const initialCode = `(module
- (type $0 (func (param f64) (result f64)))
- (memory $0 0)
- (export "dsp" (func $module/dsp))
- (export "memory" (memory $0))
- (func $module/dsp (param $0 f64) (result f64)
+      const initialCode = `(func (export "dsp") (param $0 f64) (result f64)
   local.get $0
   f64.const 61
   f64.mul
@@ -153,9 +148,8 @@ export function dsp(t: f64): f64 {
   f64.mul
   f64.const 0.5
   f64.mul
- )
-)
-`;
+)`;
+
       input.value = urlCode || initialCode;
       window.addEventListener("hashchange", function () {
         const urlCode = from_base64(window.location.hash.slice(1));
