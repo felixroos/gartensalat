@@ -47,14 +47,22 @@
   <body>
     <h2>🌱 compiling wasm: wabt</h2>
     <p>
-      Here's another, probably more accurate way to compile wasm:
-      <a href="https://github.com/AssemblyScript/wabt.js">wabt.js</a>
+      After <a href="./watr.html">compiling WAT with watr</a>, I'm now trying
+      <a href="https://github.com/AssemblyScript/wabt.js" style="color: yellow"
+        >wabt.js</a
+      >:
     </p>
     <textarea id="input" type="text" rows="16" spellcheck="false"></textarea>
     <div id="output"></div>
     <p>
-      I've added this because I've noticed watr wasn't able to compile some
-      things I threw at it.
+      I'm trying another lib because I've noticed watr wasn't able to compile
+      some things I threw at it. While wabt.js is a lot larger (~300kB) than
+      watr (~11kB), it seems to handle all WAT files that come out of
+      assemblyscript (future post), whereas watr struggles a lot. I'll continue
+      using wabt for audio in the next post. If WASM generally turns out to be a
+      good route for DSP, compared to JIT optimized JS, I might also think about
+      compiling straight to WASM binary for my specialized use case of graph
+      compilation.
     </p>
     <details>
       <summary id="loc">show page source</summary>
