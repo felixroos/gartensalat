@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 assemblyscript worklet</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      canvas {
+        width: 500px;
+        background-color: #44444490;
+        max-width: 100%;
+      }
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 assemblyscript worklet</h2>
+    <p>
+      Now let's use <a href="/wasm/asc.html">assemblyscript</a> to calculate
+      audio samples:
+    </p>
+    <div>
+      <small>💡 hit ctrl+enter to update the code & ctrl+. to stop.</small>
+    </div>
+
+    <textarea id="input" type="text" rows="16" spellcheck="false"></textarea>
+    <a id="play">run</a> (downloads ~10MB compiler) | <a id="stop">stop</a>
+    <textarea readonly id="wat" rows="16"></textarea>
+    <div id="stats"></div>
+    <a id="runinworklet">run in worklet</a>
+    <canvas id="canvas"></canvas>
+    <p>
+      examples:
+      <a
+        href="#Y29uc3QgU0FNUExFX1JBVEUgPSA0NDEwMDsKY29uc3QgSVNSOiBmNjQgPSAxL1NBTVBMRV9SQVRFOwoKCmZ1bmN0aW9uIGxlcnAoeDogZjY0LCB5MDogZjY0LCB5MTogZjY0KTogZjY0IHsKICBpZiAoeCA+PSAxKSByZXR1cm4geTE7CgogIHJldHVybiB5MCArIHggKiAoeTEgLSB5MCk7Cn0KCmNsYXNzIFB1bHNlT3NjIHsKICBwaGFzZTogZjY0ID0gMDsKICB1cGRhdGUoZnJlcTogZjY0LCBkdXR5OiBmNjQgPSAwLjUpOiBmNjQgewogICAgdGhpcy5waGFzZSArPSBJU1IgKiBmcmVxOwogICAgbGV0IGN5Y2xlUG9zID0gdGhpcy5waGFzZSAlIDE7CiAgICByZXR1cm4gY3ljbGVQb3MgPCBkdXR5ID8gMSA6IC0xOwogIH0KfQoKY2xhc3MgU2luZU9zYyB7CiAgcGhhc2U6IGY2NCA9IDA7CiAgdXBkYXRlKGZyZXE6IGY2NCk6IGY2NCB7CiAgICByZXR1cm4gTWF0aC5zaW4oKHRoaXMucGhhc2UgKz0gMiAqIE1hdGguUEkgKiBmcmVxICogSVNSKSk7CiAgfQp9CgpjbGFzcyBEdXN0IHsKICB1cGRhdGUoZGVuc2l0eTogZjY0KTogZjY0IHsKICAgIHJldHVybiAoTWF0aC5yYW5kb20oKSA8IGRlbnNpdHkgKiBJU1IgPyBNYXRoLnJhbmRvbSgpIDogMCk7CiAgfQp9CgpjbGFzcyBSYW5nZSB7CiAgdXBkYXRlKGlucHV0OiBmNjQsIG1pbjogZjY0LCBtYXg6IGY2NCk6IGY2NCB7CiAgICBjb25zdCB1bmkgPSAoaW5wdXQgKyAxKSAqIDAuNTsKICAgIHJldHVybiB1bmkgKiAobWF4IC0gbWluKSArIG1pbjsKICB9Cn0KCmNsYXNzIEltcHVsc2UgewogIHBoYXNlOiBmNjQgPSAxOwogIHVwZGF0ZShmcmVxOiBmNjQpOiBmNjQgewogICAgdGhpcy5waGFzZSArPSBJU1IgKiBmcmVxOwogICAgbGV0IHYgPSB0aGlzLnBoYXNlID49IDEgPyAxIDogMDsKICAgIHRoaXMucGhhc2UgPSB0aGlzLnBoYXNlICUgMTsKICAgIHJldHVybiB2OwogIH0KfQoKY2xhc3MgTHBmIHsKICBzMDogZjY0ID0gMDsKICBzMTogZjY0ID0gMDsKICB1cGRhdGUoczogZjY0LCBjdXRvZmY6IGY2NCwgcmVzb25hbmNlOiBmNjQgPSAwKTogZjY0IHsKICAgIC8vIE91dCBvZiBib3VuZCB2YWx1ZXMgY2FuIHByb2R1Y2UgTmFOcwogICAgY3V0b2ZmID0gTWF0aC5taW4oY3V0b2ZmLCAxKTsKICAgIHJlc29uYW5jZSA9IE1hdGgubWF4KHJlc29uYW5jZSwgMCk7CiAgICB2YXIgYzogZjY0ID0gTWF0aC5wb3coMC41LCAoMSAtIGN1dG9mZikgLyAwLjEyNSk7CiAgICB2YXIgcjogZjY0ID0gTWF0aC5wb3coMC41LCAocmVzb25hbmNlICsgMC4xMjUpIC8gMC4xMjUpOwogICAgdmFyIG1yYzogZjY0ID0gMSAtIHIgKiBjOwogICAgdmFyIHYwOiBmNjQgPSB0aGlzLnMwOwogICAgdmFyIHYxOiBmNjQgPSB0aGlzLnMxOwogICAgLy8gQXBwbHkgdGhlIGZpbHRlciB0byB0aGUgc2FtcGxlCiAgICB2MCA9IG1yYyAqIHYwIC0gYyAqIHYxICsgYyAqIHM7CiAgICB2MSA9IG1yYyAqIHYxICsgYyAqIHYwOwogICAgcyA9IHYxOwogICAgdGhpcy5zMCA9IHYwOwogICAgdGhpcy5zMSA9IHYxOwogICAgcmV0dXJuIHM7CiAgfQp9CgoKY2xhc3MgRGVsYXkgewogIHdyaXRlSWR4OiBpMzIgPSAwOwogIHJlYWRJZHg6IGkzMiA9IDA7CiAgYnVmZmVyOiBGbG9hdDY0QXJyYXk7CiAgY29uc3RydWN0b3IoKSB7CiAgICBjb25zdCBNQVhfREVMQVlfVElNRTogaTMyID0gNDsKICAgIHRoaXMuYnVmZmVyID0gbmV3IEZsb2F0NjRBcnJheShNQVhfREVMQVlfVElNRSAqIFNBTVBMRV9SQVRFKTsKICB9CiAgd3JpdGUoczogZjY0LCBkZWxheVRpbWU6IGY2NCk6IHZvaWQgewogICAgdGhpcy53cml0ZUlkeCA9ICh0aGlzLndyaXRlSWR4ICsgMSkgJSB0aGlzLmJ1ZmZlci5sZW5ndGg7CiAgICB0aGlzLmJ1ZmZlclt0aGlzLndyaXRlSWR4XSA9IHM7CiAgICAvLyBDYWxjdWxhdGUgaG93IGZhciBpbiB0aGUgcGFzdCB0byByZWFkCiAgICBsZXQgbnVtU2FtcGxlcyA9IE1hdGgubWluKAogICAgICBNYXRoLmZsb29yKFNBTVBMRV9SQVRFICogZGVsYXlUaW1lKSwKICAgICAgKHRoaXMuYnVmZmVyLmxlbmd0aCAtIDEpCiAgICApIGFzIGkzMjsKICAgIHRoaXMucmVhZElkeCA9IHRoaXMud3JpdGVJZHggLSBudW1TYW1wbGVzOwogICAgLy8gSWYgcGFzdCB0aGUgc3RhcnQgb2YgdGhlIGJ1ZmZlciwgd3JhcCBhcm91bmQKICAgIGlmICh0aGlzLnJlYWRJZHggPCAwKSB0aGlzLnJlYWRJZHggKz0gdGhpcy5idWZmZXIubGVuZ3RoOwogIH0KICB1cGRhdGUoaW5wdXQ6IGY2NCwgZGVsYXlUaW1lOiBmNjQpOiBmNjQgewogICAgdGhpcy53cml0ZShpbnB1dCwgZGVsYXlUaW1lKTsKICAgIHJldHVybiB0aGlzLmJ1ZmZlclt0aGlzLnJlYWRJZHhdOwogIH0KfQoKY2xhc3MgU2F3IHsgCiAgcGhhc2U6IGY2NCA9IDAKICB1cGRhdGUoZnJlcTogZjY0KTogZjY0IHsKICAgIHRoaXMucGhhc2UgKz0gSVNSICogZnJlcTsKICAgIHJldHVybiAodGhpcy5waGFzZSAlIDEpICogMiAtIDE7CiAgfQp9CgovLyBhZGQgbXVsCmxldCBzcmMgPSBuZXcgU2F3KCkKbGV0IGxmbyA9IG5ldyBTaW5lT3NjKCkKbGV0IGxwZiA9IG5ldyBMcGYoKQpsZXQgZGVsID0gbmV3IERlbGF5KCk7CgpleHBvcnQgZnVuY3Rpb24gZHNwKCk6ZjY0IHsKICBsZXQgdjAgPSBzcmMudXBkYXRlKDYwKQogIGxldCB2MSA9IChsZm8udXBkYXRlKDMpKzEpLzQKICBsZXQgdjIgPSBscGYudXBkYXRlKHYwLCB2MSwgMCkvNAogIGxldCB2MyA9IGRlbC51cGRhdGUodjIsIC4xNCkKICByZXR1cm4gdjIrdjMqLjUKfQ=="
+        >supercoil ugens</a
+      >
+      |
+      <a
+        href="#LyohCiAqCiAqIHBvdGFzbWljIC0gZ28gdG8gc2xlZXAKICoKICovCgpleHBvcnQgZnVuY3Rpb24gZHNwKHQ6IGY2NCk6IGY2NCB7CiAgbGV0IHMgPSAwLjA7CiAgbGV0IGZlZWRiYWNrID0gMC40OwogIGxldCBwID0gWzAuNzM3LDAuNDE1LDAuMzIyLDAuMTddOwogIGZvcihsZXQgaT0wLjA7IGk8TWF0aGYuUEk7aSs9TWF0aGYuUEkvNykgCiAgewogICBsZXQgX3QgPSB0IDwgTWF0aC5QST8gdCA6IHQtaTsKICAgbGV0IG4gPSA8aTMyPk1hdGgucm91bmQoX3QvTWF0aC5QSS8yKSVwLmxlbmd0aDsKICAgcys9IDAuMyAqIE1hdGguc2luKDIqTWF0aC5QSSpfdCooNDQwKzQ0MCooKGkvMC43NSklNCkpKnBbbl0pIAogICAgICAgKiBNYXRoLmV4cCgwLjAxLV90JU1hdGguUEkvNCo0KSAqIChmZWVkYmFjay0oaS80KSpmZWVkYmFjayk7CiAgfQogIHJldHVybiBzOwp9Cg=="
+        >potasmic - go to sleep</a
+      >
+      |
+      <a
+        href="#CmxldCByID0gbmV3IEZsb2F0NjRBcnJheSgxNCk7CmV4cG9ydCBmdW5jdGlvbiBkc3AodDogZjY0KTogZjY0IHsKclswXSA9IDQvNDQxMDAgLy8gZGl2CnJbMV0gPSByWzFdK3JbMF0gLy8gYWRkCnJbMl0gPSByWzFdJTEgLy8gbW9kCnJbM10gPSByWzJdKjYuMjgzMTg1MzA3MTc5NTg2IC8vIG11bApyWzRdID0gTWF0aC5zaW4oclszXSkgLy8gc2luCnJbNV0gPSByWzRdKjMgLy8gbXVsCnJbNl0gPSByWzVdKzMzMCAvLyBhZGQKcls3XSA9IHJbNl0vNDQxMDAgLy8gZGl2CnJbOF0gPSByWzhdK3JbN10gLy8gYWRkCnJbOV0gPSByWzhdJTEgLy8gbW9kCnJbMTBdID0gcls5XSo2LjI4MzE4NTMwNzE3OTU4NiAvLyBtdWwKclsxMV0gPSBNYXRoLnNpbihyWzEwXSkgLy8gc2luCnJbMTJdID0gclsxMV0vMiAvLyBkaXYKcmV0dXJuIHJbMTJdCn0="
+        >vibrato sine</a
+      >
+      |
+      <a
+        href="#Ly8gdGhpcyBleGFtcGxlIGhhcyBiZWVuIGFkYXB0ZWQgZnJvbSB0aGUgImZlZWRiYWNrIiBwb3N0Ci8vIHNpbiAvIGNvcyBieSBNYXggR3JhZXkgKCBodHRwczovL2dpdGh1Yi5jb20vcGV0ZXJzYWxvbW9uc2VuL2phdmFzY3JpcHRtdXNpYy9pc3N1ZXMvMiNpc3N1ZWNvbW1lbnQtNDY5NDE5NjA5ICkKCmV4cG9ydCBjb25zdCBQSTogZjY0ID0gMy4xNDE1OTI2NTM1ODk3OTM7CmV4cG9ydCBmdW5jdGlvbiBzaW4oeDogZjY0KTogZjY0IHsKICB2YXIgeTogZjY0LCB6OiBmNjQ7CiAgeCAqPSAxIC8gUEk7CiAgeSAgPSBmbG9vcih4KTsKICB6ICA9IHggLSB5OwogIHogKj0gMS4wIC0gejsKICB6ICo9IDMuNiAqIHogKyAzLjE7CiAgcmV0dXJuIHNlbGVjdCgteiwgeiwgPGk2ND55ICYgMSk7Cn0KCmV4cG9ydCBmdW5jdGlvbiBjb3MoeDogZjY0KTogZjY0IHsKICByZXR1cm4gc2luKHggKyBQSSAqIC41KTsKfQoKLy8gZG9udCB1c2UgdHlwZWQgYXJyYXkgdG8gZ2V0IGEgc21hbGxlciBiaW5hcnkKbGV0IHIwOiBmNjQgPSAwOwpsZXQgcjE6IGY2NCA9IDA7CmxldCByMjogZjY0ID0gMDsKbGV0IHIzOiBmNjQgPSAwOwpsZXQgcjQ6IGY2NCA9IDA7CmxldCByNTogZjY0ID0gMDsKbGV0IHI2OiBmNjQgPSAwOwpsZXQgcjc6IGY2NCA9IDA7CmxldCByODogZjY0ID0gMDsKbGV0IHI5OiBmNjQgPSAwOwpsZXQgcjEwOiBmNjQgPSAwOwpsZXQgcjExOiBmNjQgPSAwOwpsZXQgcjEyOiBmNjQgPSAwOwoKZXhwb3J0IGZ1bmN0aW9uIGRzcCgpOiBmNjQgewpyMCA9IDQvNDQxMDAgLy8gZGl2CnIxID0gcjErcjAgLy8gYWRkCnIyID0gcjElMSAvLyBtb2QKcjMgPSByMio2LjI4MzE4NTMwNzE3OTU4NiAvLyBtdWwKcjQgPSBzaW4ocjMpIC8vIHNpbgpyNSA9IHI0KjMgLy8gbXVsCnI2ID0gcjUrMzMwIC8vIGFkZApyNyA9IHI2LzQ0MTAwIC8vIGRpdgpyOCA9IHI4K3I3IC8vIGFkZApyOSA9IHI4JTEgLy8gbW9kCnIxMCA9IHI5KjYuMjgzMTg1MzA3MTc5NTg2IC8vIG11bApyMTEgPSBzaW4ocjEwKSAvLyBzaW4KcjEyID0gcjExLzIgLy8gZGl2CnJldHVybiByMTIKfQ=="
+        >vibrato sine (cheap)</a
+      >
+      |
+      <a
+        href="#bGV0IHIgPSBuZXcgRmxvYXQ2NEFycmF5KDIwKTsKZXhwb3J0IGZ1bmN0aW9uIGRzcCgpOmY2NCB7CnJbMF0gPSAyMTEvNDQxMDAgLy8gZGl2CnJbMV0gPSByWzFdK3JbMF0gLy8gYWRkCnJbMl0gPSByWzFdJTEgLy8gbW9kCnJbM10gPSByWzJdKjYuMjgzMTg1MzA3MTc5NTg2IC8vIG11bApyWzRdID0gTWF0aC5zaW4oclszXSkgLy8gc2luCnJbNV0gPSByWzRdKjAuMyAvLyBtdWwKcls2XSA9IDMzMS80NDEwMCAvLyBkaXYKcls3XSA9IHJbN10rcls2XSAvLyBhZGQKcls4XSA9IHJbN10lMSAvLyBtb2QKcls5XSA9IHJbOF0qNi4yODMxODUzMDcxNzk1ODYgLy8gbXVsCnJbMTBdID0gTWF0aC5zaW4ocls5XSkgLy8gc2luCnJbMTFdID0gclsxMF0qMC4yIC8vIG11bApyWzEyXSA9IDQ1MS80NDEwMCAvLyBkaXYKclsxM10gPSByWzEzXStyWzEyXSAvLyBhZGQKclsxNF0gPSByWzEzXSUxIC8vIG1vZApyWzE1XSA9IHJbMTRdKjYuMjgzMTg1MzA3MTc5NTg2IC8vIG11bApyWzE2XSA9IE1hdGguc2luKHJbMTVdKSAvLyBzaW4KclsxN10gPSByWzE2XSowLjEgLy8gbXVsCnJbMThdID0gcls1XStyWzExXStyWzE3XSAvLyBhZGQKcmV0dXJuIHJbMThdCn07"
+        >wandering sine</a
+      >
+      |
+      <a
+        href="#Ly8gdGhpcyBleGFtcGxlIGhhcyBiZWVuIGFkYXB0ZWQgZnJvbSB0aGUgImZlZWRiYWNrIiBwb3N0Ci8vIHNpbiAvIGNvcyBieSBNYXggR3JhZXkgKCBodHRwczovL2dpdGh1Yi5jb20vcGV0ZXJzYWxvbW9uc2VuL2phdmFzY3JpcHRtdXNpYy9pc3N1ZXMvMiNpc3N1ZWNvbW1lbnQtNDY5NDE5NjA5ICkKCmV4cG9ydCBjb25zdCBQSTogZjY0ID0gMy4xNDE1OTI2NTM1ODk3OTM7CmV4cG9ydCBmdW5jdGlvbiBzaW4oeDogZjY0KTogZjY0IHsKICB2YXIgeTogZjY0LCB6OiBmNjQ7CiAgeCAqPSAxIC8gUEk7CiAgeSAgPSBmbG9vcih4KTsKICB6ICA9IHggLSB5OwogIHogKj0gMS4wIC0gejsKICB6ICo9IDMuNiAqIHogKyAzLjE7CiAgcmV0dXJuIHNlbGVjdCgteiwgeiwgPGk2ND55ICYgMSk7Cn0KCmV4cG9ydCBmdW5jdGlvbiBjb3MoeDogZjY0KTogZjY0IHsKICByZXR1cm4gc2luKHggKyBQSSAqIC41KTsKfQoKLy8gZG9udCB1c2UgdHlwZWQgYXJyYXkgdG8gZ2V0IGEgc21hbGxlciBiaW5hcnkKbGV0IHIwOiBmNjQgPSAwOwpsZXQgcjE6IGY2NCA9IDA7CmxldCByMjogZjY0ID0gMDsKbGV0IHIzOiBmNjQgPSAwOwpsZXQgcjQ6IGY2NCA9IDA7CmxldCByNTogZjY0ID0gMDsKbGV0IHI2OiBmNjQgPSAwOwpsZXQgcjc6IGY2NCA9IDA7CmxldCByODogZjY0ID0gMDsKbGV0IHI5OiBmNjQgPSAwOwpsZXQgcjEwOiBmNjQgPSAwOwpsZXQgcjExOiBmNjQgPSAwOwpsZXQgcjEyOiBmNjQgPSAwOwpsZXQgcjEzOiBmNjQgPSAwOwpsZXQgcjE0OiBmNjQgPSAwOwpsZXQgcjE1OiBmNjQgPSAwOwpsZXQgcjE2OiBmNjQgPSAwOwpsZXQgcjE3OiBmNjQgPSAwOwpsZXQgcjE4OiBmNjQgPSAwOwoKZXhwb3J0IGZ1bmN0aW9uIGRzcCgpOmY2NCB7CnIwID0gMjExLzQ0MTAwIC8vIGRpdgpyMSA9IHIxK3IwIC8vIGFkZApyMiA9IHIxJTEgLy8gbW9kCnIzID0gcjIqNi4yODMxODUzMDcxNzk1ODYgLy8gbXVsCnI0ID0gc2luKHIzKSAvLyBzaW4KcjUgPSByNCowLjMgLy8gbXVsCnI2ID0gMzMxLzQ0MTAwIC8vIGRpdgpyNyA9IHI3K3I2IC8vIGFkZApyOCA9IHI3JTEgLy8gbW9kCnI5ID0gcjgqNi4yODMxODUzMDcxNzk1ODYgLy8gbXVsCnIxMCA9IHNpbihyOSkgLy8gc2luCnIxMSA9IHIxMCowLjIgLy8gbXVsCnIxMiA9IDQ1MS80NDEwMCAvLyBkaXYKcjEzID0gcjEzK3IxMiAvLyBhZGQKcjE0ID0gcjEzJTEgLy8gbW9kCnIxNSA9IHIxNCo2LjI4MzE4NTMwNzE3OTU4NiAvLyBtdWwKcjE2ID0gc2luKHIxNSkgLy8gc2luCnIxNyA9IHIxNiowLjEgLy8gbXVsCnIxOCA9IHI1K3IxMStyMTcgLy8gYWRkCnJldHVybiByMTgKfTs="
+        >wandering sine (cheap)</a
+      >
+      |
+      <a
+        href="#CmxldCByID0gbmV3IEZsb2F0NjRBcnJheSgzOCk7CmV4cG9ydCBmdW5jdGlvbiBkc3AodDogZjY0KTogZjY0IHsKclswXSA9IDAuMDEvNDQxMDAgLy8gZGl2CnJbMV0gPSByWzFdK3JbMF0gLy8gYWRkCnJbMl0gPSByWzFdKjYuMjgzMTg1MzA3MTc5NTg2IC8vIG11bApyWzNdID0gTWF0aC5zaW4oclsyXSkgLy8gc2luCnJbNF0gPSByWzNdKjEwIC8vIG11bApyWzVdID0gcls0XSs4OSAvLyBhZGQKcls2XSA9IHJbNV0vNDQxMDAgLy8gZGl2CnJbN10gPSByWzddK3JbNl0gLy8gYWRkCnJbOF0gPSByWzddJTEgLy8gbW9kCnJbOV0gPSByWzhdLTAuNSAvLyBzdWIKclsxMF0gPSByWzldKjIgLy8gbXVsCnJbMTFdID0gclsxMF0qMC4yIC8vIG11bApyWzEyXSA9IDAuMDMvNDQxMDAgLy8gZGl2CnJbMTNdID0gclsxM10rclsxMl0gLy8gYWRkCnJbMTRdID0gclsxM10qNi4yODMxODUzMDcxNzk1ODYgLy8gbXVsCnJbMTVdID0gTWF0aC5zaW4oclsxNF0pIC8vIHNpbgpyWzE2XSA9IHJbMTVdKjEwIC8vIG11bApyWzE3XSA9IHJbMTZdKzEyMCAvLyBhZGQKclsxOF0gPSByWzE3XS80NDEwMCAvLyBkaXYKclsxOV0gPSByWzE5XStyWzE4XSAvLyBhZGQKclsyMF0gPSByWzE5XSUxIC8vIG1vZApyWzIxXSA9IHJbMjBdLTAuNSAvLyBzdWIKclsyMl0gPSByWzIxXSoyIC8vIG11bApyWzIzXSA9IHJbMjJdKjAuMiAvLyBtdWwKclsyNF0gPSAwLjA1LzQ0MTAwIC8vIGRpdgpyWzI1XSA9IHJbMjVdK3JbMjRdIC8vIGFkZApyWzI2XSA9IHJbMjVdKjYuMjgzMTg1MzA3MTc5NTg2IC8vIG11bApyWzI3XSA9IE1hdGguc2luKHJbMjZdKSAvLyBzaW4KclsyOF0gPSByWzI3XSoxMCAvLyBtdWwKclsyOV0gPSByWzI4XSsxNjEgLy8gYWRkCnJbMzBdID0gclsyOV0vNDQxMDAgLy8gZGl2CnJbMzFdID0gclszMV0rclszMF0gLy8gYWRkCnJbMzJdID0gclszMV0lMSAvLyBtb2QKclszM10gPSByWzMyXS0wLjUgLy8gc3ViCnJbMzRdID0gclszM10qMiAvLyBtdWwKclszNV0gPSByWzM0XSowLjIgLy8gbXVsCnJbMzZdID0gclsxMV0rclsyM10rclszNV0gLy8gYWRkCnJldHVybiByWzM2XQp9"
+        >driftin saws</a
+      >
+      <a
+        href="#Ly8gdGhpcyBleGFtcGxlIGhhcyBiZWVuIGFkYXB0ZWQgZnJvbSB0aGUgImZlZWRiYWNrIiBwb3N0Ci8vIHNpbiAvIGNvcyBieSBNYXggR3JhZXkgKCBodHRwczovL2dpdGh1Yi5jb20vcGV0ZXJzYWxvbW9uc2VuL2phdmFzY3JpcHRtdXNpYy9pc3N1ZXMvMiNpc3N1ZWNvbW1lbnQtNDY5NDE5NjA5ICkKCmV4cG9ydCBjb25zdCBQSTogZjY0ID0gMy4xNDE1OTI2NTM1ODk3OTM7CmV4cG9ydCBmdW5jdGlvbiBzaW4oeDogZjY0KTogZjY0IHsKICB2YXIgeTogZjY0LCB6OiBmNjQ7CiAgeCAqPSAxIC8gUEk7CiAgeSAgPSBmbG9vcih4KTsKICB6ICA9IHggLSB5OwogIHogKj0gMS4wIC0gejsKICB6ICo9IDMuNiAqIHogKyAzLjE7CiAgcmV0dXJuIHNlbGVjdCgteiwgeiwgPGk2ND55ICYgMSk7Cn0KCmV4cG9ydCBmdW5jdGlvbiBjb3MoeDogZjY0KTogZjY0IHsKICByZXR1cm4gc2luKHggKyBQSSAqIC41KTsKfQoKCmxldCByMDpmNjQ9MDsKbGV0IHIxOmY2ND0wOwpsZXQgcjI6ZjY0PTA7CmxldCByMzpmNjQ9MDsKbGV0IHI0OmY2ND0wOwpsZXQgcjU6ZjY0PTA7CmxldCByNjpmNjQ9MDsKbGV0IHI3OmY2ND0wOwpsZXQgcjg6ZjY0PTA7CmxldCByOTpmNjQ9MDsKbGV0IHIxMDpmNjQ9MDsKbGV0IHIxMTpmNjQ9MDsKbGV0IHIxMjpmNjQ9MDsKbGV0IHIxMzpmNjQ9MDsKbGV0IHIxNDpmNjQ9MDsKbGV0IHIxNTpmNjQ9MDsKbGV0IHIxNjpmNjQ9MDsKbGV0IHIxNzpmNjQ9MDsKbGV0IHIxODpmNjQ9MDsKbGV0IHIxOTpmNjQ9MDsKbGV0IHIyMDpmNjQ9MDsKbGV0IHIyMTpmNjQ9MDsKbGV0IHIyMjpmNjQ9MDsKbGV0IHIyMzpmNjQ9MDsKbGV0IHIyNDpmNjQ9MDsKbGV0IHIyNTpmNjQ9MDsKbGV0IHIyNjpmNjQ9MDsKbGV0IHIyNzpmNjQ9MDsKbGV0IHIyODpmNjQ9MDsKbGV0IHIyOTpmNjQ9MDsKbGV0IHIzMDpmNjQ9MDsKbGV0IHIzMTpmNjQ9MDsKbGV0IHIzMjpmNjQ9MDsKbGV0IHIzMzpmNjQ9MDsKbGV0IHIzNDpmNjQ9MDsKbGV0IHIzNTpmNjQ9MDsKbGV0IHIzNjpmNjQ9MDsKCmV4cG9ydCBmdW5jdGlvbiBkc3AoKTogZjY0IHsKcjAgPSAwLjAxLzQ0MTAwIC8vIGRpdgpyMSA9IHIxK3IwIC8vIGFkZApyMiA9IHIxKjYuMjgzMTg1MzA3MTc5NTg2IC8vIG11bApyMyA9IHNpbihyMikgLy8gc2luCnI0ID0gcjMqMTAgLy8gbXVsCnI1ID0gcjQrODkgLy8gYWRkCnI2ID0gcjUvNDQxMDAgLy8gZGl2CnI3ID0gcjcrcjYgLy8gYWRkCnI4ID0gcjclMSAvLyBtb2QKcjkgPSByOC0wLjUgLy8gc3ViCnIxMCA9IHI5KjIgLy8gbXVsCnIxMSA9IHIxMCowLjIgLy8gbXVsCnIxMiA9IDAuMDMvNDQxMDAgLy8gZGl2CnIxMyA9IHIxMytyMTIgLy8gYWRkCnIxNCA9IHIxMyo2LjI4MzE4NTMwNzE3OTU4NiAvLyBtdWwKcjE1ID0gc2luKHIxNCkgLy8gc2luCnIxNiA9IHIxNSoxMCAvLyBtdWwKcjE3ID0gcjE2KzEyMCAvLyBhZGQKcjE4ID0gcjE3LzQ0MTAwIC8vIGRpdgpyMTkgPSByMTkrcjE4IC8vIGFkZApyMjAgPSByMTklMSAvLyBtb2QKcjIxID0gcjIwLTAuNSAvLyBzdWIKcjIyID0gcjIxKjIgLy8gbXVsCnIyMyA9IHIyMiowLjIgLy8gbXVsCnIyNCA9IDAuMDUvNDQxMDAgLy8gZGl2CnIyNSA9IHIyNStyMjQgLy8gYWRkCnIyNiA9IHIyNSo2LjI4MzE4NTMwNzE3OTU4NiAvLyBtdWwKcjI3ID0gc2luKHIyNikgLy8gc2luCnIyOCA9IHIyNyoxMCAvLyBtdWwKcjI5ID0gcjI4KzE2MSAvLyBhZGQKcjMwID0gcjI5LzQ0MTAwIC8vIGRpdgpyMzEgPSByMzErcjMwIC8vIGFkZApyMzIgPSByMzElMSAvLyBtb2QKcjMzID0gcjMyLTAuNSAvLyBzdWIKcjM0ID0gcjMzKjIgLy8gbXVsCnIzNSA9IHIzNCowLjIgLy8gbXVsCnIzNiA9IHIxMStyMjMrcjM1IC8vIGFkZApyZXR1cm4gcjM2Cn0="
+      >
+        driftin saws (cheap)
+      </a>
+    </p>
+    <p>
+      We've now reached
+      <a href="https://github.com/felixroos/doughbat" style="color: yellow"
+        >doughbat</a
+      >
+    </p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+
+    <script type="module">
+      const input = document.querySelector("#input");
+      const stats = document.querySelector("#stats");
+      const runinworklet = document.querySelector("#runinworklet");
+      const to_base64 = (str) => btoa(unescape(encodeURIComponent(str)));
+      const from_base64 = (base64) => decodeURIComponent(escape(atob(base64)));
+
+      // init canvas
+      const canvas = document.querySelector("#canvas");
+      const drawContext = canvas.getContext("2d");
+      canvas.width = 800;
+      canvas.height = 200;
+      drawSilence(drawContext);
+
+      // init audio
+      const ac = new AudioContext();
+      document.addEventListener("click", function firstClick() {
+        ac.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+
+      // worklet play / stop
+      let worklet;
+      async function update() {
+        if (!worklet) {
+          worklet = await runWasmWorklet(ac);
+          worklet.port.onmessage = (e) => drawBuffer(e.data);
+        }
+
+        const start = performance.now();
+        const output = await compileAssemblyScript(input.value);
+        wat.value = output["module.wat"];
+        worklet.port.postMessage({ wasm: output["module.wasm"] });
+        const took = performance.now() - start;
+        console.log("compilation took ", took / 1000 + "s");
+        const outsize = formatBytes(output["module.wasm"].length);
+        const time = (took / 1000).toFixed(2);
+        const loc = wat.value.split("\n").length;
+        stats.innerText = `compilation took ${time}s, ${outsize} / ${loc}loc`;
+        console.log("wat length", output["module.wat"].length);
+        runinworklet.setAttribute(
+          "href",
+          "/wasm/wasm-worklet.html#" + to_base64(wat.value)
+        );
+      }
+      function stop() {
+        worklet?.disconnect();
+        worklet?.port.postMessage("stop");
+        worklet = undefined;
+      }
+      document.querySelector("#play").onclick = () => update();
+      document.querySelector("#stop").onclick = () => stop();
+
+      // live coding
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = from_base64(urlCode);
+        console.log("loaded code from url!", urlCode);
+      }
+      /* const initialCode = `function saw(t: f64, f: f64): f64 {
+  return (((f * t) % 1.0) - 0.5) * 2.0;
+}
+export function dsp(t: f64): f64 {
+  return saw(t, 61.1);
+}`; */
+      const initialCode = `function saw(t: f64, f: f64): f64 {
+  return (((f * t) % 1.0) - 0.5) * 2.0;
+}
+export function dsp(t: f64): f64 {
+  return (saw(t, 55)*(1-saw(t,8)))/4;
+}`;
+
+      input.value = urlCode || initialCode;
+      window.addEventListener("hashchange", function () {
+        const urlCode = from_base64(window.location.hash.slice(1));
+        input.value = urlCode || initialCode;
+        update();
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          const hash = to_base64(input.value);
+          let urlCode = window.location.hash.slice(1);
+          if (hash !== urlCode) {
+            window.location.hash = "#" + hash;
+          } else {
+            update();
+          }
+        }
+        if ((e.ctrlKey || e.altKey) && e.code === "Period") {
+          e.preventDefault();
+          stop();
+        }
+      });
+
+      // worklet that uses incoming wasm as sample generator
+      async function runWasmWorklet(ac) {
+        const name = `worklet-${Date.now()}`;
+        const workletCode = `
+class MyProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.t = 0;
+    this.active = true;
+    this.framebuffer = new Float32Array(Math.floor(sampleRate/30));
+    this.port.onmessage = (e) => {
+      e.data === "stop" && (this.active = false)
+      e.data.wasm && WebAssembly.instantiate(e.data.wasm, {
+            environment: { SAMPLERATE: globalThis.sampleRate },
+            env: {
+              seed: () => 0,
+              abort: () =>
+                console.log("webassembly synth abort, should not happen"),
+            },
+          }).then((result) => {
+        this.dsp = result.instance.exports.dsp;
+      });
+    }
+  }
+  process(inputs, outputs, parameters) {
+    if (this.dsp && outputs[0][0]) {
+      const output = outputs[0];
+      for (let i = 0; i < output[0].length; i++) {
+        const out = this.dsp(this.t/44100);
+        for(let c in output)
+          output[c][i] = out;
+        this.t++;
+        this.framebuffer[this.t%this.framebuffer.length] = out;
+        if(this.t % this.framebuffer.length === 0 && this.t > 0) {
+          this.port.postMessage(this.framebuffer)
+        }
+      }
+    }
+    return this.active;
+  }
+}
+registerProcessor('${name}', MyProcessor);`;
+        await ac.resume();
+        const dataURL = `data:text/javascript;base64,${to_base64(workletCode)}`;
+        await ac.audioWorklet.addModule(dataURL);
+        const node = new AudioWorkletNode(ac, name);
+        node.connect(ac.destination);
+        return node;
+      }
+      async function compileAssemblyScript(
+        code,
+        files //: { [name: string]: string }
+      ) {
+        const asc = await import("./asc.mjs");
+        const output = Object.create({
+          stdout: asc.createMemoryStream(),
+          stderr: asc.createMemoryStream(),
+        });
+        const sources = {
+          "index.ts": code,
+          ...(files || {}),
+        };
+        const { error } = await asc.main(
+          [
+            "--textFile",
+            "module.wat",
+            "--outFile",
+            "module.wasm",
+            "-Osize", // 50.5kB WAT (2898loc)
+            //"--debug", // 87.16kB WAT (4338loc)
+            //"-Ospeed", // 56.79kB WAT (3022loc)
+            //"-O", // 56.79kB WAT (3022loc)
+            // "-O --noAssert", // 82.78kB WAT (4338loc)
+            // no -O: 82.78kB WAT (4338loc)
+            "index.ts",
+          ],
+          {
+            stdout: output.stdout,
+            stderr: output.stderr,
+            readFile: (name) =>
+              sources.hasOwnProperty(name) ? sources[name] : null,
+            writeFile: (name, contents) => (output[name] = contents),
+            listFiles: () => [],
+          }
+        );
+        if (error) {
+          const message = `${error.message}: ${output.stderr.toString()}`;
+          throw new Error(message);
+        }
+        return output;
+      }
+      function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "kB", "MB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        const size = parseFloat((bytes / Math.pow(k, i)).toFixed(decimals));
+        return `${size}${sizes[i]}`;
+      }
+      // viz
+      function drawBuffer(samples) {
+        drawContext.clearRect(0, 0, canvas.width, canvas.height);
+        plot(
+          (x) => samples[Math.floor(x)], // this is bad..
+          drawContext,
+          [1, samples.length],
+          [-1, 1],
+          "white",
+          2
+        );
+      }
+      function drawSilence(ctx, color = "white", lineWidth = 2) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height / 2);
+        ctx.lineTo(canvas.width, canvas.height / 2);
+        ctx.stroke();
+      }
+
+      // plot function, see /plot.html
+      function plot(
+        fn,
+        ctx,
+        xrange = [-1, 1],
+        yrange = [-1, 1],
+        color = "black",
+        lineWidth = 4
+      ) {
+        // these 3 functions are very good to know..
+        const lerp = (v, min, max) => v * (max - min) + min;
+        const invLerp = (v, min, max) => (v - min) / (max - min);
+        const remap = (v, vmin, vmax, omin, omax) =>
+          lerp(invLerp(v, vmin, vmax), omin, omax);
+        // prepare draw context
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = color;
+        // function ranges
+        const [x0, x1] = xrange;
+        const [y0, y1] = yrange;
+        // draw ranges
+        const [px0, px1] = [0, ctx.canvas.width];
+        const [py0, py1] = [ctx.canvas.height - ctx.lineWidth, ctx.lineWidth];
+        // actual draw logic
+        ctx.beginPath();
+        for (let px = 0; px < ctx.canvas.width; px++) {
+          const x = remap(px, px0, px1, x0, x1);
+          const y = fn(x);
+          const py = remap(y, y0, y1, py0, py1);
+          px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
