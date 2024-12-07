@@ -59,6 +59,7 @@
     <textarea id="input" type="text" rows="24" spellcheck="false"></textarea>
     <a id="play">play</a> | <a id="stop">stop</a>
     <canvas id="canvas"></canvas>
+    <div id="stats"></div>
     <p>
       The compiled WASM buffer is sent to the audio worklet via postMessage to
       then be instantiated on the audio thread.
@@ -106,6 +107,7 @@ export function dsp(t: f64): f64 {
 
     <script type="module">
       const input = document.querySelector("#input");
+      const stats = document.querySelector("#stats");
       const to_base64 = (str) => btoa(unescape(encodeURIComponent(str)));
       const from_base64 = (base64) => decodeURIComponent(escape(atob(base64)));
 
@@ -141,9 +143,15 @@ export function dsp(t: f64): f64 {
           worklet = await runWasmWorklet(ac);
           worklet.port.onmessage = (e) => drawBuffer(e.data);
         }
+        const start = performance.now();
         const buffer = await compileWat(input.value);
+        const took = performance.now() - start;
+        const time = (took / 1000).toFixed(2);
         console.log("compilation done...");
         worklet.port.postMessage({ wasm: buffer });
+        const size = formatBytes(buffer.length);
+        const loc = input.value.split("\n").length;
+        stats.innerText = `compilation took ${time}s, ${size} / ${loc}loc`;
       }
       function stop() {
         worklet?.disconnect();
@@ -247,6 +255,14 @@ registerProcessor('${name}', MyProcessor);`;
         return node;
       }
 
+      function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "kB", "MB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        const size = parseFloat((bytes / Math.pow(k, i)).toFixed(decimals));
+        return `${size}${sizes[i]}`;
+      }
       // viz
       function drawBuffer(samples) {
         drawContext.clearRect(0, 0, canvas.width, canvas.height);
