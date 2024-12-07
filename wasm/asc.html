@@ -64,7 +64,7 @@
     </div>
     <textarea id="input" type="text" rows="16" spellcheck="false"></textarea>
     <div><a id="compile">compile</a> (downloads ~10MB compiler)</div>
-    <pre id="wat"></pre>
+    <textarea readonly id="wat" rows="16"></textarea>
     <pre id="result"></pre>
     <br />
     <p>
@@ -86,8 +86,6 @@
     <a href="/">back to garten.salat</a>
 
     <script type="module">
-      import { compile } from "./watr.mjs";
-
       const input = document.querySelector("#input");
       const to_base64 = (str) => btoa(unescape(encodeURIComponent(str)));
       const from_base64 = (base64) => decodeURIComponent(escape(atob(base64)));
@@ -100,19 +98,11 @@
 
         const output = await compileAssemblyScript(input.value);
         console.log("output", output);
-        // const res = await runAsc(input.value);
-        wat.innerText = output["module.wat"];
+        wat.value = output["module.wat"];
 
         const wasm = await WebAssembly.instantiate(output["module.wasm"], {});
         const main = wasm.instance.exports.main;
         const res = main();
-        console.log("res", res);
-
-        /* const buffer = compile(input.value);
-        const module = new WebAssembly.Module(buffer);
-        const instance = new WebAssembly.Instance(module);
-        const { main } = instance.exports;
-        const res = main(); */
         result.innerText = `result: ${res}`;
       }
       compileButton.addEventListener("click", () => update());
@@ -167,8 +157,7 @@ return 42;
             "module.wasm",
             "--bindings",
             "raw -03",
-            "--runtime",
-            "stub",
+            "-Osize",
             "index.ts",
           ],
           {
@@ -186,15 +175,6 @@ return 42;
         }
         return output;
       }
-
-      /* async function runAsc(code) {
-        const output = await compileAssemblyScript(code);
-
-        const wasm = await WebAssembly.instantiate(output.binary, {});
-        const main = wasm.instance.exports.main;
-        const result = main();
-        return result;
-      } */
 
       // render source code
       const html = document.querySelector("html").outerHTML;
