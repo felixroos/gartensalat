@@ -161,12 +161,8 @@
       const perc = register("perc", (gate, decay) => gate.adsr(0, 0, 1, decay));
       let compileUgen = (r, a, i) => `${r} = n${i}.update(${a.join(",")})`;
 
-      const poly = registerNode(
-        "poly",
-        (r, a) =>
-          // a.map((arg, i) => `o[${i}] = ${arg}`).join("\n")
-          //`return [${a.join(",")}]`
-          `return ${a[0]}`
+      const poly = registerNode("poly", (r, a) =>
+        a.map((arg, i) => `o[${i}] = ${arg}`).join("\n")
       );
       let ugens = new Map();
       function registerUgen(name, ugen, compile = compileUgen) {
@@ -641,9 +637,15 @@ class PinkNoise {
           }
         });
         const setup = setupLines.join("\n");
-        const code = `${setup}\nexport function dsp(t: f64): f64 {\n${unit.lines.join(
-          "\n"
-        )}\n}`;
+        const code = `${setup}
+
+let o = new Float64Array(2);
+export function getOutputPointer(): ArrayBuffer {
+  return o.buffer; // tell js the buffer pointer
+}
+export function dsp(t: f64): void {
+${unit.lines.join("\n")}
+}`;
         console.log("unit", unit);
         console.log(code);
         asc.value = code;
@@ -690,14 +692,12 @@ class PinkNoise {
         console.log("loaded code from url!", urlCode);
       }
 
-      const initialCode = `saw([55,110,220,330])
-.lpf( sine(.25).range(.3,.7) )
+      const initialCode = `saw([55,110,220,330]).lpf( sine(.25).range(.3,.7) )
 .mix(2)
 .mul(impulse(4).perc(.1).lag(.05))
 .add(x=>x.delay(saw(.01).range(.005,.02)).mul(.9))
 .add(x=>x.delay(.3).mul(.7))
-.fold(0)
-.mul(.6)
+.fold(0).mul(.6)
 .out()`;
 
       input.value = urlCode || initialCode;
@@ -740,25 +740,27 @@ class MyProcessor extends AudioWorkletProcessor {
     ];
     this.port.onmessage = (e) => {
       e.data === "stop" && (this.active = false)
-      e.data.wasm && WebAssembly.instantiate(e.data.wasm, {
-            environment: { SAMPLERATE: globalThis.sampleRate },
-            env: {
-              seed: () => 0,
-              abort: () =>
-                console.log("webassembly synth abort, should not happen"),
-            },
-          }).then((result) => {
-        this.dsp = result.instance.exports.dsp;
-      });
+      if(e.data.wasm) {
+        WebAssembly.instantiate(e.data.wasm, {
+          environment: { SAMPLERATE: globalThis.sampleRate },
+          env: {
+            seed: () => 0,
+            abort: () =>
+              console.log("webassembly synth abort, should not happen"),
+          },
+        }).then((result) => {
+          const { memory, getOutputPointer, dsp } = result.instance.exports;
+          this.dsp = dsp;
+          this.o = new Float64Array(memory.buffer, getOutputPointer(), 2);
+        });
+      }
     }
   }
   process(inputs, outputs, parameters) {
     if (this.dsp && outputs[0][0]) {
       const output = outputs[0];
       for (let i = 0; i < output[0].length; i++) {
-        // this.dsp(this.t/44100, this.o);
-        this.o[0] = this.dsp(this.t/44100);
-        this.o[1] = this.o[0]
+        this.dsp(this.t/44100);
         output[0][i] = this.o[0];
         output[1][i] = this.o[1];
         this.t++;
