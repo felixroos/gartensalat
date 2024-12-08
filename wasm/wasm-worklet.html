@@ -72,14 +72,14 @@
         style="color: yellow"
         >assemblyscript</a
       >
-      to generate it (with some edits).. this is the assemblyscript code:
+      to generate it. this is the assemblyscript code:
     </p>
     <pre>
-function saw(t: f64, f: f64): f64 {
-  return (((f * t) % 1.0) - 0.5) * 2.0;
+function saw(f: f32, t: f32): f32 {
+  return (((f * t * 1.0) % 1.0) - 0.5) * 1.0;
 }
-export function dsp(t: f64): f64 {
-  return saw(t, 61.0)/2;
+export function dsp(t: f32): f32 {
+  return (saw(60, t) + saw(61, t))/4
 }
     </pre>
     <p>
@@ -167,23 +167,38 @@ export function dsp(t: f64): f64 {
         urlCode = from_base64(urlCode);
         console.log("loaded code from url!");
       }
-      const initialCode = `(func (export "dsp") (param $0 f64) (result f64)
+      const initialCode = `(module
+ (type $0 (func (param f32 f32) (result f32)))
+ (type $1 (func (param f32) (result f32)))
+ (memory $0 0)
+ (export "dsp" (func $index/dsp))
+ (export "memory" (memory $0))
+ (func $index/saw (param $0 f32) (param $1 f32) (result f32)
   local.get $0
-  f64.const 61
-  f64.mul
+  local.get $1
+  f32.mul
   local.tee $0
   local.get $0
-  f64.trunc
-  f64.sub
+  f32.trunc
+  f32.sub
   local.get $0
-  f64.copysign
-  f64.const -0.5
-  f64.add
-  f64.const 2
-  f64.mul
-  f64.const 0.5
-  f64.mul
-)`;
+  f32.copysign
+  f32.const -0.5
+  f32.add
+ )
+ (func $index/dsp (param $0 f32) (result f32)
+  f32.const 60 ;; <-- frequency 1 is here
+  local.get $0
+  call $index/saw
+  f32.const 61 ;; <-- frequency 2 is here
+  local.get $0
+  call $index/saw
+  f32.add
+  f32.const 0.25
+  f32.mul
+ )
+)
+`;
 
       input.value = urlCode || initialCode;
       window.addEventListener("hashchange", function () {
