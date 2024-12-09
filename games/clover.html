@@ -1,50 +1,58 @@
-<body style="font-size: 1.4em">
-  <div id="stats" style="white-space: pre"></div>
-  <br />
-  <div id="container"></div>
-  <script>
-    const url = new URL(window.location.href);
-    const p = Object.fromEntries(url.searchParams.entries());
-    const bag = p.bag ? p.bag.split(",") : ["☘️"];
-    const special = p.special ?? "🍀";
-    let lvl = p.lvl ?? 1;
-    let times = [];
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <title>clover game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body style="font-size: 1.4em">
+    <div id="stats" style="white-space: pre"></div>
+    <br />
+    <div id="container"></div>
+    <script>
+      const url = new URL(window.location.href);
+      const p = Object.fromEntries(url.searchParams.entries());
+      const bag = p.bag ? p.bag.split(",") : ["☘️"];
+      const special = p.special ?? "🍀";
+      let lvl = p.lvl ?? 1;
+      let times = [];
 
-    const container = document.getElementById("container");
-    const stats = document.getElementById("stats");
-    const screen = document.body.getBoundingClientRect().height;
-    let started, loc;
-    function reset() {
-      loc = Math.floor(Math.random() * lvl);
-      started = performance.now();
-      container.innerText = "";
-      count = 0;
-    }
-    function render() {
-      while (count < lvl) {
-        let span = document.createElement("span");
-        if (count === loc) {
-          span.addEventListener("click", () => {
-            const took = (performance.now() - started) / 1000;
-            alert(`YOU BEAT LVL ${lvl} IN ${took.toFixed(2)}s!`);
-            times.push(took);
-            lvl *= 2;
-            reset();
-            render();
-          });
-          span.innerText = special;
-          span.style = "cursor:pointer";
-        } else {
-          span.innerText = bag[Math.floor(Math.random() * bag.length)];
-        }
-        container.appendChild(span);
-        count++;
+      const container = document.getElementById("container");
+      const stats = document.getElementById("stats");
+      const screen = document.body.getBoundingClientRect().height;
+      let started, loc;
+      function reset() {
+        loc = Math.floor(Math.random() * lvl);
+        started = performance.now();
+        container.innerText = "";
+        count = 0;
       }
-      stats.innerText = `*clover*, the game with exponential difficulty!\n${times
-        .map((time, i) => `lvl ${2 ** i}: ${time.toFixed(2)}s`)
-        .join("\n")}${times.length ? "\n" : ""}lvl ${lvl}: find ${special}`;
-    }
-    reset();
-    render();
-  </script>
-</body>
+      function render() {
+        while (count < lvl) {
+          let span = document.createElement("span");
+          if (count === loc) {
+            span.addEventListener("click", () => {
+              const took = (performance.now() - started) / 1000;
+              alert(`YOU BEAT LVL ${lvl} IN ${took.toFixed(2)}s!`);
+              times.push(took);
+              lvl *= 2;
+              reset();
+              render();
+            });
+            span.innerText = special;
+            span.style = "cursor:pointer";
+          } else {
+            span.innerText = bag[Math.floor(Math.random() * bag.length)];
+          }
+          container.appendChild(span);
+          count++;
+        }
+        stats.innerText = `*clover*, the game with exponential difficulty!\n${times
+          .map((time, i) => `lvl ${2 ** i}: ${time.toFixed(2)}s`)
+          .join("\n")}${times.length ? "\n" : ""}lvl ${lvl}: find ${special}`;
+      }
+      reset();
+      render();
+    </script>
+  </body>
+</html>
