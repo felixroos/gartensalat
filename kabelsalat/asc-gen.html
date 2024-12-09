@@ -61,7 +61,7 @@
       <textarea readonly id="wat" rows="16"></textarea>
     </label>
     <div id="stats"></div>
-    <a id="runinworklet">run in worklet</a>
+    <!-- <a id="runinworklet">run in worklet</a> -->
     <canvas id="canvas"></canvas>
 
     <details>
@@ -110,6 +110,9 @@
           }
           return input;
         }
+        apply(fn) {
+          return fn(this);
+        }
       }
       const registry = new Map();
       // registers a function on the node class + standalone
@@ -150,60 +153,15 @@
         return { lines, last, nodes };
       };
       // the following code uses the above graph lib
-      // to implement the dummy math language
-
       const n = registerNode("n", (r, [a = 0]) => `${r} = ${a}`);
       const mul = registerNode("mul", (r, [a, b]) => `${r} = ${a}*${b}`);
       const div = registerNode("div", (r, [a, b]) => `${r} = ${a}/${b}`);
       const add = registerNode("add", (r, a) => `${r} = ${a.join("+")}`);
       const mod = registerNode("mod", (r, [a, b]) => `${r} = ${a}%${b}`);
       const sub = registerNode("sub", (r, [a, b]) => `${r} = ${a}-${b}`);
-      const perc = register("perc", (gate, decay) => gate.adsr(0, 0, 1, decay));
-      let compileUgen = (r, a, i) => `${r} = u${i}.update(${a.join(",")})`;
-
       const poly = registerNode("poly", (r, a) =>
         a.map((arg, i) => `o[${i}] = ${arg}`).join("\n")
       );
-      let ugens = new Map();
-      function registerUgen(name, ugen, compile = compileUgen) {
-        ugens.set(name, ugen);
-        return registerNode(name, compile);
-      }
-      let lib = {
-        n,
-        mul,
-        div,
-        add,
-        mod,
-        sub,
-        pulse: registerUgen("pulse", "PulseOsc"),
-        sine: registerUgen("sine", "SineOsc"),
-        tri: registerUgen("tri", "TriOsc"),
-        saw: registerUgen("saw", "SawOsc"),
-        dust: registerUgen("dust", "Dust"),
-        impulse: registerUgen("impulse", "Impulse"),
-        lpf: registerUgen("lpf", "Lpf"),
-        delay: registerUgen("delay", "Delay"),
-        adsr: registerUgen(
-          "adsr",
-          "ADSR",
-          (r, a, i) => `${r} = u${i}.update(t, ${a.join(",")})`
-        ),
-        lag: registerUgen("lag", "Lag"),
-        slide: registerUgen("slide", "Slide"),
-        slew: registerUgen("slew", "Slew"),
-        fold: registerUgen("fold", "Fold"),
-        sequence: registerUgen("sequence", "Sequence"),
-        clockdiv: registerUgen("clockdiv", "ClockDiv"),
-        distort: registerUgen("distort", "Distort"),
-        hold: registerUgen("hold", "Hold"),
-        noise: registerUgen("noise", "Noise"),
-        brown: registerUgen("brown", "BrownNoise"),
-        pink: registerUgen("pink", "PinkNoise"),
-        range: registerUgen("range", "Range"),
-      };
-      Object.assign(window, lib);
-
       let mix = register("mix", (input, channels = 1) => {
         if (![1, 2].includes(channels)) {
           channels = 2;
@@ -228,11 +186,67 @@
         return add(...input.ins);
       });
 
+      let compileUgen = (r, a, i) => `${r} = u${i}.update(${a.join(",")})`;
+      let ugens = new Map();
+      function registerUgen(name, ugen, compile = compileUgen) {
+        ugens.set(name, ugen);
+        return registerNode(name, compile);
+      }
+      let lib = {
+        n,
+        mul,
+        div,
+        add,
+        mod,
+        sub,
+        poly,
+        mix,
+        pulse: registerUgen("pulse", "PulseOsc"),
+        sine: registerUgen("sine", "SineOsc"),
+        tri: registerUgen("tri", "TriOsc"),
+        saw: registerUgen("saw", "SawOsc"),
+        dust: registerUgen("dust", "Dust"),
+        impulse: registerUgen("impulse", "Impulse"),
+        lpf: registerUgen("lpf", "Lpf"),
+        delay: registerUgen("delay", "Delay"),
+        adsr: registerUgen(
+          "adsr",
+          "ADSR",
+          (r, a, i) => `${r} = u${i}.update(t, ${a.join(",")})`
+        ),
+        lag: registerUgen("lag", "Lag"),
+        slide: registerUgen("slide", "Slide"),
+        slew: registerUgen("slew", "Slew"),
+        fold: registerUgen("fold", "Fold"),
+        seq: registerUgen(
+          "seq",
+          "Sequence",
+          (r, a, i) => `${r} = u${i}.update(${a[0]}, [${a.slice(1).join(",")}])`
+        ),
+        clockdiv: registerUgen("clockdiv", "ClockDiv"),
+        distort: registerUgen("distort", "Distort"),
+        hold: registerUgen("hold", "Hold"),
+        noise: registerUgen("noise", "Noise"),
+        brown: registerUgen("brown", "BrownNoise"),
+        pink: registerUgen("pink", "PinkNoise"),
+        range: registerUgen("range", "Range"),
+      };
+
+      const perc = register("perc", (gate, decay) => gate.adsr(0, 0, 1, decay));
+      const ad = register("ad", (gate = 0, attack = 0.02, decay = 0.1) =>
+        gate.adsr(attack, decay, 0, decay)
+      );
+
+      Node.prototype.filter = Node.prototype.lpf;
+      lib.filter = lib.lpf;
+
+      Object.assign(window, lib);
+
       // ui
       const input = document.querySelector("#input");
       const asc = document.querySelector("#asc");
       const stats = document.querySelector("#stats");
-      const runinworklet = document.querySelector("#runinworklet");
+      // const runinworklet = document.querySelector("#runinworklet");
       const to_base64 = (str) => btoa(unescape(encodeURIComponent(str)));
       const from_base64 = (base64) => decodeURIComponent(escape(atob(base64)));
 
@@ -311,10 +325,10 @@ ${unit.lines.join("\n")}
         const time = (took / 1000).toFixed(2);
         const loc = wat.value.split("\n").length;
         stats.innerText = `compilation took ${time}s, ${outsize} / ${loc}loc`;
-        runinworklet.setAttribute(
+        /* runinworklet.setAttribute(
           "href",
           "/wasm/wasm-worklet.html#" + to_base64(wat.value)
-        );
+        ); */
       }
 
       function stop() {
