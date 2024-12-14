@@ -43,10 +43,65 @@
         width: 100%;
         box-sizing: border-box;
       }
+      #wat {
+        font-family: monospace;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
     </style>
   </head>
   <body>
     <h2>🌱 assemblyscript codegen</h2>
+    <p>Now let's piece together the following earlier experiments:</p>
+    <ol>
+      <li>
+        writing a
+        <a href="https://kabel.salat.dev/" target="_blank" style="color: yellow"
+          >kabelsalat</a
+        >
+        graph in JS
+      </li>
+
+      <li>
+        <a href="/kabelsalat/graph-compilation.html">compiling it</a> to
+        AssemblyScript
+      </li>
+      <li>
+        compiling <a href="/wasm/asc.html">AssemblyScript</a> to
+        <a href="/wasm/wabt.html">WASM</a>
+      </li>
+      <li>
+        run the WASM in an
+        <a href="/audio-dsp/worklets2.html">AudioWorklet</a> to make sound
+      </li>
+    </ol>
+    <p>Additionally, I've implement most of the core ugens in kabelsalat.</p>
+    <p>
+      examples:
+      <a
+        href="#c2F3KFs1NSwxMTAsMjIwLDMzMF0pLmxwZiggc2luZSguMjUpLnJhbmdlKC4zLC43KSApCi5taXgoMikKLm11bChpbXB1bHNlKDQpLnBlcmMoLjEpLmxhZyguMDUpKQouYWRkKHg9PnguZGVsYXkoc2F3KC4wMSkucmFuZ2UoLjAwNSwuMDIpKS5tdWwoLjkpKQouYWRkKHg9PnguZGVsYXkoLjMpLm11bCguNykpCi5mb2xkKDApLm11bCguMikKLm91dCgpCg=="
+        >froos - distorted guitar</a
+      >
+      |
+      <a
+        href="#Ly8gc3RhcmR1c3QKLy8gYnkgcHVsdSA6IGh0dHBzOi8vcHVsdXNvdW5kLmZpCmxldCBtZWwgPSBuKHNpbmUoMC4xKS5yYW5nZXgoMSwgNSkpLmR1c3QoKS5hcHBseShnID0+IAogIGcuYWQoMC4wMDEsc2luZSgxMS4yMykucmFuZ2V4KDAuMDcsIDAuMikpLm11bCgKICAgIGcuc2VxKDUyLDU3LDYwLDU5LDQ1LDUyLDU5LDQ1LDU3KS5hZGQoZy5zZXEoMTIsMTIsMjQsMTIsMTIsMTIpKS5taWRpbm90ZSgpCiAgICAgIC5tdWwoZy5hZCgwLjAwMSwwLjAzKS5iaXBvbGFyKCkucmFuZ2V4KDEsbm9pc2UoKS5ob2xkKGcpLnJhbmdleCgwLjUsMikpKQogICAgICAuc2luZSgpCiAgICAgIC5tdWwobm9pc2UoKS5ob2xkKGcpLmxhZygwLjAwMSkucmFuZ2UoMC4yLDEpKQogICAgICAucGFuKG5vaXNlKCkuaG9sZChnKS5sYWcoMC4wMDMpLm11bCgwLjgpKQogICkKKQogIC5hZGQoeCA9PiB4LmRlbGF5KHNpbmUoMC4xMjEpLnJhbmdleCgwLjMzMywgMC4zNDcpKS5tdWwoc2luZSgwLjU0KS5yYW5nZXgoMC4zLCAwLjcpKSkKICAuYWRkKHggPT4geC5kZWxheShzaW5lKDAuMTMxKS5yYW5nZXgoMC41NDMsIDAuNTU3KSkubXVsKHNpbmUoMC42NCkucmFuZ2V4KDAuMywgMC43KSkpCiAgLm11bCgxLjA1KTsKbGV0IHdpbmQgPSBub2lzZSgpCiAgLm11bChkdXN0KDE4KS5hZCgwLjAwMywwLjA1KS5iaXBvbGFyKCkucmFuZ2V4KDAuNiwxKSkKICAuYWRkKG5vaXNlKCkuaG9sZChkdXN0KDUwMCkpKQogIC5tdWwobigwLjcpLmFwcGx5KHIgPT4gbm9pc2UoKS5ob2xkKGltcHVsc2UocikpLnNsZXcocikucmFuZ2V4KDAuNCwxKSkpCiAgLmRpc3RvcnQoMC41KQogIC5scGYobigwLjIpLmFwcGx5KHIgPT4gbm9pc2UoKS5ob2xkKGltcHVsc2UocikpLnNsZXcocikucmFuZ2V4KDAuNSwwLjkpKSwwLjIpCiAgLmhwZihuKDAuMzMpLmFwcGx5KHIgPT4gbm9pc2UoKS5ob2xkKGltcHVsc2UocikpLnNsZXcocikucmFuZ2V4KDAuMywwLjQpKSkKICAucGFuKHNpbmUoMC4xMikubXVsKDAuNykpCiAgLmFkZCh4ID0+IHguZGVsYXkoMC42NSkubXVsKDAuNzIpKQogIC5tdWwoMC4yKTsKbGV0IGRyb25lID0gYWRkKC4uLlswLDcsMTAsMTJdLm1hcCgoeCxpKSA9PgogIG4oeCs0NSkubWlkaW5vdGUoKS5zaW5lKCkKICAgIC5tdWwobih4LzI1KS5zaW5lKDAsIGkvMipNYXRoLlBJKS51bmlwb2xhcigpKQogICAgLnBhbihzaW5lKDEsIDAsIGkvMipNYXRoLlBJKS5tdWwoMC42KSkKKSkKICAubXVsKDAuOCk7CmFkZChtZWwsIHdpbmQsIGRyb25lKS5tdWwoLjMpLm91dCgp"
+        >pulu - stardust</a
+      >
+      |
+      <a
+        href="#Ly8gbGV0J3MgY3JlYXRlIHNvbWUgbm90ZXMKbGV0IG5vdGUgPSBpbXB1bHNlKDYwKSAvLyBjbG9jayBhdCAxNTBicG0KLmNsb2NrZGl2KDMyKSAvLyBkaXZpZGUgY2xvY2sgYnkgMzIKLnNlcSg2NCwwLDAsNjcsMCwwLDYyLDApIC8vIHVzZSBjbG9jayBmb3Igc2VxdWVuY2UKCi8vIHVzZSB0aGUgbm90ZXMgdG8gdHJpZ2dlciBhbiBlbnZlbG9wZQpsZXQgZW52ID0gbm90ZQouYWRzcigKICAuMDEsIC8vIGF0dGFjawogIHNpbmUoLjEpLnJhbmdlKC4xLCAuMyksIC8vIG1vZHVsYXRlZCBkZWNheQogIC41IC8vIHN1c3RhaW4KKQoubXVsKC43NSkgLy8gZXZlbG9wZSBhbW91bnQKCm5vdGUKLmhvbGQobm90ZSkgLy8gaG9sZCBub3RlcyBhYm92ZSB6ZXJvZXMKLm1pZGlub3RlKCkgLy8gY29udmVydCBtaWRpIG51bWJlcnMgdG8gZnJlcQoucHVsc2UoLjIpIC8vIHB1bHNlIHdhdmUgd2l0aCAuMiB3aWR0aAouZmlsdGVyKAogIHNpbmUoLjEpLnJhbmdlKC43LC44KS5tdWwoZW52KSwgLy8gbW9kdWxhdGVkIGN1dG9mZgogIGVudi5tdWwoLjUpIC8vIHJlc29uYW5jZSB3aXRoIGVudmVsb3BlCikKLm11bChlbnYpIC8vIGFtcGxpdHVkZSBlbnZlbG9wZQouYWRkKAogIC8vIGZlZWRiYWNrIGRlbGF5CiAgeD0+eC5kZWxheShzaW5lKC4wMykucmFuZ2UoLjEsLjUpKSAvLyBtb2R1bGF0ZWQgZGVsYXkgdGltZQogICAgICAubXVsKC45KSAvLyBmZWVkYmFjayBhbW91bnQKKQoubXVsKC41Ki4zKSAvLyBtYXN0ZXIgbGV2ZWwKLm91dCgpIC8vIHNlbmQgdG8gb3V0cHV0"
+        >modulated feedback delay</a
+      >
+      |
+      <a
+        href="#Ly8gc29tZSBrYXJwbHVzLXN0cm9uZyB0aGluZwoKbGV0IGltcCA9IGltcHVsc2UoNikKCmxldCBkYW1wID0gc2luZSguMikucmFuZ2UoLjQsLjcpCmxldCBidXJzdCA9IG5vaXNlKCkuaG9sZChpbXB1bHNlKDEpKS5yYW5nZSguMDA1LC4wMDkpCgpub2lzZSgpLm11bChpbXAucGVyYyhidXJzdCkpCi5hZGQoeD0+eC5kZWxheShidXJzdCkuZmlsdGVyKGRhbXApKQoubXVsKGltcC5hZHNyKC4wMiwuNSwwKSkKLmZpbHRlciguOCkubXVsKG5vaXNlKCkuaG9sZChpbXApKQouYWRkKHg9PnguZGVsYXkoLjI1KS5tdWwoc2luZSguMSkucmFuZ2UoLjUsLjgpKSkKLm91dCgp"
+      >
+        karplus-strongish
+      </a>
+    </p>
+
     <!-- <div>
       <small>💡 hit ctrl+enter to update the code & ctrl+. to stop.</small>
     </div> -->
@@ -103,6 +158,7 @@
         }
         parseInput(input) {
           if (typeof input === "function") {
+            console.log("feedback", input, this);
             input = input(this); // lambda feedback
           }
           if (Array.isArray(input)) {
@@ -111,6 +167,7 @@
           return input;
         }
         apply(fn) {
+          console.log("apply", fn);
           return fn(this);
         }
       }
@@ -185,10 +242,44 @@
         }
         return add(...input.ins);
       });
+      export let log = registerNode("log", (r, a) => `${r} = Math.log(${a})`);
+      export let exp = registerNode("exp", (r, a) => `${r} = Math.exp(${a})`);
+      export let sin = registerNode("sin", (r, a) => `${r} = Math.sin(${a})`);
+      export let cos = registerNode("cos", (r, a) => `${r} = Math.cos(${a})`);
+      const rangex = register("rangex", (sig, min, max) => {
+        let logmin = log(min);
+        let range = log(max).sub(logmin);
+        let uni = sig.unipolar();
+        let l = uni.mul(range).add(logmin);
+        return exp(l);
+      });
+      export let bipolar = register("bipolar", (unipolar) =>
+        n(unipolar).mul(2).sub(1)
+      );
+      export let unipolar = register("unipolar", (bipolar) =>
+        n(bipolar).add(1).div(2)
+      );
+      export let midinote = registerNode(
+        "midinote",
+        (r, [note]) => `${r} = (2 ** ((${note} - 69) / 12) * 440)`
+      );
+      export let pan = register("pan", (input, pos) => {
+        return input; // TODO
+      });
+      export let hpf = register("hpf", (input, cutoff, resonance = 0) =>
+        input.sub(input.lpf(cutoff, resonance))
+      );
 
-      let compileUgen = (r, a, i) => `${r} = u${i}.update(${a.join(",")})`;
+      const perc = register("perc", (gate, decay) => gate.adsr(0, 0, 1, decay));
+      const ad = register("ad", (gate = 0, attack = 0.02, decay = 0.1) =>
+        gate.adsr(attack, decay, 0, decay)
+      );
+      let compileUgen =
+        (getArgs = (...a) => a) =>
+        (r, a, i) =>
+          `${r} = u${i}.update(${getArgs(...a).join(",")})`;
       let ugens = new Map();
-      function registerUgen(name, ugen, compile = compileUgen) {
+      function registerUgen(name, ugen, compile = compileUgen()) {
         ugens.set(name, ugen);
         return registerNode(name, compile);
       }
@@ -201,8 +292,14 @@
         sub,
         poly,
         mix,
+        pan,
+        // TODO: find way to express default values for ugen args..
         pulse: registerUgen("pulse", "PulseOsc"),
-        sine: registerUgen("sine", "SineOsc"),
+        sine: registerUgen(
+          "sine",
+          "SineOsc",
+          compileUgen((freq = 220, sync = 0, phase = 0) => [freq, sync, phase])
+        ),
         tri: registerUgen("tri", "TriOsc"),
         saw: registerUgen("saw", "SawOsc"),
         dust: registerUgen("dust", "Dust"),
@@ -212,16 +309,35 @@
         adsr: registerUgen(
           "adsr",
           "ADSR",
-          (r, a, i) => `${r} = u${i}.update(t, ${a.join(",")})`
+          compileUgen(
+            (
+              clock,
+              attack = 0.02,
+              decay = 0.1,
+              sustain = 0.2,
+              release = 0.1
+            ) => ["t", clock, attack, decay, sustain, release]
+          )
         ),
         lag: registerUgen("lag", "Lag"),
         slide: registerUgen("slide", "Slide"),
-        slew: registerUgen("slew", "Slew"),
-        fold: registerUgen("fold", "Fold"),
+        slew: registerUgen(
+          "slew",
+          "Slew",
+          compileUgen((input = 0, up = 1, dn = 1) => [input, up, dn])
+        ),
+        fold: registerUgen(
+          "fold",
+          "Fold",
+          compileUgen((input = 0, boost = 0) => [input, boost])
+        ),
         seq: registerUgen(
           "seq",
           "Sequence",
-          (r, a, i) => `${r} = u${i}.update(${a[0]}, [${a.slice(1).join(",")}])`
+          // TODO: assign dynamic steps, like: u${i}.steps[i] = uN
+          // dynamic steps are steps where a is not a number
+          // passing an array won't work because it will pile up memory in the hot path..
+          (r, a, i) => `${r} = u${i}.update(${a[0]})`
         ),
         clockdiv: registerUgen("clockdiv", "ClockDiv"),
         distort: registerUgen("distort", "Distort"),
@@ -230,12 +346,10 @@
         brown: registerUgen("brown", "BrownNoise"),
         pink: registerUgen("pink", "PinkNoise"),
         range: registerUgen("range", "Range"),
+        rangex,
+        perc,
+        ad,
       };
-
-      const perc = register("perc", (gate, decay) => gate.adsr(0, 0, 1, decay));
-      const ad = register("ad", (gate = 0, attack = 0.02, decay = 0.1) =>
-        gate.adsr(attack, decay, 0, decay)
-      );
 
       Node.prototype.filter = Node.prototype.lpf;
       lib.filter = lib.lpf;
@@ -267,7 +381,7 @@
       // worklet play / stop
       let worklet;
       async function update() {
-        console.log("update", input.value);
+        //console.log("update", input.value);
         let node;
         Node.prototype.out = function () {
           node = this;
@@ -284,7 +398,17 @@
         unit.nodes.forEach((node, i) => {
           if (ugens.has(node.type)) {
             const className = ugens.get(node.type);
-            ugenLines.push(`let u${i}: ${className}  = new ${className}();`);
+            if (className === "Sequence") {
+              const args = node.ins
+                .slice(1)
+                .map((input) => (typeof input === "number" ? input : 0))
+                .join(",");
+              ugenLines.push(
+                `let u${i}: ${className}  = new ${className}([${args}]);`
+              );
+            } else {
+              ugenLines.push(`let u${i}: ${className}  = new ${className}();`);
+            }
           }
         });
         const code = `import { PulseOsc, SineOsc, TriOsc, SawOsc, Dust, Range, Impulse, Lpf, Delay, ADSR, Lag, Slide, Slew, Fold, Sequence, ClockDiv, Distort, Hold, Noise, BrownNoise, PinkNoise } from "./ugens.ts"
@@ -303,7 +427,7 @@ export function dsp(t: f64): void {
 ${unit.lines.join("\n")}
 }`;
         console.log("unit", unit);
-        console.log(code);
+        //console.log(code);
         asc.value = code;
         return updateAsc(code);
       }
@@ -472,8 +596,13 @@ export class PulseOsc {
 
 export class SineOsc {
   phase: f64 = 0;
-  update(freq: f64): f64 {
-    return sin((this.phase += 2 * PI * freq * ISR));
+  syncSgn: bool = false;
+  update(freq: f64, sync: f64, phaseOffset: f64): f64 {
+    if (!this.syncSgn && sync > 0) this.phase = 0;
+    this.syncSgn = sync > 0;
+    let cyclePos = (this.phase + phaseOffset) % 1;
+    this.phase += ISR * freq;
+    return sin(cyclePos * 2 * PI);
   }
 }
 
@@ -544,14 +673,14 @@ export class Lpf {
 export class Delay {
   writeIdx: i32 = 0;
   readIdx: i32 = 0;
-  buffer: Float64Array;
+  buffer: StaticArray<f64>;
   constructor() {
-    const MAX_DELAY_TIME: i32 = 4;
-    this.buffer = new Float64Array(MAX_DELAY_TIME * SAMPLE_RATE);
+    const MAX_DELAY_TIME: f64 = 10;
+    this.buffer = new StaticArray<f64>(<i32>Math.floor(MAX_DELAY_TIME * SAMPLE_RATE));
   }
-  write(s: f64, delayTime: f64): void {
+  update(input: f64, delayTime: f64): f64 {
     this.writeIdx = (this.writeIdx + 1) % this.buffer.length;
-    this.buffer[this.writeIdx] = s;
+    this.buffer[this.writeIdx] = input;
     // Calculate how far in the past to read
     let numSamples = Math.min(
       Math.floor(SAMPLE_RATE * delayTime),
@@ -560,9 +689,6 @@ export class Delay {
     this.readIdx = this.writeIdx - numSamples;
     // If past the start of the buffer, wrap around
     if (this.readIdx < 0) this.readIdx += this.buffer.length;
-  }
-  update(input: f64, delayTime: f64): f64 {
-    this.write(input, delayTime);
     return this.buffer[this.readIdx];
   }
 }
@@ -705,14 +831,18 @@ export class Sequence {
   clockSgn: bool = true;
   step: i32 = 0;
   first: bool = true;
-  update(clock: f64, steps: f64[]): f64 {
+  steps: StaticArray<f64>;
+  constructor(steps: StaticArray<f64>) {
+    this.steps = steps;
+  }
+  update(clock: f64): f64 {
     if (!this.clockSgn && clock > 0) {
-      this.step = (this.step + 1) % steps.length;
+      this.step = (this.step + 1) % this.steps.length;
       this.clockSgn = clock > 0;
       return 0; // set first sample to zero to retrigger gates on step change...
     }
     this.clockSgn = clock > 0;
-    return steps[this.step];
+    return this.steps[this.step];
   }
 }
 
@@ -835,6 +965,8 @@ export function cos(x: f64): f64 {
             "--outFile",
             "module.wasm",
             "-Osize", // 50.5kB WAT (2898loc)
+            "--runtime",
+            "stub", // no GC
             //"--debug", // 87.16kB WAT (4338loc)
             //"-Ospeed", // 56.79kB WAT (3022loc)
             //"-O", // 56.79kB WAT (3022loc)
