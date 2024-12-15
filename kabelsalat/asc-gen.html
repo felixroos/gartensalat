@@ -158,7 +158,6 @@
         }
         parseInput(input) {
           if (typeof input === "function") {
-            console.log("feedback", input, this);
             input = input(this); // lambda feedback
           }
           if (Array.isArray(input)) {
@@ -217,7 +216,7 @@
       const mod = registerNode("mod", (r, [a, b]) => `${r} = ${a}%${b}`);
       const sub = registerNode("sub", (r, [a, b]) => `${r} = ${a}-${b}`);
       const poly = registerNode("poly", (r, a) =>
-        a.map((arg, i) => `o[${i}] = ${arg}`).join("\n")
+        a.map((arg, i) => `o[i*CHANNELS+${i}] = ${arg}`).join("\n")
       );
       let mix = register("mix", (input, channels = 1) => {
         if (![1, 2].includes(channels)) {
@@ -414,18 +413,32 @@
         const code = `import { PulseOsc, SineOsc, TriOsc, SawOsc, Dust, Range, Impulse, Lpf, Delay, ADSR, Lag, Slide, Slew, Fold, Sequence, ClockDiv, Distort, Hold, Noise, BrownNoise, PinkNoise } from "./ugens.ts"
 // create ugen instances
 ${ugenLines.join("\n")}
-// stereo output
-let o = new Float64Array(2);
+// r registers store each nodes last output
+let r = new Float64Array(${unit.nodes.length})
+// actual dsp loop
+export function dsp(t: f64, i: i32): void {
+${unit.lines.join("\n")}
+}
+let sample: i32 = 0;
+// TODO: find way to import from asc env
+let SAMPLE_RATE: i32 = 44100;
+let ISR: f64 = 1/SAMPLE_RATE;
+let BLOCK_SIZE: i32 = 128;
+let CHANNELS: i32 = 2;
+
+// stereo buffer with interleaved samples
+let o = new Float64Array(BLOCK_SIZE * CHANNELS);
 // tell js the buffer pointer
 export function getOutputPointer(): ArrayBuffer {
   return o.buffer;
 }
-// r registers store each nodes last output
-let r = new Float64Array(${unit.nodes.length})
-// actual dsp loop
-export function dsp(t: f64): void {
-${unit.lines.join("\n")}
-}`;
+export function block(): void {
+  for(let i = 0; i < BLOCK_SIZE; i++) {
+    dsp(sample * ISR, i);
+    sample++;
+  }
+}
+`;
         console.log("unit", unit);
         //console.log(code);
         asc.value = code;
@@ -505,11 +518,12 @@ ${unit.lines.join("\n")}
       async function runWasmWorklet(ac) {
         const name = `worklet-${Date.now()}`;
         const workletCode = `
+const BLOCK_SIZE = 128;
+const CHANNELS = 2;
 class MyProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.t = 0;
-    this.o = [0, 0];
     this.active = true;
     this.frames = Math.floor(sampleRate/30);
     this.framebuffers = [
@@ -520,30 +534,32 @@ class MyProcessor extends AudioWorkletProcessor {
       e.data === "stop" && (this.active = false)
       if(e.data.wasm) {
         WebAssembly.instantiate(e.data.wasm, {
-          environment: { SAMPLERATE: globalThis.sampleRate },
           env: {
+            SAMPLE_RATE: globalThis.sampleRate,
+            CHANNELS: 2,
             seed: () => 0,
             abort: () =>
               console.log("webassembly synth abort, should not happen"),
           },
         }).then((result) => {
-          const { memory, getOutputPointer, dsp } = result.instance.exports;
-          this.dsp = dsp;
-          this.o = new Float64Array(memory.buffer, getOutputPointer(), 2);
+          const { memory, getOutputPointer, block } = result.instance.exports;
+          this.block = block;
+          this.o = new Float64Array(memory.buffer, getOutputPointer(), BLOCK_SIZE * CHANNELS);
         });
       }
     }
   }
   process(inputs, outputs, parameters) {
-    if (this.dsp && outputs[0][0]) {
+   if (this.block && outputs[0][0]) {
+      this.block();
       const output = outputs[0];
       for (let i = 0; i < output[0].length; i++) {
-        this.dsp(this.t/44100);
-        output[0][i] = this.o[0];
-        output[1][i] = this.o[1];
+        const offset = i * CHANNELS;
+        output[0][i] = this.o[offset];
+        output[1][i] = this.o[offset + 1];
         this.t++;
-        this.framebuffers[0][this.t%this.frames] = this.o[0];
-        this.framebuffers[1][this.t%this.frames] = this.o[1];
+        this.framebuffers[0][this.t%this.frames] = this.o[offset];
+        this.framebuffers[1][this.t%this.frames] = this.o[offset + 1];
         if(this.t % this.frames === 0 && this.t > 0) {
           this.port.postMessage(this.framebuffers)
         }
