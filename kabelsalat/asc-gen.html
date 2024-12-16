@@ -419,13 +419,9 @@ let r = new Float64Array(${unit.nodes.length})
 export function dsp(t: f64, i: i32): void {
 ${unit.lines.join("\n")}
 }
-let sample: i32 = 0;
-// TODO: find way to import from asc env
-let SAMPLE_RATE: i32 = 44100;
-let ISR: f64 = 1/SAMPLE_RATE;
-let BLOCK_SIZE: i32 = 128;
-let CHANNELS: i32 = 2;
+import { SAMPLE_RATE, ISR, BLOCK_SIZE, CHANNELS } from "./env.ts";
 
+let sample: i32 = 0;
 // stereo buffer with interleaved samples
 let o = new Float64Array(BLOCK_SIZE * CHANNELS);
 // tell js the buffer pointer
@@ -518,6 +514,7 @@ export function block(): void {
       async function runWasmWorklet(ac) {
         const name = `worklet-${Date.now()}`;
         const workletCode = `
+const SAMPLE_RATE = globalThis.sampleRate;
 const BLOCK_SIZE = 128;
 const CHANNELS = 2;
 class MyProcessor extends AudioWorkletProcessor {
@@ -535,8 +532,10 @@ class MyProcessor extends AudioWorkletProcessor {
       if(e.data.wasm) {
         WebAssembly.instantiate(e.data.wasm, {
           env: {
-            SAMPLE_RATE: globalThis.sampleRate,
-            CHANNELS: 2,
+            log: (s) => console.log(s),
+            SAMPLE_RATE,
+            BLOCK_SIZE,
+            CHANNELS,
             seed: () => 0,
             abort: () =>
               console.log("webassembly synth abort, should not happen"),
@@ -588,12 +587,26 @@ registerProcessor('${name}', MyProcessor);`;
           stderr: asc.createMemoryStream(),
         });
         const sources = {
+          "env.ts": `
+@external("env", "log")
+export declare function log(s: string): void
+
+@external("env", "SAMPLE_RATE")
+export declare const SAMPLE_RATE: i32
+
+@external("env", "CHANNELS")
+export declare const CHANNELS: i32
+
+@external("env", "BLOCK_SIZE")
+export declare const BLOCK_SIZE: i32
+
+export const ISR: f64 = 1 / SAMPLE_RATE;
+          `,
           "ugens.ts": `// these are most core kabelsalat ugens ported to assemblyscript
 // the kabelsalat ugens are largely based on noisecraft: https://github.com/maximecb/noisecraft
 // license:  GPL-2.0
 
-const SAMPLE_RATE = 44100;
-const ISR: f64 = 1 / SAMPLE_RATE;
+import { SAMPLE_RATE, ISR } from './env.ts';
 
 function lerp(x: f64, y0: f64, y1: f64): f64 {
   if (x >= 1) return y1;
