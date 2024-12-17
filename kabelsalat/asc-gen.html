@@ -82,7 +82,7 @@
       examples:
       <a
         href="#c2F3KFs1NSwxMTAsMjIwLDMzMF0pLmxwZiggc2luZSguMjUpLnJhbmdlKC4zLC43KSApCi5taXgoMikKLm11bChpbXB1bHNlKDQpLnBlcmMoLjEpLmxhZyguMDUpKQouYWRkKHg9PnguZGVsYXkoc2F3KC4wMSkucmFuZ2UoLjAwNSwuMDIpKS5tdWwoLjkpKQouYWRkKHg9PnguZGVsYXkoLjMpLm11bCguNykpCi5mb2xkKDApLm11bCguMikKLm91dCgpCg=="
-        >froos - distorted guitar</a
+        >distorted guitar</a
       >
       |
       <a
@@ -118,7 +118,21 @@
     <div id="stats"></div>
     <!-- <a id="runinworklet">run in worklet</a> -->
     <canvas id="canvas"></canvas>
-
+    <p>
+      rudimentary testing on my (relatively low spec android) phone reveals that
+      it runs smoothly on chrome. For some reason, firefox also runs smoothly
+      when the screen is touched, but when I let go my finger, some crackles
+      appear (in stardust). The audio buffer is now filled on the wasm side,
+      which made things a bit faster. Another thing to improve performance would
+      be to calculate audio in larger blocks. AudioWorklet is hard wired to use
+      128 samples, but you can also calculate the DSP in a Worker thread instead
+      and pass larger buffers to the AudioWorklet for playback...
+    </p>
+    <p>
+      What's more or less unexpected: The JS version of kabelsalat seems to be
+      more performant! To get a more clear picture, I have to set up a benchmark
+      for this..
+    </p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
