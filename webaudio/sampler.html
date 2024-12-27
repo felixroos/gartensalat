@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 webaudio sampler</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+      }
+      input,
+      pre {
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 webaudio sampler</h2>
+    <p>
+      Let's implement a simple webaudio sampler. We can load and play a sample
+      from any url like this:
+    </p>
+
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+
+    <div style="display: flex">
+      <input id="url1" type="url" />
+      <button id="load1">play</button>
+    </div>
+    <div style="display: flex">
+      <input id="url2" type="url" />
+      <button id="load2">play</button>
+    </div>
+    <script id="play-sample">
+      let loadSample = async (url, ac) =>
+        fetch(url)
+          .then((res) => res.arrayBuffer())
+          .then((buf) => ac.decodeAudioData(buf));
+      let audioBuffers = new Map(); // cache
+      let playSample = async (url, ac) => {
+        !audioBuffers.has(url) && audioBuffers.set(url, loadSample(url, ac));
+        const src = ac.createBufferSource();
+        src.buffer = await audioBuffers.get(url);
+        src.connect(ac.destination);
+        src.start(ac.currentTime + 0.01);
+      };
+      const ac = new AudioContext();
+      // helper function to connect input to button
+      let arm = (button, input) =>
+        (button.onmousedown = async () => {
+          await ac.resume();
+          playSample(input.value, ac);
+        });
+      // input 1
+      const input1 = document.querySelector("#url1");
+      input1.value =
+        "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/refs/heads/master/808bd/BD0000.WAV";
+      const button1 = document.querySelector("#load1");
+      arm(button1, input1);
+      // input 2
+      const input2 = document.querySelector("#url2");
+      input2.value =
+        "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/refs/heads/master/hh/000_hh3closedhh.wav";
+      const button2 = document.querySelector("#load2");
+      arm(button2, input2);
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>
+      ok that works.. next time we'll see how to load a pack of samples from a
+      json file
+    </p>
+    <br />
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+
+    <script type="module">
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
