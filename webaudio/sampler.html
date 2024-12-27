@@ -44,11 +44,6 @@
   </head>
   <body>
     <h2>🌱 webaudio sampler</h2>
-    <p>
-      Let's implement a simple webaudio sampler. We can load and play a sample
-      from any url like this:
-    </p>
-
     <script>
       // render codeblock from script tag
       let codeblock = (scriptElement, indent = 0) => {
@@ -68,14 +63,15 @@
       }
     </script>
 
-    <div style="display: flex">
-      <input id="url1" type="url" />
-      <button id="load1">play</button>
-    </div>
-    <div style="display: flex">
-      <input id="url2" type="url" />
-      <button id="load2">play</button>
-    </div>
+    <p>Let's implement a simple webaudio sampler. Here's the result:</p>
+    <div
+      id="container"
+      style="display: grid; grid-template-columns: 40px auto"
+    ></div>
+    <p>
+      press keys a-z on your keyboard to play it (or click the buttons). This is
+      the code:
+    </p>
     <script id="play-sample">
       let loadSample = async (url, ac) =>
         fetch(url)
@@ -87,33 +83,45 @@
         const src = ac.createBufferSource();
         src.buffer = await audioBuffers.get(url);
         src.connect(ac.destination);
-        src.start(ac.currentTime + 0.01);
+        src.start();
       };
       const ac = new AudioContext();
       // helper function to connect input to button
-      let arm = (button, input) =>
-        (button.onmousedown = async () => {
+      let arm = (button, input, key) => {
+        let play = async () => {
           await ac.resume();
           playSample(input.value, ac);
-        });
-      // input 1
-      const input1 = document.querySelector("#url1");
-      input1.value =
-        "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/refs/heads/master/808bd/BD0000.WAV";
-      const button1 = document.querySelector("#load1");
-      arm(button1, input1);
-      // input 2
-      const input2 = document.querySelector("#url2");
-      input2.value =
-        "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/refs/heads/master/hh/000_hh3closedhh.wav";
-      const button2 = document.querySelector("#load2");
-      arm(button2, input2);
+        };
+        button.onmousedown = play;
+        document.addEventListener("keydown", (e) => e.key === key && play());
+      };
+      const container = document.querySelector("#container");
+      let samples =
+        "808/CB.WAV#909/BT0A0A7.WAV#808bd/BD0000.WAV#808cy/CY0000.WAV#808hc/HC00.WAV#808ht/HT00.WAV#808lc/LC00.WAV#808lt/LT00.WAV#808mc/MC00.WAV#808mt/MT00.WAV#808oh/OH00.WAV#808sd/SD0000.WAV#ab/000_ab2closedhh.wav#ade/000_011112-bassline.wav#ades2/000_01.wav#ades3/01.wav#ades4/01.wav#alex/000_drumx1.wav#alphabet/a.wav#amencutup/000_AMENCUT_001.wav#armora/000_beep.wav#arp/000_arp2.wav#arpy/arpy01.wav#auto/000_break-kick.wav#baa/1.wav#baa2/1.wav#bass/000_bass1.wav#bass0/000_0.wav#bass1/18076__daven__01-sb-bass-hit-c.wav#bass2/69988__noizemassacre__hardcore-bass-1.wav#bass3/83245__zgump__bass-0201.wav#bassdm/001_BT0A0A7.WAV#bassfoo/000_0.wav#battles/000_explo1.wav#bd/BT0A0A7.wav#bend/000_2.wav#bev/00-mono.wav#bin/000_bin1.wav#birds/000_1.wav#birds3/000_1.wav#bleep/boip.wav#blip/000_blipp01.wav#blue/aya.wav#bottle/000_1.wav#breaks125/015_sdstckbr.wav#breaks152/000_AMEN.WAV#breaks157/000_PLEAD.WAV#breaks165/000_RAWCLN.WAV#breath/000_breath.wav#bubble/000_bub0.wav#can/000_1.wav#casio/high.wav#cb/rytm-cb.wav#cc/CSHD0.wav#chin/000_tik1.wav#circus/000_bounce.wav#clak/000_clak1.wav#click/000_click0.wav#clubkick/1.wav#co/CLOP1.wav#coins/coins.wav#control/1.wav#cosmicg/000_cg_att.wav#cp/HANDCLP0.wav#cr/RIDED0.wav#crow/000_crow.wav#d/000_d1.wav#db/dbs12closedhh.wav#diphone/000_kd1_002.wav#diphone2/000_kd1_399.wav#dist/000_inddistb1.wav#dork2/0.wav#dorkbot/1.wav#dr/000_002.WAV#dr2/000_DR110CHT.WAV#dr55/000_DR55 hi hat.wav#dr_few/000_001.WAV#drum/000_drum1.wav#drumtraks/000_DT Cabasa.wav#e/000_e1.wav#east/000_nipon_wood_block.wav#electro1/000_et1closedhh.wav#em2/0.wav#erk/000_123.wav#f/000_f.wav#feel/BD 04 d.wav#feelfx/blnk.wav#fest/000_foo.wav#fire/fire.wav#flick/000_square-p.wav#fm/31seconds.wav#foo/000_samthfdbrk.wav#future/000_808KICK4.wav#gab/gab01.wav#gabba/000_0.wav#gabbaloud/000_0.wav#gabbalouder/000_0.wav#glasstap/000_0.wav#glitch/000_BD.wav#glitch2/000_BD.wav#gretsch/000_brushhitom.wav#gtr/0001_cleanC.wav#h/000_0_da0.wav#hand/hand11-mono.wav#hardcore/000_hcclosedhh.wav#hardkick/VEC1 BD Distortion 06.wav#haw/hawaiian-hh.wav#hc/HHCD0.wav#hh/000_hh3closedhh.wav#hh27/000_hh27closedhh.wav#hit/bandpass-blart.wav#hmm/hmm.wav#ho/HHOD0.wav#hoover/1.wav#house/000_BD.wav#ht/HT0D0.wav#if/000_gab.wav#ifdrums/ignorebd.wav#incoming/000_Mattel  Snare.wav#industrial/000_01.wav#insect/000_everglades_conehead.wav#invaders/000_0.wav#jazz/000_BD.wav#jungbass/000_deeep_n_low.wav#jungle/jungle4closedhh.wav#juno/00_juno_raw_low.wav#jvbass/000_01.wav#kicklinn/Linn Kick 1.wav#koy/01_left.wav#kurt/000_kurt01.wav#latibro/000_Sound2.wav#led/000_foo.wav#less/bass2.wav#lighter/000_0.wav#linnhats/1.wav#lt/LT0D0.wav#made/0.wav#made2/output.wav#mash/0.wav#mash2/000_output.wav#metal/000_0.wav#miniyeah/000_Sound0.wav#monsterb/000_jumpdown.wav#moog/000_Mighty Moog C2.wav#mouth/000_1.wav#mp3/000_mp30.wav#msg/000_msg0.wav#mt/MT0D0.wav#mute/000_FH A#2 SCF.wav#newnotes/000_0.wav#noise/000_noise.wav#noise2/000_0.wav#notes/000_0.wav#numbers/0.wav#oc/OPCL1.wav#odx/000_Kick_1.wav#off/000_01.wav#outdoor/1.wav#pad/alien-monolith-pad.wav#padlong/atmospheric-abduction.wav#pebbles/90788__kmoon__pebbles-scrape-drag-foot.wav#perc/000_perc0.wav#peri/000_bd.wav#pluck/BS A1 PI.wav#popkick/000_1.wav#print/000_0.wav#proc/000_2.wav#procshort/000_1.wav#psr/000_01.wav#rave/AREUREADY.wav#rave2/rave_bass01.wav#ravemono/Babylon.wav#realclaps/1.wav#reverbkick/1.wav#rm/RIM0.wav#rs/rytm-rs.wav#sax/000_notes121a.wav#sd/rytm-00-hard.wav#seawolf/000_minehit.wav#sequential/000_Tom Clap.wav#sf/000_bass.wav#sheffield/jakeinsects.wav#short/sampleoftheday-gtt-fx-synth-009.wav#sid/000_bas2.wav#sine/000_sine.wav#sitar/000_d_maj_sitar_chorda.wav#sn/ST0T0S0.wav#space/000_0.wav#speakspell/000_1.wav#speech/000_Sound10.wav#speechless/000_a.wav#speedupdown/000_Sound20.wav#stab/000_stab1.wav#stomp/000_0.wav#subroc3d/000_01.wav#sugar/000_bark.wav#sundance/000_bong.wav#tabla/000_bass_flick1.wav#tabla2/23645_loofa_A_001.wav#tablex/0.wav#tacscan/000_01.wav#tech/tn1closedhh.wav#techno/000_0.wav#tink/000_tink1.wav#tok/000_0.wav#toys/000_ClassicalMusic.wav#trump/000_tightstabb.wav#ul/000_beep.wav#ulgab/gab1.wav#uxay/000_bar.wav#v/000_b_blipp01.wav#voodoo/000_VoodooBass.wav#wind/000_wind1.wav#wobble/000_0.wav#world/bd.wav#xmas/170535__cognito-perceptu__merry-christmas.wav#yeah/000_Sound0.wav"
+          .split("#")
+          .map(
+            (path) =>
+              `https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/${path}`
+          );
+      // create one sample per key a-z
+      for (let i = 97; i <= 122; i++) {
+        let letter = String.fromCharCode(i);
+        const input = document.createElement("input");
+        input.value =
+          samples[i] ||
+          "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/refs/heads/master/808bd/BD0000.WAV";
+        const button = document.createElement("button");
+        button.innerText = letter;
+        container.appendChild(button);
+        container.appendChild(input);
+        arm(button, input, letter);
+      }
       codeblock(document.currentScript, 6);
     </script>
 
     <p>
-      ok that works.. next time we'll see how to load a pack of samples from a
-      json file
+      that's it for today.. next time we'll see how to load a pack of samples
+      from a json file
     </p>
     <br />
     <details>
