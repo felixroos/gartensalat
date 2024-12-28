@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>🌱 pixelfont grid 2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        font-size: 12px;
+        background: #44444490;
+        padding: 8px;
+        border: 0;
+        overflow: auto;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 pixelfont grid 2</h2>
+    <p>
+      This a performance optimized version of
+      <a href="./pixelfont-grid.html">pixelfont grid</a>, based on what I've
+      learned from <a href="./pixelfont-editor.html">pixelfont editor</a>
+    </p>
+
+    <!-- PixelFont -->
+    <script>
+      // https://garten.salat.dev/pixelfonts/pixelfont-rendering.html
+      class PixelFont {
+        constructor(font) {
+          const { base64, chars, cols, rows } = font;
+          this.base64 = base64;
+          this.chars = chars;
+          this.perChar = base64.length / chars.length;
+          const maxBits = this.perChar * 6; // 1 base64 char = 6 bit
+          this.cols = cols;
+          this.rows = rows;
+          this.bitsPerChar = this.cols * this.rows;
+          const totalPixels = this.cols * this.rows * this.chars.length;
+          this.bits = new Uint8Array(totalPixels);
+          this.decode();
+        }
+        getChar(char) {
+          const i = this.chars.indexOf(char);
+          const [from, to] = [i * this.perChar, (i + 1) * this.perChar];
+          const chunk = this.base64.slice(from, to);
+          const bin = this.base64ToBinary(chunk);
+          return bin.slice(0, this.bitsPerChar);
+        }
+        base64ToBinary(base64String) {
+          const binaryString = atob(base64String);
+          let str = "";
+          for (let i = 0; i < binaryString.length; i++) {
+            str += binaryString.charCodeAt(i).toString(2).padStart(8, "0");
+          }
+          return str;
+        }
+        decode() {
+          for (let i = 0; i < this.chars.length; i++) {
+            const blockOffset = i * this.bitsPerChar;
+            const bits = this.getChar(this.chars[i]);
+            for (let j = 0; j < bits.length; j++) {
+              const blockStart = (blockOffset + j) * 4;
+              const v = bits[j] === "1" ? 255 : 0;
+              this.bits[blockOffset + j] = v;
+            }
+          }
+        }
+
+        insertChar(char, imageData, x, y, gap = 1, a = 1) {
+          const { data } = imageData;
+          const charIndex = this.chars.indexOf(char);
+          const readStart = charIndex * this.cols * this.rows;
+          const fw = this.cols + gap;
+          const fh = this.rows + gap;
+          if (x >= imageData.width) {
+            console.log("overflow..");
+            return;
+          }
+          const topLeft = y * imageData.width + x;
+          const ia = 1 - a;
+          for (let row = 0; row < this.rows; row++) {
+            const writeStart = topLeft + row * imageData.width;
+            for (let col = 0; col < this.cols; col++) {
+              const i = (writeStart + col) * 4;
+              const readBlock = readStart + (row * this.cols + col);
+              const v = this.bits[readBlock] * a;
+              data[i] = v + ia * data[i];
+              data[i + 1] = v + ia * data[i + 1];
+              data[i + 2] = v + ia * data[i + 2];
+              data[i + 3] = v ? 255 : 0;
+            }
+          }
+        }
+        insertText(text, imageData, x, y, gap = 1, a = 1) {
+          const lines = text.split("\n");
+          lines.forEach((line, l) => {
+            line.split("").forEach((char, i) => {
+              const offsetX = x + i * (this.cols + gap);
+              const offsetY = y + l * (this.rows + gap);
+              this.insertChar(char, imageData, offsetX, offsetY, gap, a);
+            });
+          });
+        }
+      }
+    </script>
+    <!-- https://garten.salat.dev/pixelfonts/pixelfont-editor.html (edited)-->
+    <script>
+      const _mod = (n, m) => ((n % m) + m) % m;
+      const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+      class Editor {
+        constructor(canvas, font, text, config = {}) {
+          this.canvas = canvas;
+          this.col = 0; // caret column
+          this.row = 0; // caret row
+          const { cols = 32, rows = 16, gap = 1, scale = 1 } = config;
+          this.scale = scale;
+          this.cols = cols; // number of columns
+          this.rows = rows; // number of rows
+          this.gap = gap; // gap between chars in px
+          this.ctx = canvas.getContext("2d");
+          this.setText(text);
+          this.font = font;
+          const [x, y, w, h] = this.getCaretRect();
+          canvas.width = w * this.cols;
+          canvas.height = h * this.rows;
+          canvas.style.width = canvas.width * this.scale + "px";
+          canvas.style.height = canvas.height * this.scale + "px";
+          canvas.style.imageRendering = "pixelated";
+          this.image = new ImageData(canvas.width, canvas.height);
+          this.paint();
+          let arrows = {
+            ArrowRight: [1, 0],
+            ArrowLeft: [-1, 0],
+            ArrowUp: [0, -1],
+            ArrowDown: [0, 1],
+          };
+          document.addEventListener("keydown", (e) => {
+            if (e.metaKey) {
+              return;
+            }
+            if (Object.keys(arrows).includes(e.key)) {
+              this.move(...arrows[e.key]);
+              e.preventDefault();
+            } else if (e.key === "Enter") {
+              this.move(0, 1);
+              this.col = 0;
+            } else if (e.key === "Backspace") {
+              this.move(-1, 0);
+              this.replaceChar(" ");
+            } else if (e.key === " " || this.font.chars.includes(e.key)) {
+              e.preventDefault();
+              this.replaceChar(e.key);
+              this.move(1, 0);
+            } else {
+              return;
+            }
+            this.paint();
+          });
+        }
+        setText(text) {
+          this.buffer = this.getPaddedText(text).split("");
+        }
+
+        getPaddedText(string) {
+          const padded = [];
+          const lines = string.split("\n");
+          for (let r = 0; r < this.rows; r++) {
+            padded[r] =
+              lines[r]?.padEnd(this.cols).slice(0, this.cols) ||
+              Array(this.cols).fill(" ").join("");
+          }
+          return padded.join("\n");
+        }
+        paint() {
+          const bufferString = this.buffer.join("");
+          this.font.insertText(bufferString, this.image, 0, 0, this.gap);
+          this.ctx.imageSmoothingEnabled = false;
+          this.drawCaret();
+          this.ctx.putImageData(this.image, 0, 0);
+        }
+        move(col, row) {
+          this.col += col;
+          this.col = Math.min(this.col, this.cols - 1);
+          this.col = Math.max(this.col, 0);
+          this.row += row;
+          this.row = Math.max(this.row, 0);
+          this.row = Math.min(this.row, this.rows - 1);
+        }
+        getCaretIndex() {
+          return this.row * (this.cols + 1) + this.col;
+        }
+        replaceChar(char) {
+          this.buffer[this.getCaretIndex()] = char;
+        }
+        drawCaret() {
+          const [x, y] = this.getCaretRect();
+          const char = this.buffer[this.row * this.cols + this.col];
+          this.font.insertChar("§", this.image, x, y, this.gap, 0.4);
+        }
+        getCaretRect() {
+          const w = this.font.cols + this.gap;
+          const h = this.font.rows + this.gap;
+          const x = this.col * w;
+          const y = this.row * h;
+          return [x, y, w, h];
+        }
+      }
+    </script>
+    <script>
+      const font = new PixelFont({
+        base64:
+          "////////////////////ECBAgQIECAAAQIAAAA==AAChQoAAAAAAAAAAAA==RIkX9EiRIkSL+iRIgA==AABBxUoOChSo4IAAAA==AkVRIIEECCBBIqiQAA==AADCRIopSokR0AAAAA==AAAgggAAAAAAAAAAAA==AgQQIIECBAgQECAgQA==gQECAgQIECBBAggQAA==AAAAhUc/nFQgAAAAAA==ECBAgQI/iBAgQIECAA==AAAAAAAAAAAQQQAAAA==AAAAAAA/gAAAAAAAAA==AAAAAAAAAAAAQIAAAA==AgQQIIEECCBBAggQAA==AAABxEiVKkSI4AAAAA==AAAAQYUCBAgQIAAAAA==AAABxECCCCCB8AAAAA==AAABxECGAgSI4AAAAA==AAAAwoUSJHwQIAAAAA==AAAD5AgeAgSI4AAAAA==AAABxEgeIkSI4AAAAA==AAAD4ECCCCCBAAAAAA==AAABxEiOIkSI4AAAAA==AAABxEiRHgSI4AAAAA==AAAAgQAAAAAAQIAAAA==AAAAgQAAAAAQQQAAAA==AAAAMYwgQGAwGAAAAA==AAAH8AAAAAAD+AAAAA==AAAGAwGAgQxjAAAAAA==AHESIEEECAAAQIAAAA==AAABxFOpUpiA4AAAAA==AAABxEiRPkSJEAAAAA==AAADxEieIkSJ4AAAAA==AAABxEgQIECI4AAAAA==AAADxEiRIkSJ4AAAAA==AAAD5AgeIECB8AAAAA==AAAD5AgeIECBAAAAAA==AAABxEgQLkSI4AAAAA==AAACJEifIkSJEAAAAA==AAAD4QIECBAh8AAAAA==AAAAIECBAkSI4AAAAA==AAACJIoYMFCREAAAAA==AAACBAgQIECB8AAAAA==AAACJsqRIkSJEAAAAA==AAACJkyVKkyZEAAAAA==AAABxEiRIkSI4AAAAA==AAADxEiRPECBAAAAAA==AAABxEiRIlSQ0AAAAA==AAADxEiRPFCREAAAAA==AAABxEgOAgSI4AAAAA==AAAD4QIECBAgQAAAAA==AAACJEiRIkSI4AAAAA==AAACJEiKFCggQAAAAA==AAACJEiRIlTZEAAAAA==AAACJEUECCiJEAAAAA==AAACJEUKCBAgQAAAAA==AAAD4EEECCCB8AAAAA==AAAA8QIECBAgeAAAAA==gQECAgQECAgQECAgQA==AAAHgQIECBAjwAAAAA==EFCiJFBggAAAAAAAAA==AAAAAAAAAAAAAAAfwA==AACAgIAAAAAAAAAAAA==AAAAAAcRHkSI4AAAAA==AAACBA8RIkSI4AAAAA==AAAAAAcRIECI4AAAAA==AAAAIEeRIkSI4AAAAA==AAAAAAcRPkCI4AAAAA==AAABxEgeIECBAAAAAA==AAAAAAcRIkR4EiOAAA==AAACBA8RIkSJEAAAAA==AAAAgQAACBAgQAAAAA==AAAAIEAAAgQIEiOAAA==AAACBAiWMGCxEAAAAA==AAAAgQIECBAgQAAAAA==AAAAAAUVKlSJEAAAAA==AAAAAAcRIkSJEAAAAA==AAAAAAcRIkSI4AAAAA==AAAAAAcRIkSJ4gQAAA==AAAAAAcRIkSI8CBAAA==AAAAAAcRIECBAAAAAA==AAAAAAcRHASI4AAAAA==AAACBAgeIECI4AAAAA==AAAAAAiRIkSI4AAAAA==AAAAAAiRFCggQAAAAA==AAAAAAiRKlSooAAAAA==AAAAAAiKCBBREAAAAA==AAAAAAiRIkR4EiOAAA==AAAAAA+CCBBB8AAAAA==AAwgQIYQIDAQIEBgAA==ECBAgQIECBAgQIECAA==AYCBAgMBAhhAgQwAAA==YSBIYAAAAAAAAAAAAA==",
+        chars:
+          "§!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+        cols: 7,
+        rows: 14,
+      });
+      let renderArt = (id) => {
+        const el = document.getElementById(id);
+        const initialCode = el.innerText;
+        const canvas = document.createElement("canvas");
+        canvas.style.background = "#002222";
+        el.parentElement.appendChild(canvas);
+        const editor = new Editor(canvas, font, initialCode, {
+          scale: 1,
+          cols: 86,
+          gap: 0,
+        });
+      };
+    </script>
+
+    <pre id="houses" style="display: none">
+                   _._._._._._._._
+                  l---------------l
+         _        `! l=l l=l l=l !'                                   _
+       _J^L_       |  _   _   _  |                                  _J^L_
+     _J' _ `L_     | lLl lLl lLl |    _n_n_n_n_n_      _n_n_n_n_n._J' _ `L_
+   _J'  !=!  `L_   |  _   _   _  |   /-_-_-_-_-_-\    /-_-_-_-_-=J'  !=!  `L_
+ _J'._. ._. ._.`L_ | lLl lLl lLl |  /=-_-_-_-_-_-=\  /=-_-_-_-_J'._. ._. ._.`L_
+ `i |_| |_| |_| i' |  _   _   _  |  T~~~~~~~~~~~~~T  T~~~~~~~~`i |_| |_| |_| i'
+  | !-! !-! !-! |  | lLl lLl lLl |  | l=l l=l l=l |  | l=l l=l l !-! !-! !-! |
+  | ._.  _  ._. |  |  _   _   _  |  | .o.  _  .o. |  | .o. .o. l ._.  _  ._. |
+  | |_| !-! |_| |  | lLl l-l lLl |  | |_| i-i |_| |  | |_| |_i l |_| !-! |_| |
+::l_`-'_|_|_`-'_l::l_n_n_|_|_n_n_l::l_`~'_|_|_`~'_l::l_"""_"""_l_`-'_|_|_`-adl::
+.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.--.-.-.-.-.--.-.-.-.-.-.-.-..
+adelfaure.net
+    </pre>
+    <script>
+      renderArt("houses");
+    </script>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <script type="module">
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <br />
+  </body>
+</html>
