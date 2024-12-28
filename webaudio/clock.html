@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 webaudio clock</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre,
+      textarea {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 webaudio clock</h2>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <p>Here's a clock:</p>
+    <script>
+      class Clock {
+        constructor(ac, onTick) {
+          this.ac = ac;
+          this.runs = false;
+          this.onTick = onTick;
+          return this;
+        }
+        timeout(onComplete, startTime, stopTime) {
+          const constantNode = this.ac.createConstantSource();
+          constantNode.start(startTime);
+          constantNode.stop(stopTime);
+          constantNode.onended = () => onComplete();
+        }
+        stop() {
+          this.runs = false;
+        }
+        start(begin = ac.currentTime + 0.01, duration = 0.1) {
+          if (this.runs) {
+            return;
+          }
+          this.runs = true;
+          this.tick(begin, duration);
+        }
+        tick(begin, duration) {
+          this.runs = true;
+          this.onTick(begin);
+          const end = begin + duration;
+          this.timeout(
+            () => {
+              this.runs && this.tick(end, duration);
+            },
+            begin,
+            end
+          );
+        }
+      }
+      codeblock(document.currentScript, 6);
+    </script>
+    <script>
+      // https://garten.salat.dev/webaudio/sampler.html
+      let loadSample = async (url, ac) =>
+        fetch(url)
+          .then((res) => res.arrayBuffer())
+          .then((buf) => ac.decodeAudioData(buf));
+      let audioBuffers = new Map(); // cache
+      let playSample = async (url, ac, t) => {
+        !audioBuffers.has(url) && audioBuffers.set(url, loadSample(url, ac));
+        const src = ac.createBufferSource();
+        src.buffer = await audioBuffers.get(url);
+        src.connect(ac.destination);
+        src.start(t);
+      };
+    </script>
+    <p>
+      We're abusing ConstantSourceNode to give us a timeout that is synced to
+      the audio clock. This gives as a regular callback we can use to schedule
+      sounds for the next time window. For now, let's play a kick for each clock
+      tick, which i've set to an interval of 100ms:
+    </p>
+    <button id="start">start</button>
+    <button id="stop">stop</button>
+    <script>
+      const ac = new AudioContext();
+      const sampleUrl =
+        "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/refs/heads/master/808bd/BD0000.WAV";
+
+      const clock = new Clock(ac, async (t) =>
+        playSample(sampleUrl, ac, t + 0.01)
+      );
+      document.getElementById("start").onclick = async () => {
+        ac.resume();
+        await loadSample(sampleUrl, ac);
+        clock.start();
+      };
+      document.getElementById("stop").onclick = () => clock.stop();
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>
+      this can be used to implement any type of sequencer with webaudio! i've
+      written a lot of clocks in the past, but this one seems to have a good
+      simplicity vs performance ratio.. It should be enough to do my little
+      garden musings at least.
+    </p>
+    <!---->
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script type="module">
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
