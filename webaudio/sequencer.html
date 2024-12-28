@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 webaudio sequencer</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+      }
+      input,
+      pre {
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 webaudio sequencer</h2>
+    <details>
+      <summary>edit samples</summary>
+      <div
+        id="container"
+        style="display: grid; grid-template-columns: 40px auto"
+      ></div>
+    </details>
+    <p>
+      here's a little experiment that combines
+      <a href="https://garten.salat.dev/webaudio/sampler.html">sampler</a>,
+      <a href="https://garten.salat.dev/webaudio/clock.html">clock</a> and
+      <a href="https://garten.salat.dev/pixelfonts/pixelfont-grid2.html"
+        >pixelfont grid</a
+      >. When running, the clock will automatically move the cursor, so you can
+      "record" what you type in time. The grid of the editor will quantize the
+      inputs by itself.
+    </p>
+    <!-- https://garten.salat.dev/webaudio/sampler.html -->
+    <script>
+      let loadSample = async (url, ac) =>
+        fetch(url)
+          .then((res) => res.arrayBuffer())
+          .then((buf) => ac.decodeAudioData(buf));
+      let audioBuffers = new Map(); // cache
+      let playSample = async (url, ac, t) => {
+        !audioBuffers.has(url) && audioBuffers.set(url, loadSample(url, ac));
+        const src = ac.createBufferSource();
+        src.buffer = await audioBuffers.get(url);
+        src.connect(ac.destination);
+        src.start(t);
+      };
+      const ac = new AudioContext();
+      // helper function to connect input to button
+      let arm = (button, input, key) => {
+        let play = async () => {
+          await ac.resume();
+          playSample(input.value, ac);
+        };
+        button.onmousedown = play;
+        document.addEventListener("keydown", (e) => e.key === key && play());
+      };
+    </script>
+    <!-- https://garten.salat.dev/webaudio/clock.html -->
+    <script>
+      class Clock {
+        constructor(ac, onTick) {
+          this.ac = ac;
+          this.runs = false;
+          this.onTick = onTick;
+          return this;
+        }
+        timeout(onComplete, startTime, stopTime) {
+          const constantNode = this.ac.createConstantSource();
+          constantNode.start(startTime);
+          constantNode.stop(stopTime);
+          constantNode.onended = () => onComplete();
+        }
+        stop() {
+          this.runs = false;
+        }
+        start(begin = ac.currentTime + 0.01, duration = 0.1) {
+          if (this.runs) {
+            return;
+          }
+          this.runs = true;
+          this.tick(begin, duration);
+        }
+        tick(begin, duration) {
+          this.runs = true;
+          this.onTick(begin);
+          const end = begin + duration;
+          this.timeout(
+            () => {
+              this.runs && this.tick(end, duration);
+            },
+            begin,
+            end
+          );
+        }
+      }
+    </script>
+    <!-- PixelFont -->
+    <script>
+      // https://garten.salat.dev/pixelfonts/pixelfont-rendering.html
+      class PixelFont {
+        constructor(font) {
+          const { base64, chars, cols, rows } = font;
+          this.base64 = base64;
+          this.chars = chars;
+          this.perChar = base64.length / chars.length;
+          const maxBits = this.perChar * 6; // 1 base64 char = 6 bit
+          this.cols = cols;
+          this.rows = rows;
+          this.bitsPerChar = this.cols * this.rows;
+          const totalPixels = this.cols * this.rows * this.chars.length;
+          this.bits = new Uint8Array(totalPixels);
+          this.decode();
+        }
+        getChar(char) {
+          const i = this.chars.indexOf(char);
+          const [from, to] = [i * this.perChar, (i + 1) * this.perChar];
+          const chunk = this.base64.slice(from, to);
+          const bin = this.base64ToBinary(chunk);
+          return bin.slice(0, this.bitsPerChar);
+        }
+        base64ToBinary(base64String) {
+          const binaryString = atob(base64String);
+          let str = "";
+          for (let i = 0; i < binaryString.length; i++) {
+            str += binaryString.charCodeAt(i).toString(2).padStart(8, "0");
+          }
+          return str;
+        }
+        decode() {
+          for (let i = 0; i < this.chars.length; i++) {
+            const blockOffset = i * this.bitsPerChar;
+            const bits = this.getChar(this.chars[i]);
+            for (let j = 0; j < bits.length; j++) {
+              const blockStart = (blockOffset + j) * 4;
+              const v = bits[j] === "1" ? 255 : 0;
+              this.bits[blockOffset + j] = v;
+            }
+          }
+        }
+
+        insertChar(char, imageData, x, y, gap = 1, a = 1) {
+          const { data } = imageData;
+          const charIndex = this.chars.indexOf(char);
+          const readStart = charIndex * this.cols * this.rows;
+          const fw = this.cols + gap;
+          const fh = this.rows + gap;
+          if (x >= imageData.width) {
+            console.log("overflow..");
+            return;
+          }
+          const topLeft = y * imageData.width + x;
+          const ia = 1 - a;
+          for (let row = 0; row < this.rows; row++) {
+            const writeStart = topLeft + row * imageData.width;
+            for (let col = 0; col < this.cols; col++) {
+              const i = (writeStart + col) * 4;
+              const readBlock = readStart + (row * this.cols + col);
+              const v = this.bits[readBlock] * a;
+              data[i] = v + ia * data[i];
+              data[i + 1] = v + ia * data[i + 1];
+              data[i + 2] = v + ia * data[i + 2];
+              data[i + 3] = v ? 255 : 0;
+            }
+          }
+        }
+        insertText(text, imageData, x, y, gap = 1, a = 1) {
+          const lines = text.split("\n");
+          lines.forEach((line, l) => {
+            line.split("").forEach((char, i) => {
+              const offsetX = x + i * (this.cols + gap);
+              const offsetY = y + l * (this.rows + gap);
+              this.insertChar(char, imageData, offsetX, offsetY, gap, a);
+            });
+          });
+        }
+      }
+    </script>
+    <!-- https://garten.salat.dev/pixelfonts/pixelfont-editor.html (edited)-->
+    <script>
+      const _mod = (n, m) => ((n % m) + m) % m;
+      const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+      class Editor {
+        constructor(canvas, font, text, config = {}) {
+          this.canvas = canvas;
+          this.col = 0; // caret column
+          this.row = 0; // caret row
+          const { cols = 32, rows = 16, gap = 1, scale = 1 } = config;
+          this.scale = scale;
+          this.cols = cols; // number of columns
+          this.rows = rows; // number of rows
+          this.gap = gap; // gap between chars in px
+          this.ctx = canvas.getContext("2d");
+          this.setText(text);
+          this.font = font;
+          const [x, y, w, h] = this.getCaretRect();
+          canvas.width = w * this.cols;
+          canvas.height = h * this.rows;
+          canvas.style.width = canvas.width * this.scale + "px";
+          canvas.style.height = canvas.height * this.scale + "px";
+          canvas.style.imageRendering = "pixelated";
+          this.image = new ImageData(canvas.width, canvas.height);
+          this.paint();
+          let arrows = {
+            ArrowRight: [1, 0],
+            ArrowLeft: [-1, 0],
+            ArrowUp: [0, -1],
+            ArrowDown: [0, 1],
+          };
+          document.addEventListener("keydown", (e) => {
+            if (e.metaKey || e.ctrlKey || e.altKey) {
+              return;
+            }
+            if (Object.keys(arrows).includes(e.key)) {
+              this.move(...arrows[e.key]);
+              e.preventDefault();
+            } else if (e.key === "Enter") {
+              //this.move(0, 1);
+              this.col = 0;
+            } else if (e.key === "Backspace") {
+              //this.move(-1, 0);
+              this.replaceChar(" ");
+            } else if (e.key === " " || this.font.chars.includes(e.key)) {
+              e.preventDefault();
+              this.replaceChar(e.key);
+              // this.move(1, 0);
+            } else {
+              return;
+            }
+            this.paint();
+          });
+        }
+        setText(text) {
+          this.buffer = this.getPaddedText(text).split("");
+        }
+
+        getPaddedText(string) {
+          const padded = [];
+          const lines = string.split("\n");
+          for (let r = 0; r < this.rows; r++) {
+            padded[r] =
+              lines[r]?.padEnd(this.cols).slice(0, this.cols) ||
+              Array(this.cols).fill(" ").join("");
+          }
+          return padded.join("\n");
+        }
+        paint() {
+          const bufferString = this.buffer.join("");
+          this.font.insertText(bufferString, this.image, 0, 0, this.gap);
+          this.ctx.imageSmoothingEnabled = false;
+          this.drawCaret();
+          this.ctx.putImageData(this.image, 0, 0);
+        }
+        move(col, row) {
+          this.col += col;
+          this.col = Math.min(this.col, this.cols - 1);
+          this.col = Math.max(this.col, 0);
+          this.row += row;
+          this.row = Math.max(this.row, 0);
+          this.row = Math.min(this.row, this.rows - 1);
+        }
+        getCaretIndex() {
+          return this.row * (this.cols + 1) + this.col;
+        }
+        replaceChar(char) {
+          this.buffer[this.getCaretIndex()] = char;
+        }
+        drawCaret() {
+          const [x, y] = this.getCaretRect();
+          const char = this.buffer[this.row * this.cols + this.col];
+          this.font.insertChar("§", this.image, x, y, this.gap, 0.4);
+        }
+        getCaretRect() {
+          const w = this.font.cols + this.gap;
+          const h = this.font.rows + this.gap;
+          const x = this.col * w;
+          const y = this.row * h;
+          return [x, y, w, h];
+        }
+      }
+    </script>
+
+    <canvas
+      id="canvas"
+      style="background: black"
+      width="480"
+      height="480"
+    ></canvas
+    ><br />
+    <button id="start">start</button>
+    <button id="stop">stop</button>
+    <script>
+      // editor
+      const canvas = document.querySelector("#canvas");
+      const font = new PixelFont({
+        base64:
+          "////////AAAAAAAAIQhCAIAAUoAAAAAAV9SlfUAAdWji1cQAzkRETmAARSiKyaAAIQAAAAAAOiEIQQcA4IIQhFwAURQAAAAAAQnyEAAAAAAAAIQAAAHwAAAAAAAAAIAACEREQgAAdGNYxcAA4QhCE+AAdEIiI+AAdEJgxcAAEZUviEAA/CHgxcAAdGHoxcAA+EIiIgAAdGLoxcAAdGLwxcAAAAgAAIAAAAgAAIQAGREEEGAAAD4PgAAAwQQREwAAdEIiAIAA/Gt4Q+AAdGP4xiAA9GPox8AAdGEIRcAA5KMYy4AA/CHoQ+AA/CHoQgAAdCF4xcAAjGP4xiAA+QhCE+AAGEIYxcAAjKmKSiAAhCEIQ+AAjvdaxiAAzmtazmAAdGMYxcAA9GPoQgAAdGMayaAA9GPqSiAAdGDgxcAA+QhCEIAAjGMYxcAAjGKlEIAArWtaqUAAjFRFRiAAjGLiEIAA+EREQ+AA/CEIQh8AhBBBBCAA+EIQhD8AIqIAAAAAAAAAAB8AAAAAAAAAABs4zaAAhC2Y5sAAAB8IQeAACFs4zaAAAB0fweAAMT5CEIAAAB0YxeFwhC2YxiAAAD5CE+AAAAIYxcAAhCMuSiAAACEIQ+AAACO61iAAAC2YxiAAAB0YxcAAAB0Yx9CAAB0YxeEIACdMQgAAAB8HB8AAIT5CEMAAACMYxcAAACMYqIAAACMa1UAAACKiKiAAACMVKITAAD4XQ+AAOhGMIQcAIQhCEIQA4IQxiFwAABFRAAAA",
+        chars:
+          "§ !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~",
+        cols: 5,
+        rows: 9,
+      });
+
+      const initialCode = `b k b k b khb b 
+b w a k k aw b b`;
+      const editor = new Editor(canvas, font, initialCode, {
+        scale: 2,
+        cols: 16,
+        rows: 8,
+      });
+
+      // sampler
+
+      const container = document.querySelector("#container");
+      let samples =
+        "808/CB.WAV#909/BT0A0A7.WAV#808bd/BD0000.WAV#808cy/CY0000.WAV#808hc/HC00.WAV#808ht/HT00.WAV#808lc/LC00.WAV#808lt/LT00.WAV#808mc/MC00.WAV#808mt/MT00.WAV#808oh/OH00.WAV#808sd/SD0000.WAV#ab/000_ab2closedhh.wav#ade/000_011112-bassline.wav#ades2/000_01.wav#ades3/01.wav#ades4/01.wav#alex/000_drumx1.wav#alphabet/a.wav#amencutup/000_AMENCUT_001.wav#armora/000_beep.wav#arp/000_arp2.wav#arpy/arpy01.wav#auto/000_break-kick.wav#baa/1.wav#baa2/1.wav"
+          .split("#")
+          .map(
+            (path) =>
+              `https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/${path}`
+          );
+      let inputs = new Map();
+      // create one sample per key a-z
+      for (let i = 97; i <= 122; i++) {
+        let letter = String.fromCharCode(i);
+        const input = document.createElement("input");
+        input.value = samples[i - 97];
+        inputs.set(letter, input);
+        const button = document.createElement("button");
+        button.innerText = letter;
+        container.appendChild(button);
+        container.appendChild(input);
+        arm(button, input, letter);
+      }
+      let latency = 0.05;
+
+      let playChar = (char, t) => {
+        if (inputs.has(char)) {
+          const sampleUrl = inputs.get(char).value;
+          playSample(sampleUrl, ac, t + latency);
+        }
+      };
+      let playActiveChar = (t) => {
+        const char = editor.buffer[editor.getCaretIndex()];
+        playChar(char, t);
+      };
+      // clock
+      const clock = new Clock(ac, async (t) => {
+        editor.col += 1;
+        editor.col = editor.col % 16;
+        if (editor.col % 4 === 0) {
+          playChar("i", t);
+        }
+        editor.paint();
+        playActiveChar(t);
+      });
+      let start = async () => {
+        await ac.resume();
+        editor.col = -1;
+        editor.paint();
+        clock.start();
+      };
+      let stop = () => clock.stop();
+      document.getElementById("start").onclick = start;
+      document.getElementById("stop").onclick = stop;
+      document.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          start();
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        if ((e.ctrlKey || e.altKey) && e.key === ".") {
+          stop();
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      });
+    </script>
+    <p>
+      It could be fun to run multiple sequences in parallel, maybe also with
+      different lengths.
+    </p>
+    <br />
+    <br />
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+
+    <script type="module">
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
