@@ -82,6 +82,8 @@
           );
         }
       }
+    </script>
+    <script>
       function livecode(input, initialCode, onUpdate, onStop) {
         const updateHash = (code) => {
           window.location.hash = "#" + btoa(code);
@@ -114,7 +116,8 @@
         input.value = code;
         onUpdate(code, true);
       }
-
+    </script>
+    <script>
       class Sequencer {
         constructor(ac) {
           this.tick = 0;
@@ -168,6 +171,8 @@
           src.start(t);
         }
       }
+    </script>
+    <script>
       const sequencer = new Sequencer();
 
       const audioReady = new Promise((resolve) => {
@@ -212,15 +217,17 @@ b  b b
     </script>
     <!---->
     <details>
-      <summary>show page source</summary>
-      <pre id="pagesource"></pre>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
     </details>
     <br />
     <a href="/">back to garten.salat</a>
-    <script>
-      // render code
-      document.querySelector("#pagesource").textContent =
-        document.querySelector("html").outerHTML;
+    <script type="module">
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
     </script>
   </body>
 </html>
