@@ -1,0 +1,208 @@
+<html>
+  <head>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        font-size: 12px;
+        background: #44444490;
+        padding: 8px;
+        border: 0;
+        overflow: auto;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>you're doing computing wrong</h1>
+    <p>
+      all your life you've been tricked. they told you how to do computing.
+      you've been fooled. read this blog post and i show you the way out. i am
+      the first person to get it right. nobody before has ever tried this..
+    </p>
+    <p>
+      i'm sorry, this was just an exaggerated version of the typical blog post /
+      article / life philosophy / opinion piece. i don't want this blog post to
+      be that way.. what i want to write about, is my personal struggle with
+      blogging / devlogging, and how i found a solution that seems to work
+      better for me, compared to what i've tried before. this post is mostly for
+      myself, to put my experience with blogging into words.
+    </p>
+    <h2>my struggle</h2>
+    <p>
+      you're reading this text on the 4th version of my blog / devlog / garden
+      whatever you want to call it. i've set up my
+      <a
+        href="https://loophole-letters.vercel.app/"
+        target="_blank"
+        style="color: yellow"
+        >first blog</a
+      >
+      with a tool called gatsby, which was the hot new thing back a few years
+      ago. it had a blog template so i gave it a go. it did its job, but it was
+      very annoying to customize.. the details don't matter.
+    </p>
+    <p>
+      i then migrated my posts to Next.js because it was the hot new thing a
+      while later. it was easier to customize, but annoying to deploy. they had
+      some image optimization thing that only worked in server mode, so I went
+      to vercel for deployment. i wrote a lot of interactive posts in mdx, with
+      react components sprinkled in. it was great, but it became harder and
+      harder to write, because i tried to reuse components as much as possible.
+      when writing new stuff, i often changed the components, so i would need to
+      update the old posts using those components.. i was also using npm
+      packages like there was no tomorrow, which meant a lot of maintenance.
+    </p>
+    <p>
+      after a while, i felt more and more annoyed to write on it, so i thought:
+      let's try the hot new thing, which was astro. instead of migrating my
+      posts, i started
+      <a
+        href="https://loophole-letters.netlify.app/"
+        target="_blank"
+        style="color: yellow"
+        >my second blog</a
+      >
+      from a blank slate, because i was too lazy to do so. my mistake was that i
+      only changed the framework, but i didn't change my way of writing. again,
+      i've built a complex network of components + used a bunch of npm packages.
+    </p>
+    <h2>my way out</h2>
+    <p>
+      again, i felt emotionally blocked to write. this is not how i want my blog
+      to be. i want to open my folder, start writing, commit, push and it should
+      be live. i want it to be effortless. i want to maximize the chance of me
+      writing more. i don't want it to break after a few years. i don't want to
+      spend any time with anything else than writing. i don't want to keep
+      packages up to date.
+    </p>
+    <p>
+      a lot of people in the alternative computing bubble are babbling about
+      complexity, and how it all got out of hand in the web dev space. i always
+      paid some attention to these opinions, but still i've kept my stack so
+      complex. part of the reason was that i am a web dev by trade, and it's
+      business as usual to use these complex stacks. i'm used to these tools,
+      and to thick node_modules folders. it's how the industry works. i also
+      partly questioned the competence of the people with these opinions, i
+      thought it's a good way for beginners to do things.. me, a *professional*
+      developer wouldn't bother with writing vanilla JS or plain CSS...
+    </p>
+    <p>
+      slowly, i realized that the tools that work for the software industry are
+      not necessarily the tools that work for the individual. i've written a lot
+      of small live coding tools lately. i've noticed it's much simpler to
+      prototype things in a single HTML file, as i don't need a build tool,
+      switch files, install packages etc.. a single html file even works without
+      a server (most of the time). you can send it around and it *just* works.
+      it's also a good thing that you don't have to be a *professional*
+      developer to be able to read/understand/change a thing.
+    </p>
+    <h2>my garden rules</h2>
+    <p>
+      probably the most influential *idea* that made it click for me was the
+      <a href="https://www.tadiweb.com/" target="_blank" style="color: yellow"
+        >tadi web</a
+      >
+      and its *slippy mindset*: "Being slippy means you’re not stuck.". thanks
+      <a href="https://www.todepond.com/" target="_blank" style="color: yellow"
+        >lu wilson</a
+      >!<br />ok fuck it, instead of creating one repo per single html file
+      prototype, why not create a single repo and dump all html files in there?
+    </p>
+    <p>
+      after 39 posts in this new format, i'm sure it has a positive effect on
+      me. over these posts, i've developed a set of not too serious, fluid
+      rules, that i've never written down:
+    </p>
+    <ol>
+      <li>
+        <strong>use one file</strong>: each post is one html file, including
+        html, css and js. no external files!
+      </li>
+      <li>
+        <strong>no build tool</strong>: the html file is written by hand,
+        without using a build tool.
+      </li>
+      <li>
+        <strong>no dependencies</strong>: no external packages are used. i write
+        my own tools. no npm
+      </li>
+      <li>
+        <strong>show source</strong>: each file shows its own source at the
+        bottom.
+      </li>
+      <li>
+        <strong>simple > short</strong>: being simple is better than being
+        short. i'm not code golfing, i'm code gardening. short is still a nice
+        bonus.
+      </li>
+      <li>
+        <strong>keep it wet</strong>: wet = write every time, instead of dry =
+        dont repeat yourself. a dry garden can't grow. garden work means
+        repetition. be copy paste friendly. i try to organize my code in a way
+        that i can quickly reuse code from earlier posts by copy pasting.
+      </li>
+      <li>
+        <strong>no distractions</strong>: a garden is a place to relax. don't
+        link bomb people, focus on the thing. still don't forget to give credit.
+      </li>
+      <li>
+        <strong>keep it short</strong>: i used to write very long posts that
+        took a long time. it's difficult to stay focussed for a long time.
+        rather keep it short and increase the chance of getting it out.
+      </li>
+      <li>
+        <strong>keep it broken</strong>: still publish it if it's broken or
+        *scrappy*, or not perfect. a broken idea is better than something that
+        never gets out.
+      </li>
+      <li>
+        <strong>break your own rules</strong>: be pragmatic. for example i use a
+        font file for syntax highlighting, and sometimes i want to use an
+        external tool like graphviz, which i then package as a single js file. i
+        don't want to invent the universe before i write about something that
+        interests me.
+      </li>
+    </ol>
+    <h2>this is not a paradigm</h2>
+    <p>
+      again, this is only what i've found to be a good habit for me. don't take
+      this too seriously. have fun, be kind and don't forget to turn off your
+      computer from time to time.
+    </p>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to the garden</a>
+    <script>
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
