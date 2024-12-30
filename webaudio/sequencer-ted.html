@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 webaudio sequencer example for ted</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+      }
+      input,
+      pre {
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 webaudio sequencer example for ted</h2>
+    <!-- https://garten.salat.dev/webaudio/clock.html -->
+    <script>
+      class Clock {
+        constructor(ac, onTick, duration = 0.1) {
+          this.ac = ac;
+          this.runs = false;
+          this.onTick = onTick;
+          this.duration = duration;
+          return this;
+        }
+        timeout(onComplete, startTime, stopTime) {
+          const constantNode = this.ac.createConstantSource();
+          constantNode.start(startTime);
+          constantNode.stop(stopTime);
+          constantNode.onended = () => onComplete();
+        }
+        stop() {
+          this.runs = false;
+        }
+        start(begin = ac.currentTime + 0.01) {
+          if (this.runs) {
+            return;
+          }
+          this.startTime = begin;
+          this.runs = true;
+          this.tick(begin);
+        }
+        tick(begin) {
+          this.runs = true;
+          const end = begin + this.duration;
+          this.onTick(begin, end, begin - this.startTime);
+          this.timeout(
+            () => {
+              this.runs && this.tick(end);
+            },
+            begin,
+            end
+          );
+        }
+      }
+    </script>
+
+    <button id="start">start</button>
+    <button id="stop">stop</button>
+    <script>
+      const ac = new AudioContext();
+      let steps = [100, 200, 400, 300];
+      let latency = 0.01;
+      let i = 0;
+      // clock
+      const clock = new Clock(
+        ac,
+        async (begin, end, passed) => {
+          const osc = ac.createOscillator();
+          osc.frequency.value = steps[i];
+          i = (i + 1) % steps.length;
+          osc.start(begin + latency);
+          osc.stop(begin + latency + 0.25);
+          osc.connect(ac.destination);
+        },
+        0.5
+      );
+      let start = async () => {
+        await ac.resume();
+        clock.start();
+      };
+      let stop = () => clock.stop();
+      document.getElementById("start").onclick = start;
+      document.getElementById("stop").onclick = stop;
+    </script>
+    <br />
+    <br />
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+
+    <script type="module">
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
