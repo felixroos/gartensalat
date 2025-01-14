@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🌱 chord scraping</title>
+    <title>🌱 scraping chords</title>
     <style>
       body {
         background-color: #222;
@@ -187,6 +187,7 @@
             }
           }
         });
+        // TBD: replace + chords with aug (mini doesn't allow +)
         let mini = "<\n";
         for (let i in bars) {
           const bar = bars[i];
@@ -318,6 +319,7 @@
           comments = [];
         var i;
         text = text.trim();
+        // console.log("text", text);
         // text = text.trimRight();
         while (text) {
           var found = false;
@@ -328,8 +330,9 @@
               found = true;
               if (match.length <= 2) {
                 const replacement = match[0];
-                var repl = replacements[replacement];
-                arr = arr.concat(repl ? repl : [replacement]);
+                var repl = replacements[replacement] || [replacement];
+                // console.log("match", match, replacement, repl);
+                arr = arr.concat(repl);
                 text = text.substr(replacement.length);
               } else {
                 // a chord
@@ -352,6 +355,7 @@
 
         for (i = 0; i < arr.length; i++) {
           var token = arr[i];
+          // console.log('token', token);
           if (token instanceof Array) {
             obj.chord = parseChord(token);
             token = " ";
