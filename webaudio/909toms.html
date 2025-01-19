@@ -68,9 +68,9 @@
         >ER-909</a
       >. Next up are the toms:
     </p>
-    <button id="lt">low tom</button>
-    <button id="mt">mid tom</button>
-    <button id="ht">high tom</button>
+    <button id="lt">low tom (3)</button>
+    <button id="mt">mid tom (4)</button>
+    <button id="ht">high tom (5)</button>
     <p>
       Compared to the snare drum, the toms are not filtered and they use a
       second oscillator with a frequency offset:
@@ -193,9 +193,15 @@
     <p>Here's the UI:</p>
     <div id="ui"></div>
     <script>
+      let number = 3;
       const tomui = (name, tom, config) => {
         const ui = document.getElementById("ui");
-        ui.insertAdjacentHTML("beforeend", `<h2>${name}</h2>`);
+        const button = document.createElement("button");
+        button.style = "font-size:1.25em;margin-top:16px;margin-bottom:8px;";
+        button.innerText = `${name} (${number})`;
+        number++;
+        button.addEventListener("click", () => tom.trigger());
+        ui.appendChild(button);
 
         config.forEach(({ key, label, min, max, step }) => {
           const id = `${name}-${key}`;
@@ -211,26 +217,26 @@
           slider.value = tom[key];
         });
       };
-      tomui("lt", lt, [
+      tomui("low-tom", lt, [
         { key: "frequency", min: 40, max: 300, step: 1 }, // tune
         { key: "volume", min: 0, max: 1, step: 0.01 }, // level
         { key: "decay", min: 60, max: 300, step: 1 }, // ring
         { key: "tone", min: 0, max: 0.12, step: 0.01 }, // tone
       ]);
-      tomui("mt", mt, [
+      tomui("mid-tom", mt, [
         { key: "frequency", min: 100, max: 400, step: 1 }, // tune
         { key: "volume", min: 0, max: 1, step: 0.01 }, // level
         { key: "decay", min: 60, max: 300, step: 1 }, // ring
         { key: "tone", min: 0, max: 0.12, step: 0.01 }, // tone
       ]);
-      tomui("ht", ht, [
+      tomui("high-tom", ht, [
         { key: "frequency", min: 150, max: 600, step: 1 }, // tune
         { key: "volume", min: 0, max: 1, step: 0.01 }, // level
         { key: "decay", min: 60, max: 300, step: 1 }, // ring
         { key: "tone", min: 0, max: 0.12, step: 0.01 }, // tone
       ]);
     </script>
-    <p>press 3 4 or 5 to play the toms!</p>
+    <p>press 3 4 or 5 to play the toms (or click the buttons)!</p>
     <p>
       license:
       <a
