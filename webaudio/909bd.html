@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 web audio bass drum</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 webaudio bass drum</h2>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <p>
+      I've found a nice web based 909 emulation, called
+      <a
+        href="https://extralifeinstruments.com/er-99/"
+        target="_blank"
+        style="color: yellow"
+        >ER-909</a
+      >. It's free and open
+      <a
+        href="https://github.com/matthewcieplak/er-99"
+        target="_blank"
+        style="color: yellow"
+        >source</a
+      >, so I gave it a read. In this post, I want to start with the bass drum:
+    </p>
+    <button id="play">play</button>
+    <p>The bass drum has the following components:</p>
+    <ul>
+      <li>osc: a triangle oscillator whose frequency is modulated</li>
+      <li>saturation: a gain node after the osc</li>
+      <li>waveshaper: applies distortion to the osc</li>
+      <li>input: a gain node to control the oscillator decay</li>
+      <li>whiteNoise: some white noise to emulate the initial hit</li>
+      <li>noiseInput: a gain node to control the white noise decay</li>
+      <li>output: a gain node to mix oscillator and white noise</li>
+      <li>filter: a low pass filter</li>
+    </ul>
+    <p>
+      The code is split up into a setup phase that creates the web audio nodes
+      and connects them (cosntructor). When the bass drum is triggered, the
+      existing nodes get modulated. Here my modified version of the code:
+    </p>
+    <script>
+      class BassDrum909 {
+        frequency = 80;
+        decay = 300;
+        tone = 0.5;
+        tone_decay = 20;
+        volume = 1;
+        env_amount = 2.5;
+        env_duration = 50;
+        filter_type = "lowpass";
+        filter_freq = 3000;
+        saturation = 1;
+        constructor(ac) {
+          this.ac = ac;
+          this.output = this.ac.createGain();
+          this.output.gain.value = 0;
+
+          this.filter = new BiquadFilterNode(this.ac, {
+            type: this.filter_type,
+            frequency: this.filter_freq,
+          });
+
+          this.output.connect(this.filter);
+          this.input = this.ac.createGain();
+          this.input.gain.value = 0;
+          this.input.connect(this.output);
+
+          this.whiteNoise = this.ac.createBufferSource();
+          this.whiteNoise.buffer = getWhiteNoiseBuffer(ac, 1);
+          this.whiteNoise.loop = true;
+          this.whiteNoise.start();
+          this.noiseInput = this.ac.createGain();
+          this.noiseInput.gain.value = 0;
+          this.whiteNoise.connect(this.noiseInput);
+          this.noiseInput.connect(this.output);
+
+          this.osc = this.ac.createOscillator();
+          this.osc.type = "triangle";
+          this.osc.frequency.value = this.frequency;
+
+          this.waveShaper = this.ac.createWaveShaper();
+          this.waveShaper.curve = makeDistortionCurve(2);
+          this.waveShaper.oversample = "2x";
+
+          this.saturationNode = this.ac.createGain();
+          this.saturationNode.gain.value = this.saturation;
+          this.osc.connect(this.saturationNode);
+          this.saturationNode.connect(this.waveShaper);
+          this.waveShaper.connect(this.input);
+
+          this.osc.start();
+        }
+        get out() {
+          return this.filter;
+        }
+        trigger(time = this.ac.currentTime, accent = false) {
+          this.osc.frequency.cancelScheduledValues(1.0);
+          this.osc.frequency.setValueAtTime(
+            this.frequency * this.env_amount,
+            this.ac.currentTime
+          );
+          this.osc.frequency.exponentialRampToValueAtTime(
+            this.frequency,
+            time + this.env_duration / 1000.0
+          );
+
+          this.noiseInput.gain.cancelScheduledValues(1.0);
+          this.noiseInput.gain.setValueAtTime(this.tone, time);
+          this.noiseInput.gain.exponentialRampToValueAtTime(
+            0.00001,
+            time + this.tone_decay / 1000.0
+          );
+
+          this.output.gain.setValueAtTime(
+            this.volume * (accent ? 2.0 : 1.0),
+            time
+          );
+          this.saturationNode.gain.setValueAtTime(this.saturation, time);
+          this.input.gain.cancelScheduledValues(1.0);
+          this.input.gain.linearRampToValueAtTime(this.volume, time + 0.005);
+          this.input.gain.exponentialRampToValueAtTime(
+            0.00001,
+            time + this.decay / 1000.0
+          );
+        }
+      }
+      codeblock(document.currentScript, 6);
+    </script>
+    <script>
+      function makeDistortionCurve(amount = 20) {
+        let n_samples = 256,
+          curve = new Float32Array(n_samples);
+        for (let i = 0; i < n_samples; ++i) {
+          let x = (i * 2) / n_samples - 1;
+          curve[i] =
+            ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+        }
+        return curve;
+      }
+      function getWhiteNoiseBuffer(ac, seconds = 2) {
+        const bufferSize = seconds * ac.sampleRate;
+        const noiseBuffer = ac.createBuffer(1, bufferSize, ac.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = Math.random() * 2 - 1;
+        }
+        return noiseBuffer;
+      }
+    </script>
+    <p>Here's how to use it:</p>
+    <script>
+      const ac = new AudioContext();
+      const bd = new BassDrum909(ac);
+      bd.out.connect(ac.destination);
+      document.addEventListener("click", () => ac.resume());
+      document.addEventListener("keydown", () => ac.resume());
+      document.getElementById("play").onclick = () => bd.trigger();
+      document.addEventListener(
+        "keydown",
+        (e) => e.key === "1" && bd.trigger()
+      );
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>Let's add some sliders to control the params:</p>
+    <div id="ui"></div>
+    <script>
+      const ui = document.getElementById("ui");
+      [
+        { key: "frequency", min: 40, max: 120, step: 1 }, // tune
+        { key: "volume", min: 0, max: 1, step: 0.01 }, // volume
+        { key: "tone", min: 0, max: 1, step: 0.01 }, // attack
+        { key: "decay", min: 200, max: 2000, step: 1 }, // decay
+        { key: "env_duration", min: 0, max: 200, step: 1 }, // env time
+        { key: "saturation", min: 0.9, max: 3, step: 0.01 }, // saturation
+      ].forEach(({ key, label, min, max, step }) => {
+        ui.insertAdjacentHTML(
+          "beforeend",
+          `<label style="display: flex; align-items: center; gap: 8px">
+      <input id="${key}" type="range" min="${min}" max="${max}" step="${step}" />
+      ${key}</label
+    >`
+        );
+        const slider = document.getElementById(key);
+        slider.oninput = (e) => (bd[key] = e.target.value);
+        slider.value = bd[key];
+      });
+    </script>
+    <p>press 1 to play the bass drum!</p>
+    <p>
+      I'm not sure how close this is to a 909 but I don't really care. In a
+      future post, I'll write about the other 909 sounds. It would also be
+      interesting to write the same in a worklet or in kabelsalat..
+    </p>
+    <p>
+      license:
+      <a
+        href="https://github.com/matthewcieplak/er-99/blob/main/LICENSE"
+        target="_blank"
+        >GPL-3.0</a
+      >
+    </p>
+    <!---->
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script type="module">
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
