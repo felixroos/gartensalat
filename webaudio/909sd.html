@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 web audio snare drum</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 webaudio snare drum</h2>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <p>
+      This is the second post about 909 style drum synthesis, based on
+      <a
+        href="https://extralifeinstruments.com/er-99/"
+        target="_blank"
+        style="color: yellow"
+        >ER-909</a
+      >. The next sound is the snare drum:
+    </p>
+    <button id="play">play</button>
+    <p>
+      The snare drum is similar to the bass drum, slightly simpler as it skips
+      the saturation:
+    </p>
+    <ul>
+      <li>osc: a triangle oscillator whose frequency is modulated</li>
+      <li>input: a gain node to control the oscillator decay</li>
+      <li>whiteNoise: some white noise to emulate the initial hit</li>
+      <li>noiseInput: a gain node to control the white noise decay</li>
+      <li>output: a gain node to mix oscillator and white noise</li>
+      <li>filter: a low pass filter</li>
+    </ul>
+    <script>
+      class SnareDrum909 {
+        frequency = 220;
+        decay = 100;
+        tone = 0.25;
+        tone_decay = 250;
+        volume = 0.5;
+        env_amount = 4.0;
+        env_duration = 10;
+        filter_type = "notch";
+        filter_freq = 1000;
+        constructor(ac) {
+          this.ac = ac;
+          this.output = this.ac.createGain();
+          this.output.gain.value = 0;
+
+          this.filter = new BiquadFilterNode(this.ac, {
+            type: this.filter_type,
+            frequency: this.filter_freq,
+          });
+
+          this.output.connect(this.filter);
+          this.input = this.ac.createGain();
+          this.input.gain.value = 0;
+          this.input.connect(this.output);
+
+          this.whiteNoise = this.ac.createBufferSource();
+          this.whiteNoise.buffer = getWhiteNoiseBuffer(ac, 1);
+          this.whiteNoise.loop = true;
+          this.whiteNoise.start();
+          this.noiseInput = this.ac.createGain();
+          this.noiseInput.gain.value = 0;
+          this.whiteNoise.connect(this.noiseInput);
+          this.noiseInput.connect(this.output);
+
+          this.osc = this.ac.createOscillator();
+          this.osc.type = "triangle";
+          this.osc.frequency.value = this.frequency;
+
+          this.osc.connect(this.input);
+          this.osc.start();
+        }
+        get out() {
+          return this.filter;
+        }
+        trigger(time = this.ac.currentTime, accent = false) {
+          this.osc.frequency.cancelScheduledValues(1.0);
+          this.osc.frequency.setValueAtTime(
+            this.frequency * this.env_amount,
+            this.ac.currentTime
+          );
+          this.osc.frequency.exponentialRampToValueAtTime(
+            this.frequency,
+            time + this.env_duration / 1000.0
+          );
+
+          this.noiseInput.gain.cancelScheduledValues(1.0);
+          this.noiseInput.gain.setValueAtTime(this.tone, time);
+          this.noiseInput.gain.exponentialRampToValueAtTime(
+            0.00001,
+            time + this.tone_decay / 1000.0
+          );
+
+          this.output.gain.setValueAtTime(
+            this.volume * (accent ? 2.0 : 1.0),
+            time
+          );
+          this.input.gain.cancelScheduledValues(1.0);
+          this.input.gain.linearRampToValueAtTime(this.volume, time + 0.005);
+          this.input.gain.exponentialRampToValueAtTime(
+            0.00001,
+            time + this.decay / 1000.0
+          );
+        }
+      }
+      codeblock(document.currentScript, 6);
+    </script>
+    <script>
+      function getWhiteNoiseBuffer(ac, seconds = 2) {
+        const bufferSize = seconds * ac.sampleRate;
+        const noiseBuffer = ac.createBuffer(1, bufferSize, ac.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = Math.random() * 2 - 1;
+        }
+        return noiseBuffer;
+      }
+    </script>
+    <script>
+      const ac = new AudioContext();
+      const bd = new SnareDrum909(ac);
+      bd.out.connect(ac.destination);
+      document.addEventListener("click", () => ac.resume());
+      document.addEventListener("keydown", () => ac.resume());
+      document.getElementById("play").onclick = () => bd.trigger();
+      document.addEventListener(
+        "keydown",
+        (e) => e.key === "2" && bd.trigger()
+      );
+    </script>
+    <p>Here's the UI:</p>
+    <div id="ui"></div>
+    <script>
+      const ui = document.getElementById("ui");
+      [
+        { key: "frequency", min: 40, max: 120, step: 1 }, // tune
+        { key: "volume", min: 0, max: 1, step: 0.01 }, // level
+        { key: "tone", min: 0, max: 1, step: 0.01 }, // tone
+        { key: "tone_decay", min: 0, max: 1000, step: 1 }, // snappy
+        { key: "decay", min: 200, max: 2000, step: 1 }, // ring
+      ].forEach(({ key, label, min, max, step }) => {
+        ui.insertAdjacentHTML(
+          "beforeend",
+          `<label style="display: flex; align-items: center; gap: 8px">
+      <input id="${key}" type="range" min="${min}" max="${max}" step="${step}" />
+      ${key}</label
+    >`
+        );
+        const slider = document.getElementById(key);
+        slider.oninput = (e) => (bd[key] = e.target.value);
+        slider.value = bd[key];
+      });
+    </script>
+    <p>press 2 to play the snare drum!</p>
+    <p>Next up are the toms...</p>
+    <p>
+      license:
+      <a
+        href="https://github.com/matthewcieplak/er-99/blob/main/LICENSE"
+        target="_blank"
+        >GPL-3.0</a
+      >
+    </p>
+    <!---->
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script type="module">
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
