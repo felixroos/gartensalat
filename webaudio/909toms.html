@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 web audio toms</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 webaudio toms</h2>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <p>
+      This is the 3rd post about 909 style drum synthesis, based on
+      <a
+        href="https://extralifeinstruments.com/er-99/"
+        target="_blank"
+        style="color: yellow"
+        >ER-909</a
+      >. Next up are the toms:
+    </p>
+    <button id="lt">low tom</button>
+    <button id="mt">mid tom</button>
+    <button id="ht">high tom</button>
+    <p>
+      Compared to the snare drum, the toms are not filtered and they use a
+      second oscillator with a frequency offset:
+    </p>
+    <ul>
+      <li>osc: a triangle oscillator whose frequency is modulated</li>
+      <li>input: a gain node to control the oscillator decay</li>
+      <li>whiteNoise: some white noise to emulate the initial hit</li>
+      <li>noiseInput: a gain node to control the white noise decay</li>
+      <li>osc2: a second, detuned oscillator that is mixed with the noise</li>
+      <li>output: a gain node to mix oscillator and white noise</li>
+    </ul>
+    <script>
+      class Tom909 {
+        frequency = 100;
+        offset = 100;
+        decay = 200;
+        tone = 0.05;
+        tone_decay = 100;
+        volume = 0.5;
+        env_amount = 2.0;
+        env_duration = 100;
+
+        constructor(ac, frequency = this.frequency, offset = this.offset) {
+          this.frequency = frequency;
+          this.offset = offset;
+          this.ac = ac;
+          this.output = this.ac.createGain();
+          this.output.gain.value = 0;
+
+          this.input = this.ac.createGain();
+          this.input.gain.value = 0;
+          this.input.connect(this.output);
+
+          this.whiteNoise = this.ac.createBufferSource();
+          this.whiteNoise.buffer = getWhiteNoiseBuffer(ac, 1);
+          this.whiteNoise.loop = true;
+          this.whiteNoise.start();
+          this.noiseInput = this.ac.createGain();
+          this.noiseInput.gain.value = 0;
+          this.whiteNoise.connect(this.noiseInput);
+          this.noiseInput.connect(this.output);
+
+          this.osc = this.ac.createOscillator();
+          this.osc.type = "triangle";
+          this.osc.frequency.value = this.frequency;
+
+          this.osc2 = this.ac.createOscillator();
+          this.osc2.type = "triangle";
+          this.osc2.frequency.value = this.frequency + this.offset;
+          this.osc2.connect(this.noiseInput);
+
+          this.osc.connect(this.input);
+          this.osc.start();
+          this.osc2.start();
+        }
+        get out() {
+          return this.output;
+        }
+        trigger(time = this.ac.currentTime, accent = false) {
+          this.osc.frequency.cancelScheduledValues(1.0);
+          this.osc.frequency.setValueAtTime(
+            this.frequency * this.env_amount,
+            this.ac.currentTime
+          );
+          this.osc.frequency.exponentialRampToValueAtTime(
+            this.frequency,
+            time + this.env_duration / 1000.0
+          );
+
+          this.noiseInput.gain.cancelScheduledValues(1.0);
+          this.noiseInput.gain.setValueAtTime(this.tone, time);
+          this.noiseInput.gain.exponentialRampToValueAtTime(
+            0.00001,
+            time + this.tone_decay / 1000.0
+          );
+
+          this.output.gain.setValueAtTime(
+            this.volume * (accent ? 2.0 : 1.0),
+            time
+          );
+          this.input.gain.cancelScheduledValues(1.0);
+          this.input.gain.linearRampToValueAtTime(this.volume, time + 0.005);
+          this.input.gain.exponentialRampToValueAtTime(
+            0.00001,
+            time + this.decay / 1000.0
+          );
+        }
+      }
+      codeblock(document.currentScript, 6);
+    </script>
+    <script>
+      function getWhiteNoiseBuffer(ac, seconds = 2) {
+        const bufferSize = seconds * ac.sampleRate;
+        const noiseBuffer = ac.createBuffer(1, bufferSize, ac.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = Math.random() * 2 - 1;
+        }
+        return noiseBuffer;
+      }
+    </script>
+    <script>
+      const ac = new AudioContext();
+      const lt = new Tom909(ac, 100, 100);
+      lt.out.connect(ac.destination);
+      const mt = new Tom909(ac, 200, -50);
+      mt.out.connect(ac.destination);
+      const ht = new Tom909(ac, 300, -80);
+      ht.out.connect(ac.destination);
+      document.addEventListener("click", () => ac.resume());
+      document.addEventListener("keydown", () => ac.resume());
+      document.getElementById("lt").onclick = () => lt.trigger();
+      document.getElementById("mt").onclick = () => mt.trigger();
+      document.getElementById("ht").onclick = () => ht.trigger();
+      document.addEventListener("keydown", (e) =>
+        ({ 3: lt, 4: mt, 5: ht }[e.key]?.trigger())
+      );
+    </script>
+    <p>Here's the UI:</p>
+    <div id="ui"></div>
+    <script>
+      const tomui = (name, tom, config) => {
+        const ui = document.getElementById("ui");
+        ui.insertAdjacentHTML("beforeend", `<h2>${name}</h2>`);
+
+        config.forEach(({ key, label, min, max, step }) => {
+          const id = `${name}-${key}`;
+          ui.insertAdjacentHTML(
+            "beforeend",
+            `<label style="display: flex; align-items: center; gap: 8px">
+      <input id="${id}" type="range" min="${min}" max="${max}" step="${step}" />
+      ${key}</label
+    >`
+          );
+          const slider = document.getElementById(id);
+          slider.oninput = (e) => (tom[key] = e.target.value);
+          slider.value = tom[key];
+        });
+      };
+      tomui("lt", lt, [
+        { key: "frequency", min: 40, max: 300, step: 1 }, // tune
+        { key: "volume", min: 0, max: 1, step: 0.01 }, // level
+        { key: "decay", min: 60, max: 300, step: 1 }, // ring
+        { key: "tone", min: 0, max: 0.12, step: 0.01 }, // tone
+      ]);
+      tomui("mt", mt, [
+        { key: "frequency", min: 100, max: 400, step: 1 }, // tune
+        { key: "volume", min: 0, max: 1, step: 0.01 }, // level
+        { key: "decay", min: 60, max: 300, step: 1 }, // ring
+        { key: "tone", min: 0, max: 0.12, step: 0.01 }, // tone
+      ]);
+      tomui("ht", ht, [
+        { key: "frequency", min: 150, max: 600, step: 1 }, // tune
+        { key: "volume", min: 0, max: 1, step: 0.01 }, // level
+        { key: "decay", min: 60, max: 300, step: 1 }, // ring
+        { key: "tone", min: 0, max: 0.12, step: 0.01 }, // tone
+      ]);
+    </script>
+    <p>press 3 4 or 5 to play the toms!</p>
+    <p>
+      license:
+      <a
+        href="https://github.com/matthewcieplak/er-99/blob/main/LICENSE"
+        target="_blank"
+        >GPL-3.0</a
+      >
+    </p>
+    <!---->
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script type="module">
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
