@@ -171,14 +171,14 @@
     </script>
     <script>
       const ac = new AudioContext();
-      const bd = new SnareDrum909(ac);
-      bd.out.connect(ac.destination);
+      const sd = new SnareDrum909(ac);
+      sd.out.connect(ac.destination);
       document.addEventListener("click", () => ac.resume());
       document.addEventListener("keydown", () => ac.resume());
-      document.getElementById("play").onclick = () => bd.trigger();
+      document.getElementById("play").onclick = () => sd.trigger();
       document.addEventListener(
         "keydown",
-        (e) => e.key === "2" && bd.trigger()
+        (e) => e.key === "2" && sd.trigger()
       );
     </script>
     <p>Here's the UI:</p>
@@ -200,8 +200,8 @@
     >`
         );
         const slider = document.getElementById(key);
-        slider.oninput = (e) => (bd[key] = e.target.value);
-        slider.value = bd[key];
+        slider.oninput = (e) => (sd[key] = e.target.value);
+        slider.value = sd[key];
       });
     </script>
     <p>press 2 to play the snare drum!</p>
