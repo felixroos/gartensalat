@@ -150,7 +150,7 @@
           this.osc.frequency.cancelScheduledValues(1.0);
           this.osc.frequency.setValueAtTime(
             this.frequency * this.env_amount,
-            this.ac.currentTime
+            time
           );
           this.osc.frequency.exponentialRampToValueAtTime(
             this.frequency,

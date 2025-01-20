@@ -216,15 +216,15 @@
           this.bufferSource.buffer = this.buffer;
           this.bufferSource.connect(this.noiseInput);
           this.bufferSource.start();
-          this.noiseInput.gain.setValueAtTime(1.0, this.ac.currentTime);
+          this.noiseInput.gain.setValueAtTime(1.0, time);
           this.noiseInput.gain.exponentialRampToValueAtTime(
             0.00001,
-            this.ac.currentTime + this.decay / 1000.0
+            time + this.decay / 1000.0
           );
 
           this.output.gain.setValueAtTime(
-            this.volume * (accent ? globalParams.globalAccent : 1.0),
-            this.ac.currentTime
+            this.volume * (accent ? 2.0 : 1.0),
+            time
           );
         }
       }
