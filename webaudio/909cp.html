@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 web audio clap</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 webaudio clap</h2>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <p>
+      This is the 5th post about 909 style drum synthesis, based on
+      <a
+        href="https://extralifeinstruments.com/er-99/"
+        target="_blank"
+        style="color: yellow"
+        >ER-909</a
+      >. The next sound is the clap:
+    </p>
+    <button id="play">play</button>
+    <p>Here's the "graph":</p>
+    <ul>
+      <li>whiteNoise</li>
+      <li>-> toneFilter: bandpass</li>
+      <li>-> noiseInput: gain</li>
+      <li>-> saturationNode: gain</li>
+      <li>modulator: sawtooth</li>
+      <li>-> modulatorLevel: gain</li>
+      <li>-> delayInput.gain</li>
+      <li>whiteNoise</li>
+      <li>-> delayInput: gain</li>
+      <li>-> delayOutput: gain</li>
+      <li>-> filterNodes[]: highpass/bandpass</li>
+      <li>-> saturationNode: gain</li>
+      <li>-> hiPass: highpass</li>
+      <li>-> output: gain</li>
+    </ul>
+    <script>
+      class Clap909 {
+        decay = 80;
+        spread = 10;
+        filterTypes = ["highpass", "bandpass"];
+        filterFreqs = [900, 1200];
+        filterQs = [1.2, 0.7];
+        filterGains = [0, 0, 5];
+        filterTopology = "serial";
+        highPassFreq = 80;
+        filterNodes = [];
+        volume = 1.5;
+        tune = 1000;
+        tone = 2200;
+        tail = 250;
+
+        constructor(ac) {
+          this.ac = ac;
+          this.output = this.ac.createGain();
+          this.output.gain.value = 0;
+
+          this.hiPass = new BiquadFilterNode(this.ac, {
+            frequency: this.hiPassFreq,
+            type: "highpass",
+          });
+          this.hiPass.connect(this.output);
+
+          this.saturationNode = this.ac.createGain();
+          this.saturationNode.gain.value = this.saturation || 1.0;
+          this.saturationNode.connect(this.hiPass);
+
+          this.noiseInput = this.ac.createGain();
+          this.noiseInput.gain.value = 0;
+
+          this.delayInput = this.ac.createGain();
+          this.delayOutput = this.ac.createGain();
+          this.modulatorLevel = this.ac.createGain();
+          this.modulatorLevel.gain.value = 0.4;
+          this.delayInput.gain.value = 1.0;
+          this.delayOutput.gain.value = 0;
+          this.delayInput.connect(this.delayOutput);
+
+          this.modulator = this.ac.createOscillator();
+          this.modulator.frequency.value = 40;
+          this.modulator.type = "sawtooth";
+          this.modulator.connect(this.modulatorLevel);
+          this.modulatorLevel.connect(this.delayInput.gain);
+          this.modulator.start();
+
+          this.toneFilter = new BiquadFilterNode(this.ac, {
+            frequency: this.tone,
+            Q: 2.0,
+            type: "bandpass",
+          });
+
+          this.whiteNoise = this.ac.createBufferSource();
+          this.whiteNoise.buffer = getWhiteNoiseBuffer(this.ac, 1);
+          this.whiteNoise.loop = true;
+          this.whiteNoise.start();
+
+          this.whiteNoise.connect(this.toneFilter);
+          this.toneFilter.connect(this.noiseInput);
+
+          this.noiseInput.connect(this.saturationNode);
+
+          this.whiteNoise.connect(this.delayInput);
+
+          for (let x = 0; x < this.filterFreqs.length; x++) {
+            this.filterNodes[x] = new BiquadFilterNode(this.ac, {
+              frequency: this.filterFreqs[x],
+              Q: this.filterQs[x],
+              type: this.filterTypes[x],
+            });
+            if (x === 0) {
+              this.delayOutput.connect(this.filterNodes[0]);
+            } else {
+              this.filterNodes[x - 1].connect(this.filterNodes[x]);
+            }
+            if (x == this.filterFreqs.length - 1) {
+              this.filterNodes[x].connect(this.saturationNode);
+            }
+            this.filterNodes[x].gain.value = this.filterGains[x];
+          }
+        }
+        get out() {
+          return this.output;
+        }
+        trigger(t = this.ac.currentTime, accent = false) {
+          const noiseGain = this.noiseInput.gain;
+          const tail = this.tail / 1000.0;
+          noiseGain.setValueAtTime(0.5, t);
+          noiseGain.exponentialRampToValueAtTime(0.001, t + tail);
+
+          var dc = this.spread / 1000.0;
+          let decay = (this.decay / 250) * dc;
+          const z = 0.000001;
+          const delayGain = this.delayOutput.gain;
+          delayGain.cancelScheduledValues(1.0);
+
+          delayGain.setValueAtTime(0.1, t);
+          delayGain.setTargetAtTime(z, t, dc / 3 + decay);
+
+          delayGain.setValueAtTime(0.8, t + dc);
+          delayGain.setTargetAtTime(z, t + dc, dc / 2 + decay);
+
+          delayGain.setValueAtTime(0.5, t + dc * 2);
+          delayGain.setTargetAtTime(z, t + dc * 2, dc / 2 + decay);
+
+          delayGain.setValueAtTime(0.3, t + dc * 3);
+          delayGain.setTargetAtTime(z, t + dc * 3, dc / 2 + decay);
+
+          delayGain.setValueAtTime(0.2, t + dc * 4);
+          delayGain.setTargetAtTime(z, t + dc * 4, dc / 2 + this.decay / 2500);
+
+          const vol = this.volume * (accent ? 2.0 : 1.0);
+          this.output.gain.setValueAtTime(vol, t);
+        }
+      }
+      codeblock(document.currentScript, 6);
+    </script>
+    <script>
+      function getWhiteNoiseBuffer(ac, seconds = 2) {
+        const bufferSize = seconds * ac.sampleRate;
+        const noiseBuffer = ac.createBuffer(1, bufferSize, ac.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = Math.random() * 2 - 1;
+        }
+        return noiseBuffer;
+      }
+    </script>
+    <script>
+      const ac = new AudioContext();
+      const cp = new Clap909(ac);
+      cp.out.connect(ac.destination);
+      document.addEventListener("click", () => ac.resume());
+      document.addEventListener("keydown", () => ac.resume());
+      document.getElementById("play").onclick = () => cp.trigger();
+      document.addEventListener(
+        "keydown",
+        (e) => e.key === "7" && cp.trigger()
+      );
+    </script>
+    <div id="ui"></div>
+    <script>
+      const ui = document.getElementById("ui");
+      const button = document.createElement("button");
+      button.style = "font-size:1.25em;margin-top:16px;margin-bottom:8px;";
+      button.innerText = `clap (7)`;
+      button.addEventListener("click", () => cp.trigger());
+      ui.appendChild(button);
+      [
+        { key: "volume", min: 0, max: 1, step: 0.01 }, // volume
+        { key: "spread", min: 2, max: 60, step: 1 }, // spread
+        { key: "decay", min: 0, max: 300, step: 1 }, // decay
+        { key: "tail", min: 10, max: 999, step: 1 }, // tail
+      ].forEach(({ key, label, min, max, step }) => {
+        ui.insertAdjacentHTML(
+          "beforeend",
+          `<label style="display: flex; align-items: center; gap: 8px">
+      <input id="${key}" type="range" min="${min}" max="${max}" step="${step}" />
+      ${key}</label
+    >`
+        );
+        const slider = document.getElementById(key);
+        slider.oninput = (e) => (cp[key] = e.target.value);
+        slider.value = cp[key];
+      });
+    </script>
+    <p>That's cool! Now the only sounds left are sample based...</p>
+    <p>
+      license:
+      <a
+        href="https://github.com/matthewcieplak/er-99/blob/main/LICENSE"
+        target="_blank"
+        >GPL-3.0</a
+      >
+    </p>
+    <!---->
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script type="module">
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
