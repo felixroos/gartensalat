@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 web 909 cymbals</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 512px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      pre {
+        font-size: 12px;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        width: 100%;
+        margin: 0px 0;
+        color: white;
+        box-sizing: border-box;
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 webaudio 909 cymbals</h2>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <p>
+      This is the 6th post about 909 style drum synthesis, based on
+      <a
+        href="https://extralifeinstruments.com/er-99/"
+        target="_blank"
+        style="color: yellow"
+        >ER-909</a
+      >. The last 4 sounds left are the cymbals: open hihat, closed hihat ride
+      cymbals, and crash cymbal. These are the only sounds that are sample
+      based, so they are relativey straightforward:
+    </p>
+
+    <script>
+      class Sample909 {
+        constructor(ac, config) {
+          const { sourceUrl, decay = 1000, volume = 0.5, pitch = 1.0 } = config;
+          this.ac = ac;
+          this.output = this.ac.createGain();
+          this.output.gain.value = 0.5;
+          this.sourceUrl = sourceUrl;
+          this.decay = decay;
+          this.volume = volume;
+          this.pitch = pitch;
+
+          this.ready = fetch(this.sourceUrl)
+            .then((res) => res.arrayBuffer())
+            .then((res) => ac.decodeAudioData(res))
+            .then((buffer) => (this.buffer = buffer));
+        }
+        get out() {
+          return this.output;
+        }
+        trigger(t = this.ac.currentTime, accent = false) {
+          if (this.sourceNode) this.sourceNode.stop();
+          const gain = this.output.gain;
+          gain.cancelScheduledValues(1.0);
+          gain.setValueAtTime(this.volume * (accent ? 2.0 : 1.0), t);
+          gain.exponentialRampToValueAtTime(0.00001, t + this.decay / 1000.0);
+
+          this.sourceNode = this.ac.createBufferSource();
+          this.sourceNode.playbackRate.value = this.pitch;
+          this.sourceNode.buffer = this.buffer;
+          this.sourceNode.connect(this.output);
+          this.sourceNode.start(t);
+        }
+      }
+      codeblock(document.currentScript, 6);
+    </script>
+    <div id="ui"></div>
+    <script>
+      const ac = new AudioContext();
+      document.addEventListener("click", () => ac.resume());
+      document.addEventListener("keydown", () => ac.resume());
+
+      let sounds = {
+        hh: {
+          sourceUrl: "samples/hh.wav",
+          decay: 300,
+          volume: 0.5,
+          key: 8,
+          controls: [
+            { key: "volume", min: 0, max: 1, step: 0.01 },
+            { key: "pitch", min: 0.2, max: 1.6, step: 0.01 },
+            { key: "decay", min: 20, max: 999, step: 1 },
+          ],
+        },
+        oh: {
+          sourceUrl: "samples/hh.wav",
+          decay: 2000,
+          volume: 0.5,
+          key: 9,
+          controls: [
+            { key: "volume", min: 0, max: 1, step: 0.01 },
+            { key: "pitch", min: 0.2, max: 1.6, step: 0.01 },
+            { key: "decay", min: 100, max: 3000, step: 1 },
+          ],
+        },
+        rd: {
+          sourceUrl: "samples/ride.wav",
+          decay: 2000,
+          volume: 0.2,
+          key: 0,
+          controls: [
+            { key: "volume", min: 0, max: 1, step: 0.01 },
+            { key: "pitch", min: 0.2, max: 1.6, step: 0.01 },
+            { key: "decay", min: 100, max: 3000, step: 1 },
+          ],
+        },
+        cr: {
+          sourceUrl: "samples/crash.wav",
+          decay: 2000,
+          volume: 0.3,
+          key: "p",
+          controls: [
+            { key: "volume", min: 0, max: 1, step: 0.01 },
+            { key: "pitch", min: 0.2, max: 1.6, step: 0.01 },
+            { key: "decay", min: 100, max: 3000, step: 1 },
+          ],
+        },
+      };
+
+      const ui = document.getElementById("ui");
+      Object.keys(sounds).forEach((id) => {
+        const config = sounds[id];
+        const sound = new Sample909(ac, config);
+        sound.out.connect(ac.destination);
+        document.addEventListener("keydown", (e) => {
+          e.key === config.key + "" && sound?.trigger();
+        });
+        // ui
+        const button = document.createElement("button");
+        button.style = "font-size:1.25em;margin-top:16px;margin-bottom:8px;";
+        button.innerText = `${id} (${config.key})`;
+        button.addEventListener("click", () => sound.trigger());
+        ui.appendChild(button);
+
+        config.controls.forEach(({ key, label, min, max, step }) => {
+          const inputId = `${id}-${key}`;
+          ui.insertAdjacentHTML(
+            "beforeend",
+            `<label style="display: flex; align-items: center; gap: 8px">
+      <input id="${inputId}" type="range" min="${min}" max="${max}" step="${step}" />
+      ${key}</label
+    >`
+          );
+          const slider = document.getElementById(inputId);
+          slider.oninput = (e) => (sound[key] = e.target.value);
+          slider.value = sound[key];
+        });
+      });
+    </script>
+    <p>
+      license:
+      <a
+        href="https://github.com/matthewcieplak/er-99/blob/main/LICENSE"
+        target="_blank"
+        >GPL-3.0</a
+      >
+    </p>
+    <!---->
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script type="module">
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
