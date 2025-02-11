@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 lisp sugar</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+    </style>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+  </head>
+  <body>
+    <h2>🌱 lisp sugar</h2>
+    <p>
+      after building a basic s-expression
+      <a href="/lisp/parser.html">parser</a> and
+      <a href="/lisp/interpreter.html">interpreter</a>, let's extend the syntax
+      to allow expressing signal flow graphs (like audio graphs) without getting
+      into paren hell. for example:
+    </p>
+    <pre>(out (fold (lpf (saw 55) (range (sine .5) .2 .8))))</pre>
+    <p>in kabelsalat, this could be expressed as</p>
+    <pre>saw(55).lpf(sine(.5).range(.2, .8)).fold().out()</pre>
+    <p>
+      to get a similar order of operations, we could introduce a "&gt;" operator
+      for function composition:
+    </p>
+    <pre>(saw 55 > lpf (sine .5 > range .2 .8) > fold > out)</pre>
+    <p>
+      assuming "&gt;" is a valid character of a plain node, this is still valid
+      syntax from our parsers perspective. to make it do what we want, we need
+      to rewrite each list's children to resolve the "&gt;" operators.
+    </p>
+    <img src="./img/lisp-sugar.gif" />
+    <p>
+      the idea is that the left side of each operator is used as the first
+      argument of the list on the right side. in addition, i've added a little
+      more sugar to allow the outermost list to drop the parens. here's the
+      result:
+    </p>
+    <textarea id="code" spellcheck="false"></textarea>
+    <pre id="output"></pre>
+    <p>
+      while the interpreter is the same as before, the parser now has a
+      "resolve_pipes" method that rewrites list children + "parse" now supports
+      multiple top level expressions:
+    </p>
+    <script>
+      // https://garten.salat.dev/lisp/parser.html
+      class LispParser {
+        // these are the tokens we expect
+        token_types = {
+          open_list: /^\(/,
+          close_list: /^\)/,
+          plain: /^[a-zA-Z0-9\.\#\>\+\-\*\/]+/,
+        };
+        // matches next token
+        next_token(code) {
+          for (let type in this.token_types) {
+            const match = code.match(this.token_types[type]);
+            if (match) {
+              return { type, value: match[0] };
+            }
+          }
+          throw new Error(`could not match "${code}"`);
+        }
+        // takes code string, returns list of matched tokens (if valid)
+        tokenize(code) {
+          let tokens = [];
+          while (code.length > 0) {
+            code = code.trim();
+            const token = this.next_token(code);
+            code = code.slice(token.value.length);
+            tokens.push(token);
+          }
+          return tokens;
+        }
+        // take code, return abstract syntax tree
+        parse(code) {
+          this.tokens = this.tokenize(code);
+          const expressions = [];
+          while (this.tokens.length) {
+            expressions.push(this.parse_expr());
+          }
+          // do we have multiple top level expressions or a single non list?
+          if (expressions.length > 1 || expressions[0].type !== "list") {
+            return { type: "list", children: this.resolve_pipes(expressions) };
+          }
+          // we have a single list
+          return expressions[0];
+        }
+        // parses any valid expression
+        parse_expr() {
+          let next = this.tokens[0]?.type;
+          if (next === "open_list") {
+            return this.parse_list();
+          }
+          if (next === "plain") {
+            return this.consume(next);
+          }
+          if (!this.tokens[0]) {
+            throw new Error(`unexpected end of file`);
+          }
+          throw new Error(
+            `unexpected token "${this.tokens[0].value}" of type ${this.tokens[0].type}`
+          );
+        }
+        resolve_pipes(children) {
+          // saw 55 > lpf .5 = lpf (saw 55) .5
+          while (true) {
+            let pipeIndex = children.findIndex((child) => child.value === ">");
+            if (pipeIndex === -1) break;
+            const leftSide = children.slice(0, pipeIndex);
+            const targetList = children[pipeIndex + 1];
+            const restArgs = children.slice(pipeIndex + 2);
+            children = [
+              targetList,
+              { type: "list", children: leftSide },
+              ...restArgs,
+            ];
+          }
+          return children;
+        }
+        parse_list() {
+          this.consume("open_list");
+          let children = [];
+          while (this.tokens[0]?.type !== "close_list") {
+            children.push(this.parse_expr());
+          }
+          this.consume("close_list");
+          children = this.resolve_pipes(children);
+          return { type: "list", children };
+        }
+        consume(type) {
+          // shift removes first element and returns it
+          const token = this.tokens.shift();
+          if (token.type !== type) {
+            throw new Error(`expected token type ${type}, got ${token.type}`);
+          }
+          return token;
+        }
+      }
+
+      codeblock(document.currentScript, 6);
+    </script>
+    <script>
+      class LispRunner {
+        constructor(lib) {
+          this.parser = new LispParser();
+          this.lib = lib;
+        }
+        // a helper to check conditions and throw if they are not met
+        assert(condition, error) {
+          if (!condition) {
+            throw new Error(error);
+          }
+        }
+        run(code) {
+          const ast = this.parser.parse(code);
+          return this.call(ast);
+        }
+        call(ast) {
+          // for a node to be callable, it needs to be a list
+          this.assert(
+            ast.type === "list",
+            `function call: expected list, got ${ast.type}`
+          );
+          // the first element is expected to be the function name
+          this.assert(
+            ast.children[0]?.type === "plain",
+            `function call: expected first child to be plain, got ${ast.type}`
+          );
+          // look up function in lib
+          const name = ast.children[0].value;
+          const fn = this.lib[name];
+          this.assert(fn, `function call: unknown function name "${name}"`);
+
+          // process args
+          const args = ast.children.slice(1).map((arg) => {
+            if (arg.type === "list") {
+              return this.call(arg);
+            }
+            return arg.value;
+          });
+
+          // call function
+          return fn(...args);
+        }
+      }
+
+      const lib = Object.fromEntries(
+        ["saw", "sine", "range", "lpf", "fold", "out"].map((type) => [
+          type,
+          (...ins) => ({ type, ins }),
+        ])
+      );
+      const lisp = new LispRunner(lib);
+
+      const input = document.querySelector("#code");
+      input.value = "saw 55 > lpf (sine .5 > range .2 .8) > fold > out";
+      function update() {
+        const result = lisp.run(input.value);
+        console.log("result", result);
+        document.getElementById("output").innerText = JSON.stringify(
+          result,
+          null,
+          2
+        );
+      }
+      input.addEventListener("input", () => update());
+      update();
+    </script>
+    <p>
+      I'm pretty happy with that little language, as it's fairly simple to parse
+      and it could be used as an alternative, probably more portable input for
+      kabelsalat.
+    </p>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script>
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
