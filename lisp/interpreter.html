@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 lisp interpreter</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+    </style>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+  </head>
+  <body>
+    <h2>🌱 lisp interpreter</h2>
+    <p>
+      <a href="/lisp/parser.html">last time</a>, i've written a simple lispy
+      parser, that turns a string of s-expressions into an abstract syntax tree
+      (ast). we can now interpret that ast to do things, like call functions in
+      JS for example:
+    </p>
+    <textarea id="code" spellcheck="false"></textarea>
+    <pre id="output"></pre>
+    <p>here's the code:</p>
+    <script>
+      // https://garten.salat.dev/lisp/parser.html
+      class LispParser {
+        // these are the tokens we expect
+        token_types = {
+          open_list: /^\(/,
+          close_list: /^\)/,
+          plain: /^[a-zA-Z0-9\.\#]+/,
+        };
+        // matches next token
+        next_token(code) {
+          for (let type in this.token_types) {
+            const match = code.match(this.token_types[type]);
+            if (match) {
+              return { type, value: match[0] };
+            }
+          }
+          throw new Error(`could not match "${code}"`);
+        }
+        // takes code string, returns list of matched tokens (if valid)
+        tokenize(code) {
+          let tokens = [];
+          while (code.length > 0) {
+            code = code.trim();
+            const token = this.next_token(code);
+            code = code.slice(token.value.length);
+            tokens.push(token);
+          }
+          return tokens;
+        }
+        // take code, return abstract syntax tree
+        parse(code) {
+          this.tokens = this.tokenize(code);
+          return this.parse_expr();
+        }
+        // parses any valid expression
+        parse_expr() {
+          let next = this.tokens[0]?.type;
+          if (next === "open_list") {
+            return this.parse_list();
+          }
+          if (next === "plain") {
+            return this.consume("plain");
+          }
+          if (!this.tokens[0]) {
+            throw new Error(`unexpected end of file`);
+          }
+          throw new Error(
+            `unexpected token "${this.tokens[0].value}" of type ${this.tokens[0].type}`
+          );
+        }
+        parse_list() {
+          this.consume("open_list");
+          const children = [];
+          while (this.tokens[0]?.type !== "close_list") {
+            children.push(this.parse_expr());
+          }
+          this.consume("close_list");
+          return { type: "list", children };
+        }
+        consume(type) {
+          // shift removes first element and returns it
+          const token = this.tokens.shift();
+          if (token.type !== type) {
+            throw new Error(`expected token type ${type}, got ${token.type}`);
+          }
+          return token;
+        }
+      }
+    </script>
+    <script>
+      class LispRunner {
+        constructor(lib) {
+          this.parser = new LispParser();
+          this.lib = lib;
+        }
+        // a helper to check conditions and throw if they are not met
+        assert(condition, error) {
+          if (!condition) {
+            throw new Error(error);
+          }
+        }
+        run(code) {
+          const ast = this.parser.parse(code);
+          return this.call(ast);
+        }
+        call(ast) {
+          // for a node to be callable, it needs to be a list
+          this.assert(
+            ast.type === "list",
+            `function call: expected list, got ${ast.type}`
+          );
+          // the first element is expected to be the function name
+          this.assert(
+            ast.children[0]?.type === "plain",
+            `function call: expected first child to be plain, got ${ast.type}`
+          );
+          // look up function in lib
+          const name = ast.children[0].value;
+          const fn = this.lib[name];
+          this.assert(fn, `function call: unknown function name "${name}"`);
+
+          // process args
+          const args = ast.children.slice(1).map((arg) => {
+            if (arg.type !== "plain") {
+              return this.call(arg);
+            }
+            return arg.value;
+          });
+
+          // call function
+          return fn(...args);
+        }
+      }
+      const lisp = new LispRunner({
+        add: (...args) => args.reduce((acc, arg) => acc + Number(arg), 0),
+        mul: (...args) => args.reduce((acc, arg) => acc * Number(arg), 1),
+      });
+      console.log(lisp.run(`(add 1 (mul 2 3))`));
+
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>
+      we're walking down the syntax tree in depth first order. lists are
+      interpreted as functions, where the function name is the first element of
+      the list, so `(add 1 2)` will call `add(1,2)`. a function is called after
+      all of its arguments (and potentially nested calls) have been resolved.
+    </p>
+    <script>
+      const input = document.querySelector("#code");
+      input.value = "(add 1 (mul 2 3))";
+      function update() {
+        const result = lisp.run(input.value);
+        console.log(`${input.value} = ${result}`);
+        document.getElementById("output").innerText = result;
+      }
+      input.addEventListener("input", () => update());
+      update();
+    </script>
+    <p>
+      now we can evaluate a function composition from a string without the need
+      to eval js! you might already guess where this is going..
+    </p>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script>
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
