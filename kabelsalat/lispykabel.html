@@ -72,10 +72,18 @@
       as a target.
     </p>
     <div><a id="play">play</a> | <a id="stop">stop</a></div>
-    <textarea id="code" spellcheck="false"></textarea>
+    <textarea rows="16" id="code" spellcheck="false"></textarea>
     <div>
       <small>💡 hit ctrl+enter to update the code.</small>
     </div>
+    <p>
+      inspired by common lisp, i've added some more goodies to the language:
+    </p>
+    <ul>
+      <li>defun: a function definition</li>
+      <li>defparameter: a global variable definition</li>
+      <li>lambda: an anonymous function</li>
+    </ul>
     <!-- <pre>
 poly 55 110 220 330 
 > saw 
@@ -84,6 +92,43 @@ poly 55 110 220 330
 > mul ( impulse 4 > perc .1 > lag .05 )
 > fold > mul .6 > out
     </pre> -->
+
+    <!-- impulse 4 > seq 100 200 300 > mul (impulse 1 > seq .5 1)
+> saw (sine .2 > range .1 .5) 
+> lpf (sine .5 > range .3 .6) (sine .4 > range 0 .1)
+> mul (impulse 8 > ad .01 .1)
+> mul (zaw 1 > range 1 0 > lag .1)
+> out -->
+
+    <!-- (defun lfo (f a b) (sine f > range a b))
+
+(pulse 220 .2 
+> lpf (sine .5 > range .2 .8) 
+> fold 
+> out)
+ -->
+
+    <!-- (defun lfo (f a b) (sine f > range a b))
+ (defparameter imp (impulse 4))
+ 
+ (seq imp 0 3 7 12 > add 42 > midinote
+ > pulse .2 
+ > mul (ad imp .01 .15)
+ > out) -->
+
+    <!---->
+
+    <!-- 
+(defun lfo (f a b) (sine f > range a b))
+(defparameter imp (impulse 1))
+
+(seq imp 0 3 7 12 > add 42 > midinote
+> pulse .5
+> mul (ad imp .01 .15)
+> add (lambda (x) (delay x .3 > mul .8))
+> out)    
+
+-->
 
     <script type="module">
       // https://garten.salat.dev/lisp/parser.html
@@ -122,12 +167,14 @@ poly 55 110 220 330
           while (this.tokens.length) {
             expressions.push(this.parse_expr());
           }
+          return this.make_list(expressions);
+
           // do we have multiple top level expressions or a single non list?
-          if (expressions.length > 1 || expressions[0].type !== "list") {
-            return { type: "list", children: this.resolve_pipes(expressions) };
+          /* if (expressions.length > 1 ||  expressions[0].type !== "list") {
+            return this.make_list(expressions);
           }
-          // we have a single list
-          return expressions[0];
+          return expressions[0]; */
+          //return expressions[0];
         }
         // https://garten.salat.dev/lisp/sugar.html
         // parses any valid expression see
@@ -162,6 +209,10 @@ poly 55 110 220 330
           }
           return children;
         }
+        make_list(children) {
+          children = this.resolve_pipes(children);
+          return { type: "list", children };
+        }
         parse_list() {
           this.consume("open_list");
           let children = [];
@@ -169,8 +220,7 @@ poly 55 110 220 330
             children.push(this.parse_expr());
           }
           this.consume("close_list");
-          children = this.resolve_pipes(children);
-          return { type: "list", children };
+          return this.make_list(children);
         }
         consume(type) {
           // shift removes first element and returns it
@@ -183,10 +233,11 @@ poly 55 110 220 330
       }
 
       // https://garten.salat.dev/lisp/interpreter.html
-      class LispRunner {
-        constructor(handle) {
+      class Zilp {
+        constructor(evaluator, preprocessor) {
           this.parser = new LispParser();
-          this.handle = handle;
+          this.evaluator = evaluator;
+          this.preprocessor = preprocessor;
         }
         // a helper to check conditions and throw if they are not met
         assert(condition, error) {
@@ -196,10 +247,24 @@ poly 55 110 220 330
         }
         run(code) {
           const ast = this.parser.parse(code);
-          return this.call(ast);
+          // interpret top level ast as list of expressions
+          return ast.children.map((exp) => this.evaluate(exp));
         }
-        call(ast) {
+        process_args(args) {
+          return args.map((arg) => {
+            if (arg.type === "list") {
+              return this.evaluate(arg);
+            }
+            return arg.value;
+          });
+        }
+        evaluate(ast) {
+          // console.log("call", ast);
           // for a node to be callable, it needs to be a list
+          if (ast.type === "plain") {
+            // non-lists evaluate to their value
+            return ast.value;
+          }
           this.assert(
             ast.type === "list",
             `function call: expected list, got ${ast.type}`
@@ -211,37 +276,58 @@ poly 55 110 220 330
           );
           // look up function in lib
           const name = ast.children[0].value;
-          /* const fn = this.lib[name];
-          this.assert(fn, `function call: unknown function name "${name}"`); */
+
+          // defun macro
+          if (name === "defun") {
+            const fnName = ast.children[1].value;
+            const fnArgs = ast.children[2].children.map((arg) => arg.value);
+            const fnBody = this.evaluate(ast.children[3]);
+            return `let ${fnName} = (${fnArgs.join(",")}) => ${fnBody}`;
+          }
+          if (name === "lambda") {
+            const fnArgs = ast.children[1].children.map((arg) => arg.value);
+            const fnBody = this.evaluate(ast.children[2]);
+            return `(${fnArgs.join(",")}) => ${fnBody}`;
+          }
+          if (name === "defparameter") {
+            const pName = ast.children[1].value;
+            const pBody = this.evaluate(ast.children[2]);
+            return `let ${pName} = ${pBody};`;
+          }
 
           // process args
-          const args = ast.children.slice(1).map((arg) => {
-            if (arg.type === "list") {
-              return this.call(arg);
-            }
-            return arg.value;
-          });
+          const args = this.process_args(ast.children.slice(1));
 
-          // call function
-          return this.handle(name, ...args);
+          return `${name}(${args.join(",")})`;
         }
       }
 
       // wire everything together
       import { SalatRepl } from "./@kabelsalat/web/index.mjs";
 
-      const lisp = new LispRunner(
-        (name, ...args) => `${name}(${args.join(",")})`
-      );
+      const zilp = new Zilp();
       const input = document.querySelector("#code");
-      input.value = "saw 55 > lpf (sine .5 > range .2 .8) > fold > out";
+      input.value = `(defun lfo (f a b) (sine f > range a b))
+(defparameter imp (impulse 2))
+
+(seq imp 0 3 7 12
+> add (seq (clockdiv imp 8) 0 5) 
+> add 42
+> midinote
+> saw (lfo .3 .1 .5)
+> lpf (lfo .2 .3 .8) .2
+> mul (ad imp .01 .1)
+> add (lambda (x) (delay x .3 > mul .9))
+> out)
+
+`;
 
       const repl = new SalatRepl();
 
       function update(lispCode = input.value) {
-        console.log("run:", lispCode);
-        const jsCode = lisp.run(lispCode);
-        console.log("js:", jsCode);
+        const t = performance.now();
+        const jsCode = zilp.run(lispCode).join("\n");
+        console.log(jsCode);
         repl.run(jsCode);
       }
 
@@ -258,7 +344,7 @@ poly 55 110 220 330
         }
       });
     </script>
-    <p>....</p>
+
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
