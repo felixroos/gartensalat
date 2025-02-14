@@ -72,7 +72,7 @@
       as a target.
     </p>
     <div><a id="play">play</a> | <a id="stop">stop</a></div>
-    <textarea rows="16" id="code" spellcheck="false"></textarea>
+    <textarea rows="24" id="code" spellcheck="false"></textarea>
     <div>
       <small>💡 hit ctrl+enter to update the code.</small>
     </div>
@@ -80,27 +80,33 @@
       inspired by common lisp, i've added some more goodies to the language:
     </p>
     <ul>
-      <li>defun: a function definition</li>
-      <li>defparameter: a global variable definition</li>
-      <li>lambda: an anonymous function</li>
+      <li>fn: an anonymous function</li>
+      <li>def: a global variable definition</li>
+      <li>x: y shortcut for setting variables</li>
+      <li>:x shortcut for gettin variables</li>
     </ul>
     <!-- <pre>
-poly 55 110 220 330 
+(poly 55 110 220 330 
 > saw 
 > lpf ( sine .25 > range .3 .7 )
 > mix 2
 > mul ( impulse 4 > perc .1 > lag .05 )
-> fold > mul .6 > out
+> add (fn (x) (x > delay (zaw .01 > range .005 .02) > mul .9))
+> add (fn (x) (x > delay .3 > mul .7))
+> fold > mul .6 > out)
     </pre> -->
 
-    <!-- impulse 4 > seq 100 200 300 > mul (impulse 1 > seq .5 1)
+    <!-- 
+(impulse 4 > seq 100 200 300 > mul (impulse 1 > seq .5 1)
 > saw (sine .2 > range .1 .5) 
 > lpf (sine .5 > range .3 .6) (sine .4 > range 0 .1)
 > mul (impulse 8 > ad .01 .1)
 > mul (zaw 1 > range 1 0 > lag .1)
-> out -->
+> out)
+-->
 
-    <!-- (defun lfo (f a b) (sine f > range a b))
+    <!-- 
+(lfo: fn (f a b) (sine f > range a b))
 
 (pulse 220 .2 
 > lpf (sine .5 > range .2 .8) 
@@ -108,27 +114,46 @@ poly 55 110 220 330
 > out)
  -->
 
-    <!-- (defun lfo (f a b) (sine f > range a b))
- (defparameter imp (impulse 4))
- 
- (seq imp 0 3 7 12 > add 42 > midinote
- > pulse .2 
- > mul (ad imp .01 .15)
- > out) -->
+    <!-- 
+(lfo: fn (f a b) (sine f > range a b))
+(imp: impulse 4)
 
-    <!---->
+(imp > seq 0 3 7 12 > add 42 > midinote
+> pulse .2 
+> mul (imp > ad .01 .15)
+> out) 
+ -->
 
     <!-- 
-(defun lfo (f a b) (sine f > range a b))
-(defparameter imp (impulse 1))
+(lfo: fn (f a b) (sine f > range a b))
+(imp: impulse 1)
 
 (seq imp 0 3 7 12 > add 42 > midinote
 > pulse .5
-> mul (ad imp .01 .15)
-> add (lambda (x) (delay x .3 > mul .8))
-> out)    
-
+> mul (imp > ad .01 .15)
+> add (fn (x) (x > delay .3 > mul .8))
+> out)
 -->
+
+    <!-- 
+(
+fm2: fn (freq fmh fmi) 
+(modfreq: freq > mul fmh)
+(modgain: modfreq > mul fmi)
+(sine modfreq > mul modgain > sine)
+)
+
+(
+impulse 6 
+> apply (fn (imp) (
+ imp > seq 50 50 100 50 300
+ > fm2 1.005 (sine .5 > range 4 20)
+ > mul (imp > ad 1 1)
+))
+> add (fn (x) (x > delay .3 > mul .7))
+> mul .5 > clip > out
+)
+ -->
 
     <script type="module">
       // https://garten.salat.dev/lisp/parser.html
@@ -137,7 +162,12 @@ poly 55 110 220 330
         token_types = {
           open_list: /^\(/,
           close_list: /^\)/,
-          plain: /^[a-zA-Z0-9\.\#\>\+\-\*\/]+/,
+          pipe: /^\>/,
+          set_var: /^[a-zA-Z_][a-zA-Z0-9_]*\:/, // imp: impulse 2
+          // todo: change ":" to "=" and allow arbitrary spaces
+          //assignment: /^\=/, // <- use this and do pattern matching later
+          number: /^[0-9\.\/]+/, // not super accurate..
+          word: /^[a-zA-Z0-9\.\#\=\+\-\*\/]+/,
         };
         // matches next token
         next_token(code) {
@@ -167,49 +197,82 @@ poly 55 110 220 330
           while (this.tokens.length) {
             expressions.push(this.parse_expr());
           }
-          return this.make_list(expressions);
-
-          // do we have multiple top level expressions or a single non list?
-          /* if (expressions.length > 1 ||  expressions[0].type !== "list") {
-            return this.make_list(expressions);
-          }
-          return expressions[0]; */
-          //return expressions[0];
+          return expressions;
         }
-        // https://garten.salat.dev/lisp/sugar.html
         // parses any valid expression see
         parse_expr() {
-          let next = this.tokens[0]?.type;
-          if (next === "open_list") {
-            return this.parse_list();
-          }
-          if (next === "plain") {
-            return this.consume(next);
-          }
           if (!this.tokens[0]) {
             throw new Error(`unexpected end of file`);
           }
-          throw new Error(
-            `unexpected token "${this.tokens[0].value}" of type ${this.tokens[0].type}`
-          );
+          let next = this.tokens[0].type;
+          if (next === "open_list") {
+            return this.parse_list();
+          }
+          return this.consume(next);
+        }
+        // makes sure given elements are a non nested list
+        reify_list(elements) {
+          // if it's a single list element, take it as is
+          if (elements.length === 1 && elements[0].type === "list") {
+            return elements[0];
+          }
+          if (elements.length === 1 && elements[0].type === "number") {
+            return this.wrap_n(elements[0].value);
+          }
+          // it's not a single list element -> wrap as list
+          return { type: "list", children: elements };
         }
         resolve_pipes(children) {
           // saw 55 > lpf .5 = lpf (saw 55) .5
           while (true) {
-            let pipeIndex = children.findIndex((child) => child.value === ">");
+            let pipeIndex = children.findIndex(
+              (child) => child.type === "pipe"
+            );
             if (pipeIndex === -1) break;
-            const leftSide = children.slice(0, pipeIndex);
+            let leftSide = children.slice(0, pipeIndex);
+            if (leftSide.length === 1) {
+              leftSide = leftSide[0];
+            } else {
+              leftSide = this.reify_list(leftSide);
+            }
             const callee = children[pipeIndex + 1];
             const rightSide = children.slice(pipeIndex + 2);
-            children = [
-              callee,
-              { type: "list", children: leftSide },
-              ...rightSide,
-            ];
+            children = [callee, leftSide, ...rightSide];
           }
           return children;
         }
+        wrap_n(value) {
+          return {
+            type: "list",
+            children: [
+              { type: "word", value: "n" }, // this is very kabelsalat specific...
+              { type: "word", value },
+            ],
+          };
+        }
+        resolve_set_var(children) {
+          const varIndex = children.findIndex(
+            (child) => child.type === "set_var"
+          );
+          if (varIndex === -1) return children;
+          if (varIndex !== 0) {
+            throw new Error('assignments need to be of format "x = ..."');
+          }
+          const name = children[0].value.slice(0, -1); // cut off :
+
+          let rightSide = children.slice(1);
+          rightSide = this.make_list(rightSide);
+
+          return [
+            { type: "word", value: "def" },
+            { type: "word", value: name },
+            rightSide,
+          ];
+        }
+
         make_list(children) {
+          // children = this.reify_list(children).children; // (imp: (impulse 2)) = (imp: impulse 2)
+          children = this.resolve_set_var(children);
           children = this.resolve_pipes(children);
           return { type: "list", children };
         }
@@ -246,9 +309,8 @@ poly 55 110 220 330
           }
         }
         run(code) {
-          const ast = this.parser.parse(code);
-          // interpret top level ast as list of expressions
-          return ast.children.map((exp) => this.evaluate(exp));
+          const expressions = this.parser.parse(code);
+          return expressions.map((exp) => this.evaluate(exp));
         }
         process_args(args) {
           return args.map((arg) => {
@@ -261,7 +323,7 @@ poly 55 110 220 330
         evaluate(ast) {
           // console.log("call", ast);
           // for a node to be callable, it needs to be a list
-          if (ast.type === "plain") {
+          if (ast.type === "word") {
             // non-lists evaluate to their value
             return ast.value;
           }
@@ -271,28 +333,36 @@ poly 55 110 220 330
           );
           // the first element is expected to be the function name
           this.assert(
-            ast.children[0]?.type === "plain",
-            `function call: expected first child to be plain, got ${ast.type}`
+            ast.children[0]?.type === "word",
+            `function call: expected first child to be word, got ${ast.type}`
           );
           // look up function in lib
           const name = ast.children[0].value;
 
-          // defun macro
-          if (name === "defun") {
-            const fnName = ast.children[1].value;
-            const fnArgs = ast.children[2].children.map((arg) => arg.value);
-            const fnBody = this.evaluate(ast.children[3]);
-            return `let ${fnName} = (${fnArgs.join(",")}) => ${fnBody}`;
-          }
-          if (name === "lambda") {
+          // lambda function
+          if (name === "fn") {
             const fnArgs = ast.children[1].children.map((arg) => arg.value);
-            const fnBody = this.evaluate(ast.children[2]);
+            let lines = [];
+            const statements = ast.children.slice(2);
+            let fnBody;
+            // multiple statements
+            for (let i in statements) {
+              let evaluated = this.evaluate(statements[i]);
+              if (i == statements.length - 1) {
+                evaluated = `return ${evaluated}`;
+              }
+              lines.push(evaluated);
+            }
+            fnBody = `{${lines.join(";")}}`;
+            console.log("fnBody", fnBody);
+            //const fnBody = this.evaluate(ast.children[2]);
             return `(${fnArgs.join(",")}) => ${fnBody}`;
           }
-          if (name === "defparameter") {
+          if (name === "def") {
             const pName = ast.children[1].value;
             const pBody = this.evaluate(ast.children[2]);
-            return `let ${pName} = ${pBody};`;
+            //return `let ${pName} = ${pBody};`;
+            return `let ${pName} = ${pBody}`;
           }
 
           // process args
@@ -305,22 +375,39 @@ poly 55 110 220 330
       // wire everything together
       import { SalatRepl } from "./@kabelsalat/web/index.mjs";
 
+      window.apply = (node, fn) => node.apply(fn);
       const zilp = new Zilp();
       const input = document.querySelector("#code");
-      input.value = `(defun lfo (f a b) (sine f > range a b))
-(defparameter imp (impulse 2))
+      /* input.value = `(lfo: fn (f a b) (sine f > range a b))
+(imp: impulse 2)
 
 (seq imp 0 3 7 12
-> add (seq (clockdiv imp 8) 0 5) 
+> add (:imp > clockdiv 8 > seq 0 5) 
 > add 42
 > midinote
 > saw (lfo .3 .1 .5)
 > lpf (lfo .2 .3 .8) .2
 > mul (ad imp .01 .1)
-> add (lambda (x) (delay x .3 > mul .9))
+> add (fn (x) (:x > delay .3 > mul .9))
 > out)
+`; */
+      input.value = `(
+fm2: fn (freq fmh fmi) 
+(modfreq: freq > mul fmh)
+(modgain: modfreq > mul fmi)
+(sine modfreq > mul modgain > sine)
+)
 
-`;
+(
+impulse 6 
+> apply (fn (imp) (
+ imp > seq 50 50 100 50 300
+ > fm2 1.005 (sine .5 > range 4 20)
+ > mul (imp > ad 1 1)
+))
+> add (fn (x) (x > delay .3 > mul .7))
+> mul .5 > clip > out
+)`;
 
       const repl = new SalatRepl();
 
