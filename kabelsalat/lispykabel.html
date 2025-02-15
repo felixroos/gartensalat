@@ -353,23 +353,9 @@
 
       input.value =
         urlCode ||
-        `(
-fm2: fn (freq fmh fmi) 
-(modfreq: freq > mul fmh)
-(modgain: modfreq > mul fmi)
-(sine modfreq > mul modgain > sine)
-)
-
-(
-impulse 6 
-> apply (fn (imp) (
- imp > seq 50 50 100 50 300
- > fm2 1.005 (sine .5 > range 4 20)
- > mul (imp > ad 1 1)
-))
-> add (fn (x) (x > delay .3 > mul .7))
-> mul .5 > clip > out
-)`;
+        atob(
+          `cG9seSA1NSAxMTAgMjIwIDMzMCAKPiBzYXcgCj4gbHBmICggc2luZSAuMjUgPiByYW5nZSAuMyAuNyApCj4gbWl4IDIKPiBtdWwgKCBpbXB1bHNlIDQgPiBwZXJjIC4xID4gbGFnIC4wNSApCj4gYWRkIChmbiAoeCkgKHggPiBkZWxheSAoemF3IC4wMSA+IHJhbmdlIC4wMDUgLjAyKSA+IG11bCAuOSkpCj4gYWRkIChmbiAoeCkgKHggPiBkZWxheSAuMyA+IG11bCAuNykpCj4gZm9sZCA+IG11bCAuNiA+IG91dA==`
+        );
 
       const repl = new SalatRepl();
 
