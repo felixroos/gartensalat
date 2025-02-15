@@ -170,18 +170,6 @@
           }
           return this.consume(next);
         }
-        // makes sure given elements are a non nested list
-        reify_list(elements) {
-          // if it's a single list element, take it as is
-          if (elements.length === 1 && elements[0].type === "list") {
-            return elements[0];
-          }
-          if (elements.length === 1 && elements[0].type === "number") {
-            return this.wrap_n(elements[0].value);
-          }
-          // it's not a single list element -> wrap as list
-          return { type: "list", children: elements };
-        }
         resolve_pipes(children) {
           // saw 55 > lpf .5 = lpf (saw 55) .5
           while (true) {
@@ -193,22 +181,14 @@
             if (leftSide.length === 1) {
               leftSide = leftSide[0];
             } else {
-              leftSide = this.reify_list(leftSide);
+              // wrap in (..) if multiple items on the left side
+              leftSide = { type: "list", children: leftSide };
             }
             const callee = children[pipeIndex + 1];
             const rightSide = children.slice(pipeIndex + 2);
             children = [callee, leftSide, ...rightSide];
           }
           return children;
-        }
-        wrap_n(value) {
-          return {
-            type: "list",
-            children: [
-              { type: "word", value: "n" }, // this is very kabelsalat specific...
-              { type: "word", value },
-            ],
-          };
         }
         resolve_set_var(children) {
           const varIndex = children.findIndex(
