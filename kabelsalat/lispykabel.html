@@ -76,6 +76,28 @@
     <div>
       <small>💡 hit ctrl+enter to update the code.</small>
     </div>
+    <ul id="examples"></ul>
+    <script>
+      const examplesContainer = document.getElementById("examples");
+
+      const examples = {
+        distorted_guitar:
+          "KHBvbHkgNTUgMTEwIDIyMCAzMzAgCj4gc2F3IAo+IGxwZiAoIHNpbmUgLjI1ID4gcmFuZ2UgLjMgLjcgKQo+IG1peCAyCj4gbXVsICggaW1wdWxzZSA0ID4gcGVyYyAuMSA+IGxhZyAuMDUgKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgKHphdyAuMDEgPiByYW5nZSAuMDA1IC4wMikgPiBtdWwgLjkpKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgLjMgPiBtdWwgLjcpKQo+IGZvbGQgPiBtdWwgLjYgPiBvdXQp",
+        bass_ringtone:
+          "KGltcHVsc2UgNCA+IHNlcSAxMDAgMjAwIDMwMCA+IG11bCAoaW1wdWxzZSAxID4gc2VxIC41IDEpCj4gc2F3IChzaW5lIC4yID4gcmFuZ2UgLjEgLjUpIAo+IGxwZiAoc2luZSAuNSA+IHJhbmdlIC4zIC42KSAoc2luZSAuNCA+IHJhbmdlIDAgLjEpCj4gbXVsIChpbXB1bHNlIDggPiBhZCAuMDEgLjEpCj4gbXVsICh6YXcgMSA+IHJhbmdlIDEgMCA+IGxhZyAuMSkKPiBvdXQp",
+        custom_lfo_function:
+          "KGxmbzogZm4gKGYgYSBiKSAoc2luZSBmID4gcmFuZ2UgYSBiKSkKKGltcDogaW1wdWxzZSAyKQoKKHNlcSBpbXAgMCAzIDcgMTIKPiBhZGQgKGltcCA+IGNsb2NrZGl2IDggPiBzZXEgMCA1KSAKPiBhZGQgNDIKPiBtaWRpbm90ZQo+IHNhdyAobGZvIC4zIC4xIC41KQo+IGxwZiAobGZvIC4yIC4zIC44KSAuMgo+IG11bCAoYWQgaW1wIC4wMSAuMSkKPiBhZGQgKGZuICh4KSAoeCA+IGRlbGF5IC4zID4gbXVsIC45KSkKPiBvdXQp",
+        custom_fm_function:
+          "KApmbTI6IGZuIChmcmVxIGZtaCBmbWkpIAoobW9kZnJlcTogZnJlcSA+IG11bCBmbWgpCihtb2RnYWluOiBtb2RmcmVxID4gbXVsIGZtaSkKKHNpbmUgbW9kZnJlcSA+IG11bCBtb2RnYWluID4gc2luZSkKKQoKKAppbXB1bHNlIDYgCj4gYXBwbHkgKGZuIChpbXApICgKIGltcCA+IHNlcSA1MCA1MCAxMDAgNTAgMzAwCiA+IGZtMiAxLjAwNSAoc2luZSAuNSA+IHJhbmdlIDQgMjApCiA+IG11bCAoaW1wID4gYWQgMSAxKQopKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgLjMgPiBtdWwgLjcpKQo+IG11bCAuNSA+IGNsaXAgPiBvdXQKKQo=",
+      };
+
+      Object.entries(examples).forEach(([name, hash]) =>
+        examplesContainer.insertAdjacentHTML(
+          "beforeend",
+          `<li><a href="#${hash}">${name}</a></li>`
+        )
+      );
+    </script>
     <p>
       inspired by common lisp, i've added some more goodies to the language:
     </p>
@@ -85,76 +107,6 @@
       <li>x: y shortcut for setting variables</li>
       <li>:x shortcut for gettin variables</li>
     </ul>
-    <!-- <pre>
-(poly 55 110 220 330 
-> saw 
-> lpf ( sine .25 > range .3 .7 )
-> mix 2
-> mul ( impulse 4 > perc .1 > lag .05 )
-> add (fn (x) (x > delay (zaw .01 > range .005 .02) > mul .9))
-> add (fn (x) (x > delay .3 > mul .7))
-> fold > mul .6 > out)
-    </pre> -->
-
-    <!-- 
-(impulse 4 > seq 100 200 300 > mul (impulse 1 > seq .5 1)
-> saw (sine .2 > range .1 .5) 
-> lpf (sine .5 > range .3 .6) (sine .4 > range 0 .1)
-> mul (impulse 8 > ad .01 .1)
-> mul (zaw 1 > range 1 0 > lag .1)
-> out)
--->
-
-    <!-- 
-(lfo: fn (f a b) (sine f > range a b))
-
-(pulse 220 .2 
-> lpf (sine .5 > range .2 .8) 
-> fold 
-> out)
- -->
-
-    <!-- 
-(lfo: fn (f a b) (sine f > range a b))
-(imp: impulse 4)
-
-(imp > seq 0 3 7 12 > add 42 > midinote
-> pulse .2 
-> mul (imp > ad .01 .15)
-> out) 
- -->
-
-    <!-- 
-(lfo: fn (f a b) (sine f > range a b))
-(imp: impulse 1)
-
-(seq imp 0 3 7 12 > add 42 > midinote
-> pulse .5
-> mul (imp > ad .01 .15)
-> add (fn (x) (x > delay .3 > mul .8))
-> out)
--->
-
-    <!-- 
-(
-fm2: fn (freq fmh fmi) 
-(modfreq: freq > mul fmh)
-(modgain: modfreq > mul fmi)
-(sine modfreq > mul modgain > sine)
-)
-
-(
-impulse 6 
-> apply (fn (imp) (
- imp > seq 50 50 100 50 300
- > fm2 1.005 (sine .5 > range 4 20)
- > mul (imp > ad 1 1)
-))
-> add (fn (x) (x > delay .3 > mul .7))
-> mul .5 > clip > out
-)
- -->
-
     <script type="module">
       // https://garten.salat.dev/lisp/parser.html
       class LispParser {
@@ -378,20 +330,16 @@ impulse 6
       window.apply = (node, fn) => node.apply(fn);
       const zilp = new Zilp();
       const input = document.querySelector("#code");
-      /* input.value = `(lfo: fn (f a b) (sine f > range a b))
-(imp: impulse 2)
 
-(seq imp 0 3 7 12
-> add (:imp > clockdiv 8 > seq 0 5) 
-> add 42
-> midinote
-> saw (lfo .3 .1 .5)
-> lpf (lfo .2 .3 .8) .2
-> mul (ad imp .01 .1)
-> add (fn (x) (:x > delay .3 > mul .9))
-> out)
-`; */
-      input.value = `(
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!");
+      }
+
+      input.value =
+        urlCode ||
+        `(
 fm2: fn (freq fmh fmi) 
 (modfreq: freq > mul fmh)
 (modgain: modfreq > mul fmi)
@@ -421,9 +369,20 @@ impulse 6
       document.querySelector("#play").onclick = () => update();
       document.querySelector("#stop").onclick = () => repl?.stop();
 
+      window.addEventListener("hashchange", function () {
+        try {
+          const urlCode = atob(window.location.hash.slice(1));
+          input.value = urlCode;
+        } catch (err) {
+          console.error("could not load url code", err);
+        }
+        update(input.value);
+      });
+
       input.addEventListener("keydown", (e) => {
         if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
-          update(input.value);
+          // update(input.value);
+          window.location.hash = "#" + btoa(input.value);
         }
         if ((e.ctrlKey || e.altKey) && e.key === ".") {
           e.preventDefault();
