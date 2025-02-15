@@ -76,19 +76,25 @@
     <div>
       <small>💡 hit ctrl+enter to update the code.</small>
     </div>
+    <pre id="output">// generated js code will appear here</pre>
     <ul id="examples"></ul>
     <script>
       const examplesContainer = document.getElementById("examples");
 
       const examples = {
+        // commented out hashes are with (..) around each block..
         distorted_guitar:
-          "KHBvbHkgNTUgMTEwIDIyMCAzMzAgCj4gc2F3IAo+IGxwZiAoIHNpbmUgLjI1ID4gcmFuZ2UgLjMgLjcgKQo+IG1peCAyCj4gbXVsICggaW1wdWxzZSA0ID4gcGVyYyAuMSA+IGxhZyAuMDUgKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgKHphdyAuMDEgPiByYW5nZSAuMDA1IC4wMikgPiBtdWwgLjkpKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgLjMgPiBtdWwgLjcpKQo+IGZvbGQgPiBtdWwgLjYgPiBvdXQp",
+          //"KHBvbHkgNTUgMTEwIDIyMCAzMzAgCj4gc2F3IAo+IGxwZiAoIHNpbmUgLjI1ID4gcmFuZ2UgLjMgLjcgKQo+IG1peCAyCj4gbXVsICggaW1wdWxzZSA0ID4gcGVyYyAuMSA+IGxhZyAuMDUgKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgKHphdyAuMDEgPiByYW5nZSAuMDA1IC4wMikgPiBtdWwgLjkpKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgLjMgPiBtdWwgLjcpKQo+IGZvbGQgPiBtdWwgLjYgPiBvdXQp",
+          "cG9seSA1NSAxMTAgMjIwIDMzMCAKPiBzYXcgCj4gbHBmICggc2luZSAuMjUgPiByYW5nZSAuMyAuNyApCj4gbWl4IDIKPiBtdWwgKCBpbXB1bHNlIDQgPiBwZXJjIC4xID4gbGFnIC4wNSApCj4gYWRkIChmbiAoeCkgKHggPiBkZWxheSAoemF3IC4wMSA+IHJhbmdlIC4wMDUgLjAyKSA+IG11bCAuOSkpCj4gYWRkIChmbiAoeCkgKHggPiBkZWxheSAuMyA+IG11bCAuNykpCj4gZm9sZCA+IG11bCAuNiA+IG91dA==",
         bass_ringtone:
-          "KGltcHVsc2UgNCA+IHNlcSAxMDAgMjAwIDMwMCA+IG11bCAoaW1wdWxzZSAxID4gc2VxIC41IDEpCj4gc2F3IChzaW5lIC4yID4gcmFuZ2UgLjEgLjUpIAo+IGxwZiAoc2luZSAuNSA+IHJhbmdlIC4zIC42KSAoc2luZSAuNCA+IHJhbmdlIDAgLjEpCj4gbXVsIChpbXB1bHNlIDggPiBhZCAuMDEgLjEpCj4gbXVsICh6YXcgMSA+IHJhbmdlIDEgMCA+IGxhZyAuMSkKPiBvdXQp",
+          "aW1wdWxzZSA0ID4gc2VxIDEwMCAyMDAgMzAwID4gbXVsIChpbXB1bHNlIDEgPiBzZXEgLjUgMSkKPiBzYXcgKHNpbmUgLjIgPiByYW5nZSAuMSAuNSkgCj4gbHBmIChzaW5lIC41ID4gcmFuZ2UgLjMgLjYpIChzaW5lIC40ID4gcmFuZ2UgMCAuMSkKPiBtdWwgKGltcHVsc2UgOCA+IGFkIC4wMSAuMSkKPiBtdWwgKHphdyAxID4gcmFuZ2UgMSAwID4gbGFnIC4xKQo+IG91dA==",
+        //"KGltcHVsc2UgNCA+IHNlcSAxMDAgMjAwIDMwMCA+IG11bCAoaW1wdWxzZSAxID4gc2VxIC41IDEpCj4gc2F3IChzaW5lIC4yID4gcmFuZ2UgLjEgLjUpIAo+IGxwZiAoc2luZSAuNSA+IHJhbmdlIC4zIC42KSAoc2luZSAuNCA+IHJhbmdlIDAgLjEpCj4gbXVsIChpbXB1bHNlIDggPiBhZCAuMDEgLjEpCj4gbXVsICh6YXcgMSA+IHJhbmdlIDEgMCA+IGxhZyAuMSkKPiBvdXQp",
         custom_lfo_function:
-          "KGxmbzogZm4gKGYgYSBiKSAoc2luZSBmID4gcmFuZ2UgYSBiKSkKKGltcDogaW1wdWxzZSAyKQoKKHNlcSBpbXAgMCAzIDcgMTIKPiBhZGQgKGltcCA+IGNsb2NrZGl2IDggPiBzZXEgMCA1KSAKPiBhZGQgNDIKPiBtaWRpbm90ZQo+IHNhdyAobGZvIC4zIC4xIC41KQo+IGxwZiAobGZvIC4yIC4zIC44KSAuMgo+IG11bCAoYWQgaW1wIC4wMSAuMSkKPiBhZGQgKGZuICh4KSAoeCA+IGRlbGF5IC4zID4gbXVsIC45KSkKPiBvdXQp",
+          "bGZvOiBmbiAoZiBhIGIpIChzaW5lIGYgPiByYW5nZSBhIGIpCgppbXA6IGltcHVsc2UgMgoKc2VxIGltcCAwIDMgNyAxMgo+IGFkZCAoaW1wID4gY2xvY2tkaXYgOCA+IHNlcSAwIDUpIAo+IGFkZCA0Mgo+IG1pZGlub3RlCj4gc2F3IChsZm8gLjMgLjEgLjUpCj4gbHBmIChsZm8gLjIgLjMgLjgpIC4yCj4gbXVsIChhZCBpbXAgLjAxIC4xKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgLjMgPiBtdWwgLjkpKQo+IG91dA==",
+        //"KGxmbzogZm4gKGYgYSBiKSAoc2luZSBmID4gcmFuZ2UgYSBiKSkKKGltcDogaW1wdWxzZSAyKQoKKHNlcSBpbXAgMCAzIDcgMTIKPiBhZGQgKGltcCA+IGNsb2NrZGl2IDggPiBzZXEgMCA1KSAKPiBhZGQgNDIKPiBtaWRpbm90ZQo+IHNhdyAobGZvIC4zIC4xIC41KQo+IGxwZiAobGZvIC4yIC4zIC44KSAuMgo+IG11bCAoYWQgaW1wIC4wMSAuMSkKPiBhZGQgKGZuICh4KSAoeCA+IGRlbGF5IC4zID4gbXVsIC45KSkKPiBvdXQp",
         custom_fm_function:
-          "KApmbTI6IGZuIChmcmVxIGZtaCBmbWkpIAoobW9kZnJlcTogZnJlcSA+IG11bCBmbWgpCihtb2RnYWluOiBtb2RmcmVxID4gbXVsIGZtaSkKKHNpbmUgbW9kZnJlcSA+IG11bCBtb2RnYWluID4gc2luZSkKKQoKKAppbXB1bHNlIDYgCj4gYXBwbHkgKGZuIChpbXApICgKIGltcCA+IHNlcSA1MCA1MCAxMDAgNTAgMzAwCiA+IGZtMiAxLjAwNSAoc2luZSAuNSA+IHJhbmdlIDQgMjApCiA+IG11bCAoaW1wID4gYWQgMSAxKQopKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgLjMgPiBtdWwgLjcpKQo+IG11bCAuNSA+IGNsaXAgPiBvdXQKKQo=",
+          "Zm0yOiBmbiAoZnJlcSBmbWggZm1pKSAKKG1vZGZyZXE6IGZyZXEgPiBtdWwgZm1oKQoobW9kZ2FpbjogbW9kZnJlcSA+IG11bCBmbWkpCihzaW5lIG1vZGZyZXEgPiBtdWwgbW9kZ2FpbiA+IHNpbmUpCgppbXB1bHNlIDYgCj4gYXBwbHkgKGZuIChpbXApICgKIGltcCA+IHNlcSA1MCA1MCAxMDAgNTAgMzAwCiA+IGZtMiAxLjAwNSAoc2luZSAuNSA+IHJhbmdlIDQgMjApCiA+IG11bCAoaW1wID4gYWQgMSAxKQopKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgLjMgPiBtdWwgLjcpKQo+IG11bCAuNSA+IGNsaXAgPiBvdXQK",
+        //"KApmbTI6IGZuIChmcmVxIGZtaCBmbWkpIAoobW9kZnJlcTogZnJlcSA+IG11bCBmbWgpCihtb2RnYWluOiBtb2RmcmVxID4gbXVsIGZtaSkKKHNpbmUgbW9kZnJlcSA+IG11bCBtb2RnYWluID4gc2luZSkKKQoKKAppbXB1bHNlIDYgCj4gYXBwbHkgKGZuIChpbXApICgKIGltcCA+IHNlcSA1MCA1MCAxMDAgNTAgMzAwCiA+IGZtMiAxLjAwNSAoc2luZSAuNSA+IHJhbmdlIDQgMjApCiA+IG11bCAoaW1wID4gYWQgMSAxKQopKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgLjMgPiBtdWwgLjcpKQo+IG11bCAuNSA+IGNsaXAgPiBvdXQKKQo=",
       };
 
       Object.entries(examples).forEach(([name, hash]) =>
@@ -141,6 +147,10 @@
           return tokens;
         }
         // take code, return abstract syntax tree
+        parse_block(code) {
+          this.tokens = this.tokenize(code);
+          return this.parse_expr();
+        }
         parse(code) {
           this.tokens = this.tokenize(code);
           const expressions = [];
@@ -206,7 +216,7 @@
           );
           if (varIndex === -1) return children;
           if (varIndex !== 0) {
-            throw new Error('assignments need to be of format "x = ..."');
+            throw new Error('assignments need to be of format "x: ..."');
           }
           const name = children[0].value.slice(0, -1); // cut off :
 
@@ -258,9 +268,16 @@
             throw new Error(error);
           }
         }
-        run(code) {
-          const expressions = this.parser.parse(code);
-          return expressions.map((exp) => this.evaluate(exp));
+        // evaluates a single code block, wraps in (..) automatically
+        run_block(code) {
+          const block = code.trim();
+          const expression = this.parser.parse_block(`(${code})`);
+          return this.evaluate(expression);
+        }
+        // evaluates multiple blocks, separated by double line breaks, wraps each in (...)
+        run_blocks(code) {
+          const blocks = code.trim().split("\n\n").filter(Boolean);
+          return blocks.map((block) => this.run_block(block));
         }
         process_args(args) {
           return args.map((arg) => {
@@ -304,7 +321,6 @@
               lines.push(evaluated);
             }
             fnBody = `{${lines.join(";")}}`;
-            console.log("fnBody", fnBody);
             //const fnBody = this.evaluate(ast.children[2]);
             return `(${fnArgs.join(",")}) => ${fnBody}`;
           }
@@ -359,7 +375,8 @@ impulse 6
 
       function update(lispCode = input.value) {
         const t = performance.now();
-        const jsCode = zilp.run(lispCode).join("\n");
+        const jsCode = zilp.run_blocks(lispCode).join("\n\n");
+        document.getElementById("output").innerText = jsCode;
         console.log(jsCode);
         repl.run(jsCode);
       }
@@ -379,8 +396,13 @@ impulse 6
 
       input.addEventListener("keydown", (e) => {
         if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
-          // update(input.value);
-          window.location.hash = "#" + btoa(input.value);
+          const currentHash = window.location.hash.slice(1);
+          const nextHash = btoa(input.value);
+          if (currentHash === nextHash) {
+            update(input.value); // if hash stays the same, we won't get a hashchange
+          } else {
+            window.location.hash = "#" + btoa(input.value);
+          }
         }
         if ((e.ctrlKey || e.altKey) && e.key === ".") {
           e.preventDefault();
