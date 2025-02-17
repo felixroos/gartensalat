@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+  <!-- This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details. You should have received a copy of the GNU Affero General Public License along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 idlecycles #2</title>
+    <style>
+      body {
+        background-color: #222;
+        width: 600px;
+        max-width: 100%;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+        box-sizing: border-box;
+      }
+      img {
+        max-width: 100%;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <script>
+      class MiniREPL extends HTMLElement {
+        static observedAttributes = ["code", "rows"];
+
+        constructor() {
+          super();
+        }
+        init() {
+          const code = this.getAttribute("code");
+          const rows = this.getAttribute("rows");
+          if (!code) {
+            return;
+          }
+          this.innerHTML = "";
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div class="editor-wrapper">
+        <textarea id="code" spellcheck="false" rows="${rows}">${code}</textarea>
+    <canvas 
+      style="width: 100%; max-width: 800px; height: 200px; pointer-events: none"
+    ></canvas>
+      </div>`
+          );
+          // draw logic
+          this.canvas = this.querySelector("canvas");
+          this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+          this.canvas.height =
+            this.canvas.clientHeight * window.devicePixelRatio;
+          // repl logic
+          const input = this.querySelector("textarea");
+          input.value = code;
+          this.update(input.value);
+          input.addEventListener("input", (e) => this.update(input.value));
+        }
+        async update(code) {
+          const pat = new Function(`return ${code}`)();
+          this.draw(pat);
+        }
+
+        draw(pat, cycles = 8) {
+          const ctx = this.canvas.getContext("2d");
+          const { width, height } = ctx.canvas;
+          ctx.fillStyle = "lightgray";
+          ctx.fillRect(0, 0, width, height);
+          const x = (normalized) => normalized * width;
+          const y = (normalized) => normalized * height;
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 3;
+          const haps = pat(0, cycles);
+          haps.forEach(({ a, b, value }) => {
+            const [nx, nw] = [a, b - a];
+            const [ny, nh] = [Math.floor(a) / cycles, height / cycles];
+            ctx.fillStyle = value;
+            const rect = [x(nx) % width, y(ny), x(nw), nh];
+            ctx.fillRect(...rect);
+            ctx.strokeRect(...rect);
+          });
+        }
+        connectedCallback() {
+          this.init();
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          this.init();
+        }
+      }
+      customElements.define("mini-repl", MiniREPL);
+    </script>
+    <script>
+      let cycle = (callback) => (a, b) => {
+        a = Math.floor(a);
+        b = Math.ceil(b);
+        let bag = [];
+        while (a < b) {
+          bag = bag.concat(callback(a, a + 1));
+          a++;
+        }
+        return bag;
+      };
+
+      let repeat = (value) => cycle((a, b) => [{ a, b, value }]);
+
+      let cat = (...values) =>
+        cycle((a, b) => {
+          let value = values[a % values.length];
+          return [{ a, b, value }];
+        });
+    </script>
+    <h2>🌱 idlecycles #2</h2>
+
+    <h2>Chapter 2: adding more functions</h2>
+
+    <p>
+      In this chapter we will take the
+      <a href="./chapter1.html">previous primitives</a> and create new useful
+      functions.
+    </p>
+
+    <h3>slow and fast</h3>
+
+    <p>
+      One interesting property about Patterns as functions of time (or space) is
+      that we can edit the time span from the outside:
+    </p>
+
+    <script>
+      let fast = (factor, pat) => (a, b) =>
+        pat(
+          a * factor, // scale up timespan
+          b * factor
+        ).map((hap) => ({
+          a: hap.a / factor, // scale down hap timespan
+          b: hap.b / factor,
+          value: hap.value,
+        }));
+
+      fast(5, cat("cyan", "magenta", "yellow"));
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>
+      This will have the effect of scaling the time axis of our Haps. This is
+      the visual representation:
+    </p>
+    <mini-repl code="fast(5, cat('cyan','magenta','yellow'))" />
+
+    <p>
+      The trick is to first scale up our timespan and then scale down the time
+      span of each Hap by the given factor.
+    </p>
+
+    <p>We can implement the opposite version of the function like this:</p>
+
+    <script>
+      let slow = (factor, pat) => fast(1 / factor, pat);
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>Example:</p>
+
+    <mini-repl code="slow(2, cat('cyan','magenta','yellow'))" />
+
+    <p>
+      The fact that there are gray areas is due to the way the visual is
+      implemented. Each Hap gets one rectangle whose width is determined by its
+      timespan duration. In the above case, each colored rectangle is 2 screens
+      wide, so you won't see half of it. We could theoretically implement a
+      split logic, where rectangles that are longer than one screen would be
+      split and moved to the next line, but i guess this is fine for now..
+    </p>
+
+    <h3>seq</h3>
+
+    <p>Another useful function can be derived by combining `cat` and `fast`:</p>
+
+    <script>
+      let seq = (...values) => fast(values.length, cat(...values));
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>This function will squeeze its given values into a single cycle:</p>
+    <mini-repl code="seq('cyan','magenta','yellow')" />
+
+    <p>
+      Here we can already see a cool property of functional programming: If we
+      have a set of base functions, we can combine them declaratively to create
+      new functions. You can think of it like crafting new materials from a set
+      of raw materials.
+    </p>
+
+    <h3>stack</h3>
+
+    <p>The `stack` function will place all values in the same timespan:</p>
+
+    <script>
+      let stack = (...values) =>
+        cycle((a, b) => values.map((value) => ({ a, b, value })));
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>
+      Visually, we're in 2D, so stacked rectangles will end up in the same
+      place. This will only have a visual effect when the stacked colors are
+      transparent:
+    </p>
+    <mini-repl code="stack('#ff000050', '#0000ff50')" />
+
+    <h3>Patterns of Patterns</h3>
+
+    <p>
+      Our standard library is growing, but we're still missing an important
+      property of Patterns: the ability to nest Patterns inside of each other.
+      Here's an example:
+    </p>
+
+    <pre>
+cat("cyan", seq("magenta", "yellow"))
+</pre
+    >
+
+    <p>
+      If we do that, we only get cyan, because the second input of `cat` is not
+      a color (and the canvas API will resort to the last working color when
+      drawing the rect of the second input).
+    </p>
+
+    <p>We can fix it like this:</p>
+
+    <script>
+      let nest = (value, a, b) => {
+        // if we have a function, we'll assume it's a Pattern function
+        if (typeof value === "function") {
+          return value(a, b);
+        }
+        // if it's not a function we'll take it as before
+        return [{ a, b, value }];
+      };
+      cat = (...values) =>
+        cycle((a, b) => {
+          let value = values[a % values.length];
+          return nest(value, a, b);
+        });
+
+      stack = (...values) =>
+        cycle((a, b) => values.map((value) => nest(value, a, b)).flat());
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>
+      Now if a value is a function, we'll call it with the current cycle,
+      assuming it's a Pattern function, which allows us to nest:
+    </p>
+
+    <mini-repl code="seq('cyan','magenta','yellow')" />
+
+    <p>And magically, we can nest Patterns as deep as we like:</p>
+
+    <mini-repl id="deep-nesting" rows="12" />
+    <script>
+      document.querySelector("#deep-nesting").setAttribute(
+        "code",
+        `fast(3,
+ cat(
+  seq("cyan", seq("magenta", "yellow")),
+  seq(
+    "#00ffff50",
+    "#ffff0050",
+    stack("#00ffff50","#ffff0050")
+  )
+ )
+)`
+      );
+    </script>
+
+    <p>You can edit the above code to see how it affects the visual!</p>
+    <p>
+      With these new functions, we can already create some non-trivial patterns,
+      but the syntax is still a bit unwieldy, as it's difficult to keep track of
+      all the parens when nesting.. Luckily, there is a way out, which we'll
+      implement in the next chapter!
+    </p>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <p>
+      <a href="/LICENSE">license: AGPL-3.0</a><br /><br />
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
