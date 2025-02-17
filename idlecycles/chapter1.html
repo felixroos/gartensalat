@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 idlecycles #1</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      img {
+        max-width: 500px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <script>
+      let test = (querySelector) => {
+        const container = document.querySelector(querySelector);
+        document
+          .querySelector(container)
+          .insertAdjacentHTML("beforeend", `<input type="text">test</p>`);
+      };
+    </script>
+    <h2>🌱 idlecycles #1</h2>
+    <p>
+      this is the first chapter of a series of posts about writing a
+      <a href="https://tidalcycles.org/" style="color: yellow" target="_blank"
+        >tidal</a
+      >
+      from scratch in JS. my goal is not to make this into a fully featured live
+      coding system, like
+      <a href="https://strudel.cc/" style="color: yellow" target="_blank"
+        >strudel</a
+      >, but rather cutting as much corners as possible, helping me to get a
+      deeper insight into the nature of the ideas at play, trying to avoid
+      getting lost in details. i've originally written these chapters on github,
+      but i won't spoil it to you. without further ado, let's begin..
+    </p>
+    <h2>Chapter 1: Patterns as Functions of Time</h2>
+    <p>
+      The core primitive of tidal are Patterns, which are essentially functions
+      of time:
+    </p>
+    <script>
+      let silence = (a, b) => [];
+      silence(0, 1); // []
+      silence(42, 79); // []
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>
+      The above example is the most simple pattern I can think of: silence. It
+      will always return an empty Array. The inputs a and b are the timespan we
+      want to know about.
+    </p>
+    <h3>We love repetition</h3>
+    <p>
+      The above example doesn't really do much, so let's implement another
+      pattern that repeats the same thing over and over:
+    </p>
+    <script>
+      let repeatX = (a, b) => {
+        a = Math.floor(a);
+        b = Math.ceil(b);
+        let bag = [];
+        while (a < b) {
+          bag.push({ a, b: a + 1, value: "X" });
+          a++;
+        }
+        return bag;
+      };
+      repeatX(0, 1); // [{a: 0, b: 1, value: 'X'}]
+      repeatX(0, 2); // [{a: 0, b: 1, value: 'X'}, {a: 1, b: 2, value: 'X'}]
+      repeatX(1.5, 2.5); // [{a: 1, b: 2, value: 'X'}, {a: 2, b: 3, value: 'X'}]
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>
+      This function will give us one object per whole number within the given
+      time span. The object contains the timespan during it is active + some
+      value.
+    </p>
+    <h3>Higher Order Functions</h3>
+    <p>
+      Ideally, we'd want to choose the value to repeat, so let's make it a
+      higher order function:
+    </p>
+    <script>
+      let repeatValue = (value) => (a, b) => {
+        a = Math.floor(a);
+        b = Math.ceil(b);
+        let bag = [];
+        while (a < b) {
+          bag.push({ a, b: a + 1, value });
+          a++;
+        }
+        return bag;
+      };
+      let snakes = repeatValue("snake");
+      let dogs = repeatValue("dog");
+      snakes(0, 2); // [{a: 0, b: 1, value: 'snake'},{a: 1, b: 2, value: 'snake'}]
+      dogs(1, 3); // [{a: 1, b: 2, value: 'dog'}, {a: 2, b: 3, value: 'dog'}]
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>
+      Higher order just means we have a function that returns a function. The
+      outer function takes a value and returns the inner function, which is a
+      Pattern.
+    </p>
+    <h3>It's Hap-pening</h3>
+    <p>
+      Our returned object could be expressed as a typescript type like this:
+    </p>
+    <pre>declare type Hap&lt;T&gt; = { a: number; b: number; value: T };</pre>
+    <p>With these <i>Hap</i>'s, we can now define a Pattern like this:</p>
+    <pre>
+declare type Pattern&lt;T&gt; = (a: number, b: number) => Hap&lt;T&gt;[];</pre
+    >
+    <p>
+      Note that these typings are only a simplified version of what strudel or
+      tidal use, but it's enough to get started thinking about Patterns.
+    </p>
+    <h3>Conc-cat-enation</h3>
+    <p>
+      Our repeat function is still a bit boring.. How about switching between
+      different values?
+    </p>
+    <script>
+      let concat =
+        (...values) =>
+        (a, b) => {
+          a = Math.floor(a);
+          b = Math.ceil(b);
+          let bag = [];
+          while (a < b) {
+            const value = a % values.length;
+            bag.push({ a, b: a + 1, value });
+            a++;
+          }
+          return bag;
+        };
+      let pat = concat("snake", "dog");
+      pat(0, 2); // [{a: 0, b: 1, value: 'snake'},{a: 1, b: 2, value: 'dog'}]
+      pat(1, 3); // [{a: 1, b: 2, value: 'dog'}, {a: 2, b: 3, value: 'snake'}]
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>The above pattern gives us an infinite timeline of snakes and dogs!</p>
+    <p>
+      The implementation looks very similar to repeatValue, maybe we should
+      generalize this loop:
+    </p>
+    <script>
+      let cycle = (callback) => (a, b) => {
+        a = Math.floor(a);
+        b = Math.ceil(b);
+        let bag = [];
+        while (a < b) {
+          bag = bag.concat(callback(a, a + 1));
+          a++;
+        }
+        return bag;
+      };
+
+      let repeat = (value) => cycle((a, b) => [{ a, b, value }]);
+
+      let cat = (...values) =>
+        cycle((a, b) => {
+          let value = values[a % values.length];
+          return [{ a, b, value }];
+        });
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>With this, we could implement repeat and cat much more concisely!</p>
+    <h3>Patterns as Functions of Space</h3>
+    <p>
+      So far, I've talked about a and b as a time span, but that's just a
+      metaphor, because tidal is used for music (typically). But it's actually
+      just a numerical range, so nothing stops us from interpreting Patterns as
+      functions of space:
+    </p>
+    <img src="./img/cat.png" />
+    <p>
+      In this other kind of cat picture, we see each whole number cycle
+      represented as a line, and the value of each `Hap` is interpreted as a
+      color.
+    </p>
+    <p>
+      From now on, I'll use this type of visualization, as it makes more sense
+      in a written guide.
+    </p>
+    <h3>Chapter 1: REPL</h3>
+    <p>This is the end of the first chapter!</p>
+    <p>
+      I've decided to create a minimal REPL for each chapter, to to play around
+      with the current state. Here it is:
+    </p>
+    <textarea id="code" spellcheck="false"></textarea>
+    <canvas
+      id="canvas"
+      style="width: 100%; max-width: 800px; height: 200px; pointer-events: none"
+    ></canvas>
+    <script>
+      // draw logic
+      const canvas = document.getElementById("canvas");
+      canvas.width = canvas.clientWidth * window.devicePixelRatio;
+      canvas.height = canvas.clientHeight * window.devicePixelRatio;
+
+      const ctx = canvas.getContext("2d");
+      function draw(pat, cycles = 8) {
+        const { width, height } = ctx.canvas;
+        ctx.fillStyle = "lightgray";
+        ctx.fillRect(0, 0, width, height);
+        const x = (normalized) => normalized * width;
+        const y = (normalized) => normalized * height;
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 3;
+        const haps = pat(0, cycles);
+        console.log("haps");
+        console.log(haps);
+        haps.forEach(({ a, b, value }) => {
+          const [nx, nw] = [a, b - a];
+          const [ny, nh] = [Math.floor(a) / cycles, height / cycles];
+          ctx.fillStyle = value;
+          const rect = [x(nx) % width, y(ny), x(nw), nh];
+          ctx.fillRect(...rect);
+          ctx.strokeRect(...rect);
+        });
+      }
+
+      // repl logic
+      const update = async (code) => {
+        console.log("update:");
+        console.log(code);
+        const pat = new Function(`return ${code}`)();
+        draw(pat);
+      };
+
+      const input = document.getElementById("code");
+      input.value = `cat('cyan', 'magenta', 'yellow')`;
+      update(input.value);
+      input.addEventListener("input", (e) => update(input.value));
+    </script>
+    <p>
+      The rendered output will query the pattern for 8 cycles. You can also see
+      some logs in the browser console. So far it's rather boring, but we'll see
+      how to manipulate patterns in the next one!
+    </p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script>
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
