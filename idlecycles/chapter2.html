@@ -273,31 +273,32 @@ cat("cyan", seq("magenta", "yellow"))
     <p>We can fix it like this:</p>
 
     <script>
-      let nest = (value, a, b) => {
-        // if we have a function, we'll assume it's a Pattern function
-        if (typeof value === "function") {
-          return value(a, b);
+      cycle = (callback) => (a, b) => {
+        a = Math.floor(a);
+        b = Math.ceil(b);
+        let bag = [];
+        while (a < b) {
+          const haps = callback(a, a + 1);
+          for (let hap of haps) {
+            if (typeof hap.value === "function") {
+              // for nested patterns, we resolve the subpattern
+              bag = bag.concat(hap.value(hap.a, hap.b));
+            } else {
+              // not a nested pattern
+              bag.push(hap);
+            }
+          }
+          a++;
         }
-        // if it's not a function we'll take it as before
-        return [{ a, b, value }];
+        return bag;
       };
-      cat = (...values) =>
-        cycle((a, b) => {
-          let value = values[a % values.length];
-          return nest(value, a, b);
-        });
-
-      stack = (...values) =>
-        cycle((a, b) => values.map((value) => nest(value, a, b)).flat());
       codeblock(document.currentScript, 6);
     </script>
 
     <p>
       Now if a value is a function, we'll call it with the current cycle,
-      assuming it's a Pattern function, which allows us to nest:
+      assuming it's a Pattern function, which allows us to nest!
     </p>
-
-    <mini-repl code="seq('cyan','magenta','yellow')" />
 
     <p>And magically, we can nest Patterns as deep as we like:</p>
 
