@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html>
+  <!-- This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details. You should have received a copy of the GNU Affero General Public License along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 idlecycles #3</title>
+    <style>
+      body {
+        background-color: #222;
+        width: 600px;
+        max-width: 100%;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+        box-sizing: border-box;
+      }
+      img {
+        max-width: 100%;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <script>
+      class MiniREPL extends HTMLElement {
+        static observedAttributes = ["code", "rows"];
+
+        constructor() {
+          super();
+        }
+        init() {
+          const code = this.getAttribute("code");
+          const rows = this.getAttribute("rows");
+          if (!code) {
+            return;
+          }
+          this.innerHTML = "";
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div class="editor-wrapper">
+        <textarea id="code" spellcheck="false" rows="${rows}">${code}</textarea>
+    <canvas 
+      style="width: 100%; max-width: 800px; height: 200px; pointer-events: none"
+    ></canvas>
+      </div>`
+          );
+          // draw logic
+          this.canvas = this.querySelector("canvas");
+          this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+          this.canvas.height =
+            this.canvas.clientHeight * window.devicePixelRatio;
+          // repl logic
+          const input = this.querySelector("textarea");
+          input.value = code;
+          this.update(input.value);
+          input.addEventListener("input", (e) => this.update(input.value));
+        }
+        async update(code) {
+          const pat = new Function(`return ${code}`)();
+          this.draw(pat);
+        }
+
+        draw(pat, cycles = 8) {
+          const ctx = this.canvas.getContext("2d");
+          const { width, height } = ctx.canvas;
+          ctx.fillStyle = "lightgray";
+          ctx.fillRect(0, 0, width, height);
+          const x = (normalized) => normalized * width;
+          const y = (normalized) => normalized * height;
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 3;
+          const haps = pat.query(0, cycles);
+          haps.forEach(({ a, b, value }) => {
+            const [nx, nw] = [a, b - a];
+            const [ny, nh] = [Math.floor(a) / cycles, height / cycles];
+            ctx.fillStyle = value;
+            const rect = [x(nx) % width, y(ny), x(nw), nh];
+            ctx.fillRect(...rect);
+            ctx.strokeRect(...rect);
+          });
+        }
+        connectedCallback() {
+          this.init();
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          this.init();
+        }
+      }
+      customElements.define("mini-repl", MiniREPL);
+    </script>
+    <script>
+      let cycle = (callback) => (a, b) => {
+        a = Math.floor(a);
+        b = Math.ceil(b);
+        let bag = [];
+        while (a < b) {
+          const haps = callback(a, a + 1);
+          for (let hap of haps) {
+            if (typeof hap.value === "function") {
+              // for nested patterns, we resolve the subpattern
+              bag = bag.concat(hap.value(hap.a, hap.b));
+            } else {
+              // not a nested pattern
+              bag.push(hap);
+            }
+          }
+          a++;
+        }
+        return bag;
+      };
+      let repeat = (value) => cycle((a, b) => [{ a, b, value }]);
+      let cat = (...values) =>
+        cycle((a, b) => {
+          let value = values[a % values.length];
+          return [{ a, b, value }];
+        });
+      let seq = (...values) => fast(values.length, cat(...values));
+    </script>
+    <h2>Chapter 3: Language Improvements</h2>
+
+    <p>Let's improve the language a bit. In strudel you can write:</p>
+
+    <pre>
+cat("cyan", "magenta", "yellow").fast(2);
+// is equivalent to:
+fast(2, cat("cyan", "magenta", "yellow"));
+</pre
+    >
+
+    <p>
+      In our little implementation, we can only write the second variant. To get
+      to the first variant, `cat` needs to return an object, where `fast` is a
+      function property (aka method).
+    </p>
+
+    <h3>Pattern as a class</h3>
+
+    <p>We can refactor our existing code by introducing the `Pattern` class.</p>
+
+    <script>
+      class Pattern {
+        constructor(query) {
+          this.query = query;
+        }
+      }
+      // Pattern creation shortcut:
+      let P = (q) => new Pattern(q);
+      // define methods
+      Pattern.prototype.fast = function (factor) {
+        return fast(factor, this);
+      };
+
+      Pattern.prototype.slow = function (factor) {
+        return slow(factor, this);
+      };
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>
+      This still won't work, because `fast` itself needs to return a `Pattern`
+      instance + handle a `Pattern` as its input:
+    </p>
+
+    <script>
+      let fast = (factor, pat) =>
+        // the P(...) wraps our query function in a Pattern
+        // + pat is now a Pattern, which has to queried by calling pat.query
+        P((a, b) =>
+          pat.query(a * factor, b * factor).map((hap) => ({
+            a: hap.a / factor,
+            b: hap.b / factor,
+            value: hap.value,
+          }))
+        );
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>
+      We're almost there, now the last refactoring to do is to make sure all the
+      other functions return a `Pattern` instance, so we can call `.fast` and
+      `.slow` on them. Luckily, our `cycle` function is the only thing we need
+      to touch:
+    </p>
+
+    <script>
+      cycle = (callback) =>
+        P((a, b) => {
+          // ^ this line is new
+          a = Math.floor(a);
+          b = Math.ceil(b);
+          let bag = [];
+          while (a < b) {
+            const haps = callback(a, a + 1);
+            for (let hap of haps) {
+              if (hap.value instanceof Pattern) {
+                // ^ here, we're now testing for a Pattern
+                bag = bag.concat(hap.value.query(hap.a, hap.b));
+                //                         ^ calling query now
+              } else {
+                bag.push(hap);
+              }
+            }
+            a++;
+          }
+          return bag;
+        });
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>Finally, we can do:</p>
+
+    <mini-repl
+      code="cat('cyan', seq('magenta','white').fast(2), 'yellow').fast(7)"
+    />
+
+    <p>
+      Before we were checking for value being a function, now we have to check
+      if it's a Pattern.
+    </p>
+
+    <h3>More Meta Programming</h3>
+
+    <p>
+      We have added our `fast` and `slow` methods to a `Pattern` by defining a
+      function on `Pattern.prototype`. Because we want to add many more
+      functions that transform a `Pattern`, we can add a helper function to
+      simplify that:
+    </p>
+
+    <script>
+      let register = (name, fn) => {
+        Pattern.prototype[name] = function (...args) {
+          return fn(...args, this);
+        };
+        return fn;
+      };
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>with it, we can register fast and slow like this:</p>
+
+    <!-- dont make this a real script.. -->
+    <pre>
+let fast = register("fast", (factor, pat) => /* ... */);
+let slow = register("slow", (factor, pat) => fast(1 / factor, pat));
+</pre
+    >
+
+    <p>This paves the way for a lot more functions to come!</p>
+
+    <h3>lastOf / firstOf</h3>
+
+    <p>
+      Finally, let's add another set of functions, using our new `register`
+      helper:
+    </p>
+
+    <script>
+      let firstOf = register("firstOf", (n, fn, pat) =>
+        cycle((a, b) => (a % n === 0 ? fn(pat) : pat).query(a, b))
+      );
+      let lastOf = register("lastOf", (n, fn, pat) =>
+        cycle((a, b) => (a % n === n - 1 ? fn(pat) : pat).query(a, b))
+      );
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>This allows us to conditionally apply a function every n cycles:</p>
+
+    <mini-repl
+      code="cat('cyan', 'magenta', 'yellow').lastOf(4, x=>x.fast(12))"
+    />
+    <p>
+      That's all for today! In the next chapter, we're going to implement a
+      basic mini notation parser.
+    </p>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <p>
+      <a href="/LICENSE">license: AGPL-3.0</a><br /><br />
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      // render source code
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
