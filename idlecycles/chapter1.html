@@ -298,10 +298,13 @@ declare type Pattern&lt;T&gt; = (a: number, b: number) => Hap&lt;T&gt;[];</pre
     </p>
     <script>
       // render source code
-      const html = document.querySelector("html").outerHTML;
-      const loc = html.split("\n").length;
-      document.querySelector("#pre").textContent = html;
-      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+      fetch(window.location.href)
+        .then((response) => response.text())
+        .then((html) => {
+          const label = `show source (${html.split("\n").length} loc)`;
+          document.querySelector("#pre").textContent = html;
+          document.querySelector("#loc").textContent = label;
+        });
     </script>
   </body>
 </html>

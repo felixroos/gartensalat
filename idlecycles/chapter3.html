@@ -68,10 +68,6 @@
     <script>
       class MiniREPL extends HTMLElement {
         static observedAttributes = ["code", "rows"];
-
-        constructor() {
-          super();
-        }
         init() {
           const code = this.getAttribute("code");
           const rows = this.getAttribute("rows");
@@ -256,7 +252,7 @@ fast(2, cat("cyan", "magenta", "yellow"));
 
     <mini-repl
       code="cat('cyan', seq('magenta','white').fast(2), 'yellow').fast(7)"
-    />
+    ></mini-repl>
 
     <p>
       Before we were checking for value being a function, now we have to check
@@ -314,7 +310,7 @@ let slow = register("slow", (factor, pat) => fast(1 / factor, pat));
 
     <mini-repl
       code="cat('cyan', 'magenta', 'yellow').lastOf(4, x=>x.fast(12))"
-    />
+    ></mini-repl>
     <p>
       That's all for today! In the next chapter, we're going to implement a
       basic mini notation parser.
@@ -331,10 +327,13 @@ let slow = register("slow", (factor, pat) => fast(1 / factor, pat));
     </p>
     <script>
       // render source code
-      const html = document.querySelector("html").outerHTML;
-      const loc = html.split("\n").length;
-      document.querySelector("#pre").textContent = html;
-      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+      fetch(window.location.href)
+        .then((response) => response.text())
+        .then((html) => {
+          const label = `show source (${html.split("\n").length} loc)`;
+          document.querySelector("#pre").textContent = html;
+          document.querySelector("#loc").textContent = label;
+        });
     </script>
   </body>
 </html>

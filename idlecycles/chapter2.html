@@ -51,11 +51,9 @@
       // render codeblock from script tag
       let codeblock = (scriptElement, indent = 0) => {
         const script = document.currentScript;
-        setTimeout(() => {
-          const pre = document.createElement("pre");
-          pre.textContent = getCode(scriptElement, indent);
-          script.after(pre);
-        }, 1);
+        const pre = document.createElement("pre");
+        pre.textContent = getCode(scriptElement, indent);
+        script.after(pre);
       };
       function getCode(scriptElement, indent = 0) {
         return scriptElement.innerText
@@ -68,10 +66,6 @@
     <script>
       class MiniREPL extends HTMLElement {
         static observedAttributes = ["code", "rows"];
-
-        constructor() {
-          super();
-        }
         init() {
           const code = this.getAttribute("code");
           const rows = this.getAttribute("rows");
@@ -187,7 +181,7 @@
       This will have the effect of scaling the time axis of our Haps. This is
       the visual representation:
     </p>
-    <mini-repl code="fast(5, cat('cyan','magenta','yellow'))" />
+    <mini-repl code="fast(5, cat('cyan','magenta','yellow'))"></mini-repl>
 
     <p>
       The trick is to first scale up our timespan and then scale down the time
@@ -203,7 +197,7 @@
 
     <p>Example:</p>
 
-    <mini-repl code="slow(2, cat('cyan','magenta','yellow'))" />
+    <mini-repl code="slow(2, cat('cyan','magenta','yellow'))"></mini-repl>
 
     <p>
       The fact that there are gray areas is due to the way the visual is
@@ -224,7 +218,7 @@
     </script>
 
     <p>This function will squeeze its given values into a single cycle:</p>
-    <mini-repl code="seq('cyan','magenta','yellow')" />
+    <mini-repl code="seq('cyan','magenta','yellow')"></mini-repl>
 
     <p>
       Here we can already see a cool property of functional programming: If we
@@ -248,7 +242,7 @@
       place. This will only have a visual effect when the stacked colors are
       transparent:
     </p>
-    <mini-repl code="stack('#ff000050', '#0000ff50')" />
+    <mini-repl code="stack('#ff000050', '#0000ff50')"></mini-repl>
 
     <h3>Patterns of Patterns</h3>
 
@@ -301,7 +295,7 @@ cat("cyan", seq("magenta", "yellow"))
 
     <p>And magically, we can nest Patterns as deep as we like:</p>
 
-    <mini-repl id="deep-nesting" rows="12" />
+    <mini-repl id="deep-nesting" rows="12"></mini-repl>
     <script>
       document.querySelector("#deep-nesting").setAttribute(
         "code",
@@ -337,10 +331,13 @@ cat("cyan", seq("magenta", "yellow"))
     </p>
     <script>
       // render source code
-      const html = document.querySelector("html").outerHTML;
-      const loc = html.split("\n").length;
-      document.querySelector("#pre").textContent = html;
-      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+      fetch(window.location.href)
+        .then((response) => response.text())
+        .then((html) => {
+          const label = `show source (${html.split("\n").length} loc)`;
+          document.querySelector("#pre").textContent = html;
+          document.querySelector("#loc").textContent = label;
+        });
     </script>
   </body>
 </html>
