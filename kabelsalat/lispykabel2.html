@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 lispy modular synth 2</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+      #lisp,
+      #output {
+        max-height: 300px;
+      }
+    </style>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+  </head>
+  <body>
+    <h2>🌱 lispy modular synth 2</h2>
+    <p>
+      this is another take on my
+      <a href="/kabelsalat/lispykabel.html">lispy modular synth</a>, trying to
+      further reduce complexity. the approach so far was:
+    </p>
+    <ol>
+      <li>parse code to syntax tree</li>
+      <li>generate js code from syntax tree</li>
+      <li>evaluate js code to get node graph</li>
+      <li>compile node graph to dsp code</li>
+    </ol>
+    <p>my new approach would:</p>
+    <ol>
+      <li>parse code to syntax tree</li>
+      <li>generate node graph from syntax tree</li>
+      <li>compile node graph to dsp code</li>
+    </ol>
+    <p>
+      so i'm trying to get rid of the js evaluation in the middle. the js
+      evaluation happens inside kabelsalat, where each node type has a
+      corresponding function + there's some special sauce for feedback and
+      multichannel expansion. without the js step, we would have less steps + we
+      wouldn't need the whole js to node plumbing. essentially, the custom dsl
+      would do the job of a scripting language..
+    </p>
+    <div><a id="play">play</a> | <a id="stop">stop</a></div>
+    <textarea rows="16" id="code" spellcheck="false"></textarea>
+    <div>
+      <small>💡 hit ctrl+enter to update the code.</small>
+    </div>
+    <ul id="examples"></ul>
+    <p>equivalent s-expressions:</p>
+    <pre id="lisp">// equivalent s-expressions will appear here</pre>
+    <p>generated graph:</p>
+    <pre id="output">// generated graph code will appear here</pre>
+    <script>
+      const examplesContainer = document.getElementById("examples");
+
+      const examples = {
+        distorted_guitar:
+          "cG9seSA1NSAxMTAgMjIwIDMzMCAKPiBzYXcgCj4gbHBmICggc2luZSAuMjUgPiByYW5nZSAuMyAuNyApCj4gbWl4IDIKPiBtdWwgKCBpbXB1bHNlIDQgPiBwZXJjIC4xID4gbGFnIC4wNSApCj4gYWRkIChmbiAoeCkgKHggPiBkZWxheSAoemF3IC4wMSA+IHJhbmdlIC4wMDUgLjAyKSA+IG11bCAuOSkpCj4gYWRkIChmbiAoeCkgKHggPiBkZWxheSAuMyA+IG11bCAuNykpCj4gZm9sZCA+IG11bCAuNiA+IG91dA==",
+        bass_ringtone:
+          "aW1wdWxzZSA0ID4gc2VxIDEwMCAyMDAgMzAwID4gbXVsIChpbXB1bHNlIDEgPiBzZXEgLjUgMSkKPiBzYXcgKHNpbmUgLjIgPiByYW5nZSAuMSAuNSkgCj4gZmlsdGVyIChzaW5lIC41ID4gcmFuZ2UgLjMgLjYpIChzaW5lIC40ID4gcmFuZ2UgMCAuMSkKPiBtdWwgKGltcHVsc2UgOCA+IGFkc3IgLjAxIC4xIDAgLjEpCj4gbXVsICh6YXcgMSA+IHJhbmdlIDEgMCA+IGxhZyAuMSkKPiBvdXQ=",
+        custom_lfo_function:
+          "bGZvOiBmbiAoZiBhIGIpIChzaW5lIGYgPiByYW5nZSBhIGIpCgppbXA6IGltcHVsc2UgMgoKc2VxIGltcCAwIDMgNyAxMgo+IGFkZCAoaW1wID4gY2xvY2tkaXYgOCA+IHNlcSAwIDUpIAo+IGFkZCA0Mgo+IG1pZGlub3RlCj4gc2F3IChsZm8gLjMgLjEgLjUpCj4gbHBmIChsZm8gLjIgLjMgLjgpIC4yCj4gbXVsIChhZCBpbXAgLjAxIC4xKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgLjMgPiBtdWwgLjkpKQo+IG91dA==",
+        custom_fm_function:
+          "Zm0yOiBmbiAoZnJlcSBmbWggZm1pKSAKKG1vZGZyZXE6IGZyZXEgPiBtdWwgZm1oKQoobW9kZ2FpbjogbW9kZnJlcSA+IG11bCBmbWkpCihzaW5lIG1vZGZyZXEgPiBtdWwgbW9kZ2FpbiA+IHNpbmUpCgppbXB1bHNlIDYgCj4gYXBwbHkgKGZuIChpbXApICgKIGltcCA+IHNlcSA1MCA1MCAxMDAgNTAgMzAwCiA+IGZtMiAxLjAwNSAoc2luZSAuNSA+IHJhbmdlIDQgMjApCiA+IG11bCAoaW1wID4gYWQgMSAxKQopKQo+IGFkZCAoZm4gKHgpICh4ID4gZGVsYXkgLjMgPiBtdWwgLjcpKQo+IG11bCAuNSA+IGNsaXAgPiBvdXQK",
+      };
+
+      Object.entries(examples).forEach(([name, hash]) =>
+        examplesContainer.insertAdjacentHTML(
+          "beforeend",
+          `<li><a href="#${hash}">${name}</a></li>`
+        )
+      );
+    </script>
+    <script type="module">
+      // https://garten.salat.dev/lisp/parser.html
+      class LispParser {
+        // these are the tokens we expect
+        token_types = {
+          open_list: /^\(/,
+          close_list: /^\)/,
+          pipe: /^\>/,
+          set_var: /^[a-zA-Z_][a-zA-Z0-9_]*\:/, // imp: impulse 2
+          // todo: change ":" to "=" and allow arbitrary spaces
+          //assignment: /^\=/, // <- use this and do pattern matching later
+          number: /^[0-9\.\/]+/, // not super accurate..
+          word: /^[a-zA-Z0-9\.\#\=\+\-\*\/]+/,
+        };
+        // matches next token
+        next_token(code) {
+          for (let type in this.token_types) {
+            const match = code.match(this.token_types[type]);
+            if (match) {
+              return { type, value: match[0] };
+            }
+          }
+          throw new Error(`could not match "${code}"`);
+        }
+        // takes code string, returns list of matched tokens (if valid)
+        tokenize(code) {
+          let tokens = [];
+          while (code.length > 0) {
+            code = code.trim();
+            const token = this.next_token(code);
+            code = code.slice(token.value.length);
+            tokens.push(token);
+          }
+          return tokens;
+        }
+        // take code, return abstract syntax tree
+        parse_block(code) {
+          this.tokens = this.tokenize(code);
+          return this.parse_expr();
+        }
+        parse(code) {
+          this.tokens = this.tokenize(code);
+          const expressions = [];
+          while (this.tokens.length) {
+            expressions.push(this.parse_expr());
+          }
+          return expressions;
+        }
+        // parses any valid expression see
+        parse_expr() {
+          if (!this.tokens[0]) {
+            throw new Error(`unexpected end of file`);
+          }
+          let next = this.tokens[0].type;
+          if (next === "open_list") {
+            return this.parse_list();
+          }
+          return this.consume(next);
+        }
+        resolve_pipes(children) {
+          // saw 55 > lpf .5 = lpf (saw 55) .5
+          while (true) {
+            let pipeIndex = children.findIndex(
+              (child) => child.type === "pipe"
+            );
+            if (pipeIndex === -1) break;
+            let leftSide = children.slice(0, pipeIndex);
+            if (leftSide.length === 1) {
+              leftSide = leftSide[0];
+            } else {
+              // wrap in (..) if multiple items on the left side
+              leftSide = { type: "list", children: leftSide };
+            }
+            const callee = children[pipeIndex + 1];
+            const rightSide = children.slice(pipeIndex + 2);
+            children = [callee, leftSide, ...rightSide];
+          }
+          return children;
+        }
+        resolve_set_var(children) {
+          const varIndex = children.findIndex(
+            (child) => child.type === "set_var"
+          );
+          if (varIndex === -1) return children;
+          if (varIndex !== 0) {
+            throw new Error('assignments need to be of format "x: ..."');
+          }
+          const name = children[0].value.slice(0, -1); // cut off :
+
+          let rightSide = children.slice(1);
+          rightSide = this.make_list(rightSide);
+
+          return [
+            { type: "word", value: "def" },
+            { type: "word", value: name },
+            rightSide,
+          ];
+        }
+
+        make_list(children) {
+          // children = this.reify_list(children).children; // (imp: (impulse 2)) = (imp: impulse 2)
+          children = this.resolve_set_var(children);
+          children = this.resolve_pipes(children);
+          return { type: "list", children };
+        }
+        parse_list() {
+          this.consume("open_list");
+          let children = [];
+          while (this.tokens[0]?.type !== "close_list") {
+            children.push(this.parse_expr());
+          }
+          this.consume("close_list");
+          return this.make_list(children);
+        }
+        consume(type) {
+          // shift removes first element and returns it
+          const token = this.tokens.shift();
+          if (token.type !== type) {
+            throw new Error(`expected token type ${type}, got ${token.type}`);
+          }
+          return token;
+        }
+      }
+
+      // https://garten.salat.dev/lisp/interpreter.html
+      class Zilp {
+        constructor(handle) {
+          this.parser = new LispParser();
+          this.handle = handle;
+        }
+        static print(ast, lvl = 0) {
+          const spaces = Array(lvl).fill(" ").join("");
+          if (ast.type === "list") {
+            return `${lvl ? "\n" : ""}${spaces}(${ast.children
+              .map((child) => Zilp.print(child, lvl + 1))
+              .join(" ")}${
+              ast.children.find((child) => child.type === "list")
+                ? `\n${spaces})`
+                : ")"
+            }`;
+          }
+          return `${ast.value}`;
+        }
+        // a helper to check conditions and throw if they are not met
+        assert(condition, error) {
+          if (!condition) {
+            throw new Error(error);
+          }
+        }
+        // evaluates a single code block, wraps in (..) automatically
+        run_block(code) {
+          const expression = this.parser.parse_block(`(${code})`);
+          return this.evaluate(expression);
+        }
+        // evaluates multiple blocks, separated by double line breaks, wraps each in (...)
+        run_blocks(code) {
+          const blocks = code.trim().split("\n\n").filter(Boolean);
+          return blocks.map((block) => this.run_block(block));
+        }
+        print_blocks(code) {
+          const blocks = code.trim().split("\n\n").filter(Boolean);
+          return blocks
+            .map((block) => {
+              const expression = this.parser.parse_block(`(${block})`);
+              return Zilp.print(expression);
+            })
+            .join("\n\n");
+        }
+        process_args(args) {
+          return args.map((arg) => {
+            if (arg.type === "list") {
+              return this.evaluate(arg);
+            }
+            return arg.value;
+          });
+        }
+        evaluate(ast) {
+          // console.log("call", ast);
+          // for a node to be callable, it needs to be a list
+          if (ast.type === "word") {
+            // non-lists evaluate to their value
+            return ast.value;
+          }
+          this.assert(
+            ast.type === "list",
+            `function call: expected list, got ${ast.type}`
+          );
+          // the first element is expected to be the function name
+          this.assert(
+            ast.children[0]?.type === "word",
+            `function call: expected first child to be word, got ${ast.type}`
+          );
+          // look up function in lib
+          const name = ast.children[0].value;
+
+          // lambda function
+          if (name === "fn") {
+            const fnArgs = ast.children[1].children.map((arg) => arg.value);
+            let body = [];
+            const statements = ast.children.slice(2);
+            // multiple statements
+            for (let i in statements) {
+              let evaluated = this.evaluate(statements[i]);
+              body.push(evaluated);
+            }
+            return this.handle({ type: "fn", args: fnArgs, body });
+          }
+          if (name === "def") {
+            const name = ast.children[1].value;
+            const body = this.evaluate(ast.children[2]);
+            return this.handle({ type: "def", name, body });
+          }
+          // process args
+          const args = this.process_args(ast.children.slice(1));
+          return this.handle({ type: "eval", name, args });
+        }
+      }
+
+      // wire everything together
+      import { SalatRepl, compile } from "./@kabelsalat/web/index.mjs";
+
+      window.apply = (node, fn) => node.apply(fn);
+
+      // recursively replaces variable "name" with "target", above "node"
+      let resolveVariable = (node, name, target) => {
+        if (node.type === "string" && node.value === name) {
+          return target;
+        }
+        if (node.ins) {
+          node.ins = node.ins?.map((input) =>
+            resolveVariable(input, name, target)
+          );
+        }
+        return node;
+      };
+      const nodeAlias = {
+        lpf: "filter",
+      };
+      // zilp handler that produces a kabelsalat graph
+      let buildGraph = (o) => {
+        if (o.type === "fn") {
+          return { type: "lambda", body: o.body, args: o.args };
+        } else if (o.type === "def") {
+          throw new Error("def not supported yet");
+        } else if (o.type === "eval") {
+          const node = { type: o.name, ins: [] };
+          o.args.map((arg, i) => {
+            if (typeof arg !== "object") {
+              const n = Number(arg);
+              if (!isNaN(n)) {
+                node.ins[i] = { type: "n", value: Number(arg), ins: [] };
+                return;
+              }
+              node.ins[i] = { type: "string", value: arg };
+              return;
+            }
+            if (arg.type === "lambda") {
+              if (arg.body.length !== 1) {
+                throw new Error("lambda only supports a single body so far");
+              }
+              const [feedback] = arg.body;
+              node.ins[i] = resolveVariable(feedback, arg.args[0], node);
+              return;
+            }
+            node.ins[i] = arg;
+          });
+          if (nodeAlias[node.type]) {
+            node.type = nodeAlias[node.type];
+          }
+          if (node.type === "out") {
+            const [src, ch] = node.ins;
+            return {
+              type: "exit",
+              ins: [
+                {
+                  type: "output",
+                  ins: [src /* , { type: "n", value: 1, ins: [] } */],
+                },
+              ],
+            };
+          }
+          return node;
+        }
+        throw new Error(`zilp: unhandled type ${o.type}`);
+      };
+
+      const zilp = new Zilp(buildGraph);
+      const input = document.querySelector("#code");
+
+      let urlCode = window.location.hash.slice(1);
+      if (urlCode) {
+        urlCode = atob(urlCode);
+        console.log("loaded code from url!");
+      }
+
+      input.value =
+        urlCode ||
+        atob(
+          `cG9seSA1NSAxMTAgMjIwIDMzMCAKPiBzYXcgCj4gbHBmICggc2luZSAuMjUgPiByYW5nZSAuMyAuNyApCj4gbWl4IDIKPiBtdWwgKCBpbXB1bHNlIDQgPiBwZXJjIC4xID4gbGFnIC4wNSApCj4gYWRkIChmbiAoeCkgKHggPiBkZWxheSAoemF3IC4wMSA+IHJhbmdlIC4wMDUgLjAyKSA+IG11bCAuOSkpCj4gYWRkIChmbiAoeCkgKHggPiBkZWxheSAuMyA+IG11bCAuNykpCj4gZm9sZCA+IG11bCAuNiA+IG91dA==`
+        );
+
+      const repl = new SalatRepl();
+      // https://stackoverflow.com/questions/11616630/how-can-i-print-a-circular-structure-in-a-json-like-format
+      JSON.safeStringify = (obj, indent = 2) => {
+        let cache = [];
+        const retVal = JSON.stringify(
+          obj,
+          (key, value) =>
+            typeof value === "object" && value !== null
+              ? cache.includes(value)
+                ? "[circular]" // Duplicate reference found, discard key
+                : cache.push(value) && value // Store value in our collection
+              : value,
+          indent
+        );
+        cache = null;
+        return retVal;
+      };
+      function update(lispCode = input.value) {
+        const t = performance.now();
+        const [node] = zilp.run_blocks(lispCode);
+        node.compile = () => compile(node, { log: 0 });
+        repl.play(node);
+        document.getElementById("output").innerText = JSON.safeStringify(node);
+        try {
+          document.getElementById("lisp").innerText =
+            zilp.print_blocks(lispCode);
+        } catch (err) {
+          console.error("failed to print blocks", err);
+        }
+      }
+
+      document.querySelector("#play").onclick = () => update();
+      document.querySelector("#stop").onclick = () => repl?.stop();
+
+      window.addEventListener("hashchange", function () {
+        try {
+          const urlCode = atob(window.location.hash.slice(1));
+          input.value = urlCode;
+        } catch (err) {
+          console.error("could not load url code", err);
+        }
+        update(input.value);
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          const currentHash = window.location.hash.slice(1);
+          const nextHash = btoa(input.value);
+          if (currentHash === nextHash) {
+            update(input.value); // if hash stays the same, we won't get a hashchange
+          } else {
+            window.location.hash = "#" + btoa(input.value);
+          }
+        }
+        if ((e.ctrlKey || e.altKey) && e.key === ".") {
+          e.preventDefault();
+          repl?.stop();
+        }
+      });
+    </script>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <a href="/">back to garten.salat</a>
+    <script>
+      // render source code
+      fetch(window.location.href)
+        .then((response) => response.text())
+        .then((html) => {
+          const label = `show source (${html.split("\n").length} loc)`;
+          document.querySelector("#pre").textContent = html;
+          document.querySelector("#loc").textContent = label;
+        });
+    </script>
+  </body>
+</html>
