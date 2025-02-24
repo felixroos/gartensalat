@@ -190,9 +190,8 @@ fast(2, cat("cyan", "magenta", "yellow"));
       Pattern.prototype.fast = function (factor) {
         return fast(factor, this);
       };
-
       Pattern.prototype.slow = function (factor) {
-        return slow(factor, this);
+        return fast(1 / factor, this);
       };
       codeblock(document.currentScript, 6);
     </script>
