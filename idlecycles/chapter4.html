@@ -285,14 +285,17 @@
         return tokens;
       }
       tokenize("<cyan magenta>");
-      //[
-      //{ type: "open_cat", value: "<" },
-      //{ type: "plain", value: "cyan" },
-      //{ type: "plain", value: "magenta" },
-      //{ type: "close_cat", value: ">" },
-      //]
       codeblock(document.currentScript, 6);
     </script>
+    <p>output:</p>
+    <pre>
+[
+  { "type": "open_cat", "value": "&lt;" },
+  { "type": "plain", "value": "cyan" },
+  { "type": "plain", "value": "magenta" },
+  { "type": "close_cat", "value": "&gt;" }
+]
+    </pre>
 
     <p>
       Here, we are taking token by token out of the string, until it is empty.
