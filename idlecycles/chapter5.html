@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html>
+  <!-- This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details. You should have received a copy of the GNU Affero General Public License along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 idlecycles #4</title>
+    <style>
+      body {
+        background-color: #222;
+        width: 600px;
+        max-width: 100%;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+        box-sizing: border-box;
+      }
+      img {
+        max-width: 100%;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <script>
+      class MiniREPL extends HTMLElement {
+        static observedAttributes = ["code", "rows", "cycles"];
+
+        constructor() {
+          super();
+        }
+        init() {
+          const code = this.getAttribute("code");
+          const rows = this.getAttribute("rows");
+          const cycles = this.getAttribute("cycles") || 8;
+          if (!code) {
+            return;
+          }
+          this.innerHTML = "";
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div class="editor-wrapper">
+        <textarea id="code" spellcheck="false" rows="${rows}">${code}</textarea>
+    <canvas 
+      style="width: 100%; max-width: 800px; height: 200px; pointer-events: none"
+    ></canvas>
+      </div>`
+          );
+          // draw logic
+          this.canvas = this.querySelector("canvas");
+          this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+          this.canvas.height =
+            this.canvas.clientHeight * window.devicePixelRatio;
+          // repl logic
+          const input = this.querySelector("textarea");
+          input.value = code;
+          this.update(input.value, cycles);
+          input.addEventListener("input", (e) =>
+            this.update(input.value, cycles)
+          );
+        }
+        async update(code, cycles) {
+          const pat = new Function(`return ${code}`)();
+          this.draw(pat, cycles);
+        }
+
+        draw(pat, cycles = 8) {
+          const ctx = this.canvas.getContext("2d");
+          const { width, height } = ctx.canvas;
+          ctx.fillStyle = "lightgray";
+          ctx.fillRect(0, 0, width, height);
+          const x = (normalized) => normalized * width;
+          const y = (normalized) => normalized * height;
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 3;
+          const haps = pat.query(0, cycles);
+          haps.forEach(({ a, b, value }) => {
+            const [nx, nw] = [a, b - a];
+            const [ny, nh] = [Math.floor(a) / cycles, height / cycles];
+            if (typeof value === "object") {
+              let {
+                color,
+                h: hue,
+                s: saturation,
+                l: lightness,
+                a: alpha,
+              } = value;
+              if (color) {
+                ctx.fillStyle = color;
+              } else if (hue !== undefined) {
+                hue = hue * 360;
+                saturation = (saturation ?? 0.5) * 100;
+                lightness = (lightness ?? 0.5) * 100;
+                alpha = alpha ?? 1;
+                ctx.fillStyle = `hsla(${hue},${saturation}%,${lightness}%,${alpha})`;
+              }
+            } else if (isNaN(Number(value))) {
+              ctx.fillStyle = value;
+            } else {
+              value = Number(value);
+              ctx.fillStyle = `hsl(${value}turn 50% 50%)`;
+            }
+            const rect = [x(nx) % width, y(ny), x(nw), nh];
+            ctx.fillRect(...rect);
+            ctx.strokeRect(...rect);
+          });
+        }
+        connectedCallback() {
+          this.init();
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          this.init();
+        }
+      }
+      customElements.define("mini-repl", MiniREPL);
+    </script>
+    <script>
+      class Pattern {
+        constructor(query) {
+          this.query = query;
+        }
+      }
+      // Pattern creation shortcut:
+      let P = (q) => new Pattern(q);
+
+      let repeat = (value) => cycle((a, b) => [{ a, b, value }]);
+      let cat = (...values) =>
+        cycle((a, b) => {
+          let value = values[a % values.length];
+          return [{ a, b, value }];
+        });
+      let seq = (...values) => fast(values.length, cat(...values));
+
+      let register = (name, fn) => {
+        let q = (...args) => {
+          args = args.map((arg) => {
+            if (typeof arg === "string") {
+              return mini(arg);
+            }
+            return arg;
+          });
+          return fn(...args);
+        };
+        Pattern.prototype[name] = function (...args) {
+          return q(...args, this);
+        };
+        return q;
+      };
+
+      let cycle = (callback) =>
+        P((a, b) => {
+          // ^ this line is new
+          a = Math.floor(a);
+          b = Math.ceil(b);
+          let bag = [];
+          while (a < b) {
+            const haps = callback(a, a + 1);
+            for (let hap of haps) {
+              if (hap.value instanceof Pattern) {
+                // ^ here, we're now testing for a Pattern
+                bag = bag.concat(hap.value.query(hap.a, hap.b));
+                //                         ^ calling query
+              } else {
+                bag.push(hap);
+              }
+            }
+            a++;
+          }
+          return bag;
+        });
+
+      let fast = register("fast", (factor, pat) =>
+        // the P(...) wraps our query function in a Pattern
+        // + pat is now a Pattern, which has to queried by calling pat.query
+        P((a, b) =>
+          pat.query(a * factor, b * factor).map((hap) => ({
+            a: hap.a / factor,
+            b: hap.b / factor,
+            value: hap.value,
+          }))
+        )
+      );
+      let slow = register("slow", (factor, pat) => fast(1 / factor, pat));
+
+      let firstOf = register("firstOf", (n, fn, pat) =>
+        cycle((a, b) => (a % n === 0 ? fn(pat) : pat).query(a, b))
+      );
+      let lastOf = register("lastOf", (n, fn, pat) =>
+        cycle((a, b) => (a % n === n - 1 ? fn(pat) : pat).query(a, b))
+      );
+      let token_types = {
+        open_cat: /^\</, // "<"
+        close_cat: /^\>/, // ">"
+        open_seq: /^\[/, // "["
+        close_seq: /^\]/, // "]"
+        plain: /^[a-zA-Z0-9\.\#]+/, // values
+      };
+
+      function next_token(code) {
+        for (let type in token_types) {
+          const match = code.match(token_types[type]);
+          if (match) {
+            return { type, value: match[0] };
+          }
+        }
+        throw new Error(`could not match "${code}"`);
+      }
+
+      function tokenize(code) {
+        let tokens = [];
+        while (code.length > 0) {
+          code = code.trim(); // trim white spaces
+          const token = next_token(code);
+          code = code.slice(token.value.length);
+          tokens.push(token);
+        }
+        return tokens;
+      }
+
+      class Parser {
+        parse(code) {
+          this.tokens = tokenize(code);
+          return this.parse_expr();
+        }
+        consume(type) {
+          const token = this.tokens.shift();
+          if (token.type !== type) {
+            throw new Error(`expected token type ${type}, got ${token.type}`);
+          }
+          return token;
+        }
+        parse_expr() {
+          let next = this.tokens[0]?.type;
+          if (next === "open_cat") {
+            return this.parse_cat();
+          }
+          if (next === "open_seq") {
+            return this.parse_seq();
+          }
+          if (next === "plain") {
+            return this.consume("plain");
+          }
+          throw new Error(
+            `unexpected token "${this.tokens[0].value}" of type ${this.tokens[0].type}`
+          );
+        }
+        parse_args(close_type) {
+          const args = [];
+          while (this.tokens[0]?.type !== close_type) {
+            args.push(this.parse_expr());
+          }
+          return args;
+        }
+        parse_seq() {
+          this.consume("open_seq");
+          const args = this.parse_args("close_seq");
+          this.consume("close_seq");
+          return { type: "seq", args };
+        }
+        parse_cat() {
+          this.consume("open_cat");
+          const args = this.parse_args("close_cat");
+          this.consume("close_cat");
+          return { type: "cat", args };
+        }
+      }
+
+      function patternifyTree(tree) {
+        if (tree.type === "cat") {
+          const args = tree.args.map((arg) => patternifyTree(arg));
+          return cat(...args);
+        }
+        if (tree.type === "seq") {
+          const args = tree.args.map((arg) => patternifyTree(arg));
+          return seq(...args);
+        }
+        if (tree.type === "plain") {
+          return tree.value;
+        }
+      }
+      const parser = new Parser();
+
+      let mini = (code) => {
+        const tree = parser.parse(code);
+        const pat = patternifyTree(tree);
+        if (pat instanceof Pattern) {
+          return pat;
+        }
+        return repeat(pat); // repeat plain values
+      };
+    </script>
+
+    <h2>Chapter 5: Operating on Values</h2>
+
+    <p>
+      Up until now, our functions to modify a pattern were very much concerned
+      with the timespan. Let's look at ways to modify the value of a Hap.
+    </p>
+
+    <h3>withValue</h3>
+
+    <script>
+      let withHap = register("withHap", (fn, pat) =>
+        P((a, b) => pat.query(a, b).map(fn))
+      );
+      let withValue = register("withValue", (fn, pat) =>
+        pat.withHap((hap) => ({ ...hap, value: fn(hap.value) }))
+      );
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>
+      The function `withHap` lets us edit a hap as we like. `withValue` uses it
+      to run a function on the Hap value specifically, returning a new Hap.
+    </p>
+
+    <p>With that, we could put together different shades of blue:</p>
+
+    <mini-repl
+      code="cat('cadet','powder','sky','cornflower').withValue(v=>v+'blue').fast(9)"
+    ></mini-repl>
+
+    <h3>Color from Numbers</h3>
+
+    <p>
+      Operating on values gets more exciting when we have numbers to work with.
+      For that matter, let's update the draw logic that sets the rectangle
+      color:
+    </p>
+
+    <pre>
+if (isNaN(Number(value))) {
+  ctx.fillStyle = value; // <- like before
+} else {
+  value = Number(value);
+  ctx.fillStyle = `hsl(${value}turn 50% 50%)`;
+}
+</pre
+    >
+
+    <p>
+      Now, if we receive a valid number, we'll use it as the `hue` value in an
+      `hsl` color! Here's a rainbow pattern:
+    </p>
+
+    <mini-repl code="cat(0, .1, .15, .3, .6, .7)" cycles="6"></mini-repl>
+
+    <h3>Arithmetic</h3>
+
+    <p>Now that we have numbers, we can do some arithmetic!</p>
+
+    <script>
+      let add = register("add", (n, pat) => pat.withValue((v) => v + n));
+      let sub = register("sub", (n, pat) => pat.withValue((v) => v - n));
+      let mul = register("mul", (n, pat) => pat.withValue((v) => v * n));
+      let div = register("div", (n, pat) => pat.withValue((v) => v / n));
+      let mod = register("mod", (n, pat) => pat.withValue((v) => v % n));
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>Using `add` and `mod`, we could rotate the color palette:</p>
+
+    <mini-repl code="cat(0, .25, .5, .75).fast(9).add(.3).mod(1)"></mini-repl>
+
+    <p>..changing the value of `add`:</p>
+
+    <mini-repl code="cat(0, .25, .5, .75).fast(9).add(.9).mod(1)"></mini-repl>
+
+    <h3>Object as Values</h3>
+
+    <p>
+      Right now, we are only able to pattern the hue. Wouldn't it be nice if we
+      could pattern other properties separately, like hue, saturation,
+      lightness, transparency, rect size, ...? We can do this by adjusting our
+      draw code again:
+    </p>
+
+    <pre>
+if (typeof value === "object") {
+  let {
+    color,
+    h: hue,
+    s: saturation,
+    l: lightness,
+    a: alpha,
+  } = value;
+  if (color) {
+    ctx.fillStyle = color;
+  } else if (hue !== undefined) {
+    hue = hue * 360;
+    saturation = (saturation ?? 0.5) * 100;
+    lightness = (lightness ?? 0.5) * 100;
+    alpha = alpha ?? 1;
+    ctx.fillStyle = `hsla(${hue},${saturation}%,${lightness}%,${alpha})`;
+  }
+}
+</pre
+    >
+
+    <p>With that in place, our patterns now need to contain objects:</p>
+    <mini-repl id="object-example" cycles="6" rows="9"></mini-repl>
+    <script>
+      document.getElementById("object-example").setAttribute(
+        "code",
+        `cat(
+  { color: "yellow" },
+  { h: 0.5, s: 0 },
+  { h: 0.5, s: 0.25 },
+  { h: 0.5, s: 0.5 },
+  { h: 0.5, s: 0.75 },
+  { h: 0.5, s: 1 }
+).fast(7);`
+      );
+    </script>
+
+    <p>
+      This notation is rather clunky, we need control functions to the rescue!
+    </p>
+
+    <h3>Control Functions</h3>
+
+    <p>
+      A `control` is basically a shortcut to get a pattern of objects, which
+      means each `Hap` has an object as value.
+    </p>
+
+    <script>
+      let control = (name) =>
+        register(name, (value, pat) => {
+          if (pat) {
+            // e.g. s(.5).h(.1) === h(.1, s(.5))
+            return pat.withValue((v) => Object.assign(v, { [name]: value }));
+          }
+          // e.g. h(cat(.1, .2, .3))
+          if (value instanceof Pattern) {
+            return value.withValue((v) => ({ [name]: v }));
+          }
+          // e.g. h(.3)
+          return repeat({ [name]: value });
+        });
+
+      let color = control("color");
+      let h = control("h");
+      let s = control("s");
+      let l = control("l");
+      let a = control("a");
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>
+      Controls are special in the sense that they can be used to create a
+      pattern but also modify a pattern. This allows us to completely avoid
+      curly braces `{}` and keep using functions with method chaining for object
+      values.
+    </p>
+    <mini-repl
+      code="s(cat(0, .25, .5, .75)).h(.5).fast(7)"
+      cycles="6"
+    ></mini-repl>
+
+    <h3>Implicit Mini Notation</h3>
+
+    <p>
+      In Chapter 4, we've implemented mini notation. We can modify the register
+      function to treat any string as mini notation like this:
+    </p>
+
+    <pre>
+let register = (name, fn) => {
+  let q = (...args) => {
+    args = args.map((arg) => {
+      if (typeof arg === "string") {
+        return mini(arg);
+      }
+      return arg;
+    });
+    return fn(...args);
+  };
+  Pattern.prototype[name] = function (...args) {
+    return q(...args, this);
+  };
+  return q;
+};
+    </pre>
+
+    <p>Now we can set our controls with mini notation:</p>
+
+    <mini-repl id="mini-example"></mini-repl>
+    <script>
+      document
+        .getElementById("mini-example")
+        .setAttribute("code", `s("<0 .25 .5 .75>").h(0.1).fast(7);`);
+    </script>
+
+    <h3>End of Chapter 5</h3>
+
+    <p>
+      This is starting to look very usable! In the next chapter we will see how
+      we can join multiple Patterns into one, making our language much more
+      expressive.
+    </p>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <p>
+      <a href="/LICENSE">license: AGPL-3.0</a><br /><br />
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      // render source code
+      fetch(window.location.href)
+        .then((response) => response.text())
+        .then((html) => {
+          const label = `show source (${html.split("\n").length} loc)`;
+          document.querySelector("#pre").textContent = html;
+          document.querySelector("#loc").textContent = label;
+        });
+    </script>
+  </body>
+</html>
