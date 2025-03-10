@@ -86,7 +86,7 @@
 
       let register = (name, fn) => {
         let q = (...args) => {
-          args = args.map((arg) => {
+          args = args.map((arg, i) => {
             if (typeof arg === "string") {
               return mini(arg);
             }
@@ -275,6 +275,7 @@
         });
 
       let s = control("s");
+      let speed = control("speed");
       let silence = P(() => []);
     </script>
     <h2>🌱 idlecycles</h2>
@@ -368,10 +369,11 @@
           .then((res) => res.arrayBuffer())
           .then((buf) => ac.decodeAudioData(buf));
       let audioBuffers = new Map(); // cache
-      let playSample = async (url, ac, t) => {
+      let playSample = async (url, ac, t, speed = 1) => {
         !audioBuffers.has(url) && audioBuffers.set(url, loadSample(url, ac));
         const src = ac.createBufferSource();
         src.buffer = await audioBuffers.get(url);
+        src.playbackRate.value = Number(speed);
         src.connect(ac.destination);
         src.start(t);
       };
@@ -424,7 +426,7 @@
           console.log(`s "${hap.value?.s}" not found`, hap);
           return;
         }
-        playSample(url, ac, time + 0.1);
+        playSample(url, ac, time + 0.1, hap.value.speed);
         console.log(showHap(hap)); // debug
       });
 
@@ -515,7 +517,7 @@
         `stack(
  s("jazz [perc click] cp hh"),
  s("[jvbass - - jvbass - - jvbass -]")
-)`
+).speed(.9)`
       );
     </script>
     <p>
