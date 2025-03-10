@@ -86,12 +86,7 @@
 
       let register = (name, fn) => {
         let q = (...args) => {
-          args = args.map((arg, i) => {
-            if (typeof arg === "string") {
-              return mini(arg);
-            }
-            return arg;
-          });
+          args = args.map((arg) => (typeof arg === "string" ? mini(arg) : arg));
           return fn(...args);
         };
         Pattern.prototype[name] = function (...args) {
@@ -279,7 +274,7 @@
       let silence = P(() => []);
     </script>
     <h2>🌱 idlecycles</h2>
-    <h2>Chapter 6: adding sound</h2>
+    <h2>Chapter 6: adding sound + joining patterns</h2>
     <p>
       so far, we've been using a somewhat boring visual output to debug
       patterns. let's finally make some noise!
@@ -447,7 +442,9 @@
           super();
         }
         init() {
-          const code = this.getAttribute("code");
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "").replace("<!--", "").replace("-->", "").trim();
           const rows = this.getAttribute("rows");
           if (!code) {
             return;
@@ -490,7 +487,9 @@
         }
 
         connectedCallback() {
-          this.init();
+          setTimeout(() => {
+            this.init();
+          }, 0);
         }
         attributeChangedCallback(name, oldValue, newValue) {
           this.init();
@@ -508,22 +507,110 @@
     </script>
     <p>btw, these sounds can be used:</p>
     <pre>bd perc hh cp click coins jazz jvbass</pre>
-    <p>here's another example using stack:</p>
-    <mini-repl id="repl2" rows="6"></mini-repl>
+
+    <h3>joining Patterns</h3>
+    <p>
+      we're still missing a key feature of patterns: joining multiple patterns
+      together. let's take this example:
+    </p>
     <script>
-      // we need to set it programmatically, because we cannot use " inside a html attribute
-      document.getElementById("repl2").setAttribute(
-        "code",
-        `stack(
- s("jazz [perc click] cp hh"),
- s("[jvbass - - jvbass - - jvbass -]")
-).speed(.9)`
-      );
+      let pattern = s("bd jvbass").speed("<1 2>");
+      const values = pattern.query(0, 2).map((hap) => hap.value);
+      console.log(values);
+      codeblock(document.currentScript, 6);
     </script>
     <p>
-      this starts to feel like the old days of strudel! there are still some
-      major things to implement, like patternified arguments.. more in the next
-      one
+      here, we pass a pattern to both the "s" and the "speed" control. If we
+      look at the console output, we see:
+    </p>
+    <pre>
+[
+{ s: "bd", speed: Pattern }, 
+{ s: "jvbass", speed: Pattern },
+{ s: "bd", speed: Pattern }, 
+{ s: "jvbass", speed: Pattern }
+]</pre
+    >
+    <p>this is what we'd expect:</p>
+    <pre>
+[
+{ s: "bd", speed: 1 }, 
+{ s: "jvbass", speed: 1 },
+{ s: "bd", speed: 2 }, 
+{ s: "jvbass", speed: 2 }
+]</pre
+    >
+    <p>
+      to implement this, we need to preprocess functions passed to our
+      "register" function like this:
+    </p>
+    <script>
+      register = (name, fn) => {
+        let q = (...args) => joinArgs(fn, args);
+        Pattern.prototype[name] = function (...args) {
+          return q(...args, this);
+        };
+        return q;
+      };
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>the joinArgs function is where the actual magic sits:</p>
+    <script>
+      function joinArgs(fn, args) {
+        // interpret strings as mini notation
+        args = args.map((arg) => (typeof arg === "string" ? mini(arg) : arg));
+        const pat = args[args.length - 1]; // last argument = pattern that defines structure
+        const rest = args.slice(0, -1); // extra arguments
+        // if we dont have extra arguments, or no extra argument is a pattern, we dont need to join
+        if (!rest.length || !rest.find((arg) => arg instanceof Pattern)) {
+          return fn(...args);
+        }
+        // for simplicity, let's not care about more than 1 extra argument
+        if (rest.length > 1) {
+          throw new Error(
+            "not supported yet: joinArgs for functions with > 2 args"
+          );
+        }
+        // now we know "rest" contains a single pattern that needs to be aligned to "pat"
+        // create a pattern of patterns (hap values are patterns)
+        const patpat = rest[0].withValue((v) => fn(v, pat));
+        return P((a, b) =>
+          patpat
+            .query(a, b)
+            .map((hap) => hap.value.query(hap.a, hap.b))
+            .flat()
+        );
+      }
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>
+      In our previous example, "joinArgs" would receive the "speed" function as
+      "fn", and ["&lt;1 2&gt;", s("bd jvbass")] as args. to join both, we query
+      the inner pattern (hap.value) for each hap of the outer pattern (patpat).
+    </p>
+    <p>
+      If your head starts to spin, that is normal.. If you want to understand
+      this more deeply, i recommend stepping through the code with the browser
+      debugger.
+    </p>
+
+    <script>
+      // need to reregister to use the new register function
+      s = control("s");
+      speed = control("speed");
+    </script>
+    <p>finally, we can run our example:</p>
+    <mini-repl rows="6"><!-- s("bd jvbass").speed("<1 2>") --></mini-repl>
+    <p>here's a slightly more complex one:</p>
+    <mini-repl rows="6"
+      ><!-- stack(
+  s("jazz [perc click] cp hh"),
+  s("[jvbass - - jvbass - - jvbass -]")
+).speed("<.9 .8 .7 .6>") --></mini-repl
+    >
+
+    <p>
+      this starts to feel like the old days of strudel! see you in the next one
     </p>
     <details>
       <summary id="loc">show page source</summary>
