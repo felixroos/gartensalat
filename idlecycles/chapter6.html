@@ -413,15 +413,11 @@
     <script>
       const cyclist = new Cyclist(ac, (hap, time) => {
         if (hap.value.s === "-") {
-          // "-" = rest
-          return;
+          return; // "-" = rest
         }
         const url = sounds[hap.value?.s];
-        if (!url) {
-          console.log(`s "${hap.value?.s}" not found`, hap);
-          return;
-        }
-        playSample(url, ac, time + 0.1, hap.value.speed);
+        !url && console.log(`s "${hap.value?.s}" not found`, hap);
+        url && playSample(url, ac, time + 0.1, hap.value.speed);
         console.log(showHap(hap)); // debug
       });
 
