@@ -116,8 +116,7 @@
           }
           return bag;
         });
-
-      let fast = register("fast", (factor, pat) =>
+      let _fast = (factor, pat) =>
         // the P(...) wraps our query function in a Pattern
         // + pat is now a Pattern, which has to queried by calling pat.query
         P((a, b) =>
@@ -126,16 +125,18 @@
             b: hap.b / factor,
             value: hap.value,
           }))
-        )
-      );
-      let slow = register("slow", (factor, pat) => fast(1 / factor, pat));
+        );
+      let fast = register("fast", _fast);
+      let _slow = (factor, pat) => fast(1 / factor, pat);
+      let slow = register("slow", _slow);
 
-      let firstOf = register("firstOf", (n, fn, pat) =>
-        cycle((a, b) => (a % n === 0 ? fn(pat) : pat).query(a, b))
-      );
-      let lastOf = register("lastOf", (n, fn, pat) =>
-        cycle((a, b) => (a % n === n - 1 ? fn(pat) : pat).query(a, b))
-      );
+      let _firstOf = (n, fn, pat) =>
+        cycle((a, b) => (a % n === 0 ? fn(pat) : pat).query(a, b));
+      let firstOf = register("firstOf", _firstOf);
+      let _lastOf = (n, fn, pat) =>
+        cycle((a, b) => (a % n === n - 1 ? fn(pat) : pat).query(a, b));
+
+      let lastOf = register("lastOf", _lastOf);
       let token_types = {
         open_cat: /^\</, // "<"
         close_cat: /^\>/, // ">"
@@ -243,11 +244,10 @@
         return repeat(pat); // repeat plain values
       };
 
-      let withHap = register("withHap", (fn, pat) =>
-        P((a, b) => pat.query(a, b).map(fn))
-      );
       let withValue = register("withValue", (fn, pat) =>
-        pat.withHap((hap) => ({ ...hap, value: fn(hap.value) }))
+        P((a, b) =>
+          pat.query(a, b).map((hap) => ({ ...hap, value: fn(hap.value) }))
+        )
       );
       let add = register("add", (n, pat) => pat.withValue((v) => v + n));
       let sub = register("sub", (n, pat) => pat.withValue((v) => v - n));
@@ -397,7 +397,7 @@
       // debug helper
       function showHap(hap) {
         return (
-          `${hap.a.toFixed(2)} ${hap.b.toFixed(3)}: ` +
+          `${hap.a.toFixed(3)} ${hap.b.toFixed(3)}: ` +
           Object.entries(hap.value)
             .map(([key, value]) => `${key}=${value}`)
             .join(" ")
@@ -412,7 +412,7 @@
     <button id="stop">stop</button>
     <script>
       const cyclist = new Cyclist(ac, (hap, time) => {
-        if (hap.value.s === "-") {
+        if (hap.value?.s === "-") {
           return; // "-" = rest
         }
         const url = sounds[hap.value?.s];
@@ -429,6 +429,11 @@
 
       codeblock(document.currentScript, 6);
     </script>
+
+    <p>
+      note that samples might stumble in on the first play, because they are
+      lazily loaded.. something to improve in the future
+    </p>
 
     <script>
       class MiniREPL extends HTMLElement {
@@ -511,7 +516,7 @@
     </p>
     <script>
       let pattern = s("bd jvbass").speed("<1 2>");
-      const values = pattern.query(0, 2).map((hap) => hap.value);
+      let values = pattern.query(0, 2).map((hap) => hap.value);
       console.log(values);
       codeblock(document.currentScript, 6);
     </script>
@@ -567,7 +572,7 @@
             "not supported yet: joinArgs for functions with > 2 args"
           );
         }
-        // now we know "rest" contains a single pattern that needs to be aligned to "pat"
+        // now we know "rest" contains a single pattern that needs to be joined with "pat"
         // create a pattern of patterns (hap values are patterns)
         const patpat = rest[0].withValue((v) => fn(v, pat));
         return P((a, b) =>
@@ -580,20 +585,100 @@
       codeblock(document.currentScript, 6);
     </script>
     <p>
-      In our previous example, "joinArgs" would receive the "speed" function as
-      "fn", and ["&lt;1 2&gt;", s("bd jvbass")] as args. to join both, we query
-      the inner pattern (hap.value) for each hap of the outer pattern (patpat).
+      Because this is far from trivial, let's stupidly "run" it for 2 cycles on
+      our example pattern:
+    </p>
+    <pre>
+s("bd jvbass").speed("&lt;1 2&gt;") // our example pattern
+speed("&lt;1 2&gt;", s("bd jvbass")) // rewrite without method chaining
+// let's now mentally "call" joinArgs:
+fn = speed, args = ["&lt;1 2&gt;", s("bd jvbass")] // inputs to joinArgs
+args = [mini("&lt;1 2&gt;"), s("bd jvbass")] // wrap strings in mini
+pat = s("bd jvbass") // last arg
+rest = [mini("&lt;1 2&gt;")] // extra args (all but last)
+// because rest contains a single pattern, we skip all the if branches
+// now the actual logic starts...
+// (1) create pattern of patterns, calling "fn" for each hap.value of rest[0]
+patpat = mini("&lt;1 2&gt;").withValue(v => speed(v, s("bd jvbass"))) 
+// (2) query within the requested timespan
+patpat.query(0, 2) // let's take 0,2 as our example
+// [
+//  { a: 0, b: 1, value: speed(1, s("bd jvbass")) }, // index 0
+//  { a: 1, b: 2, value: speed(2, s("bd jvbass")) } // index 1
+// ]
+// (3) query nested pattern where its active
+.map((hap) => hap.value.query(hap.a, hap.b))
+// [
+//  [
+//   { a: 0, b: 0.5, value: { s: "bd", speed: 1 } },
+//   { a: 0.5, b: 1, value: { s: "jvbass", speed: 1 } }
+//  ],
+//  [
+//   { a: 1, b: 1.5, value: { s: "bd", speed: 2 } },
+//   { a: 1.5, b: 2, value: { s: "jvbass", speed: 2 } }
+//  ]
+// ]
+// (4) flatten haps for final output
+.flat()
+// [
+//  { a: 0, b: 0.5, value: { s: "bd", speed: 1 } },
+//  { a: 0.5, b: 1, value: { s: "jvbass", speed: 1 } }
+//  { a: 1, b: 1.5, value: { s: "bd", speed: 2 } },
+//  { a: 1.5, b: 2, value: { s: "jvbass", speed: 2 } }
+// ]
+    </pre>
+    <p>
+      we can see the result matches our expected outcome, so it seems to work!
     </p>
     <p>
-      If your head starts to spin, that is normal.. If you want to understand
-      this more deeply, i recommend stepping through the code with the browser
-      debugger.
+      to understand why it works, let's recall our original problem: when our
+      speed function received a pattern, the speed value would end up as a
+      pattern, which is not what we want. we solve this in the following 4 steps
+      (which are also marked in the code above):
+    </p>
+    <ol>
+      <li>
+        we call "speed" for every hap.value of the given pattern (<code
+          >"&lt;1 2&gt;"</code
+        >). this will give us a "pattern of patterns", where each hap.value is
+        itself a valid pattern of objects.
+      </li>
+      <li>
+        we then query our pattern of patterns within the timespan supplied from
+        the outside world (0-2 in our example)
+      </li>
+      <li>
+        next, we map over each of our resulting "pattern haps" and query the
+        pattern for the timespan where the hap is active. this will make sure
+        our "temporal structure" (think rhythm) comes from the nested pattern
+        (<code>s("bd jvbass")</code>) (or the left side in our original example
+        pattern).
+      </li>
+      <li>
+        in the last step, we flatten our array of arrays, which then gives us an
+        array of haps that contain objects.
+      </li>
+    </ol>
+    <p>
+      If your head starts to spin, that is normal.. i've had to think it through
+      many times before getting it.. maybe it also helps you to step through the
+      code with the browser debugger.
+    </p>
+    <p>
+      note that i've cut as many corners as possible to get this result. i've
+      done this for the sake of learning, distilling this logic down to its
+      essentials. there are probably edge cases that will cause bugs, but we'll
+      cover those later.
     </p>
 
     <script>
       // need to reregister to use the new register function
       s = control("s");
       speed = control("speed");
+      fast = register("fast", _fast);
+      slow = register("slow", _slow);
+      firstOf = register("firstOf", _firstOf);
+      lastOf = register("lastOf", _lastOf);
     </script>
     <p>finally, we can run our example:</p>
     <mini-repl rows="6"><!-- s("bd jvbass").speed("<1 2>") --></mini-repl>
@@ -604,9 +689,17 @@
   s("[jvbass - - jvbass - - jvbass -]")
 ).speed("<.9 .8 .7 .6>") --></mini-repl
     >
+    <p>we can even pattern other functions, like fast:</p>
+    <mini-repl rows="6"
+      ><!-- stack(
+  s("jazz jazz"),
+  s("[jvbass - - jvbass - - jvbass -]")
+).fast("<1 2 1 4>") --></mini-repl
+    >
 
     <p>
-      this starts to feel like the old days of strudel! see you in the next one
+      this starts to feel like the very early days of strudel! see you in the
+      next one!
     </p>
     <details>
       <summary id="loc">show page source</summary>
