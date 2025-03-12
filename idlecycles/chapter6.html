@@ -286,13 +286,22 @@
           this.ac = ac;
           this.runs = false;
           this.onTick = onTick;
+          // we need this for safari: https://stackoverflow.com/questions/61101474/onended-does-not-fire-in-safari-or-on-ios
+          // thanks Joni Korpi for the bug report
+          this.dummyGain = this.ac.createGain();
+          this.dummyGain.gain.value = 0; // make it inaudible
+          this.dummyGain.connect(this.ac.destination);
           return this;
         }
         timeout(onComplete, startTime, stopTime) {
           const constantNode = this.ac.createConstantSource();
+          constantNode.connect(this.dummyGain);
           constantNode.start(startTime);
           constantNode.stop(stopTime);
-          constantNode.onended = () => onComplete();
+          constantNode.onended = () => {
+            onComplete();
+            constantNode.disconnect();
+          };
         }
         stop() {
           this.runs = false;
