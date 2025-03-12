@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html>
+  <!-- This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details. You should have received a copy of the GNU Affero General Public License along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 uzulang #1</title>
+    <style>
+      body {
+        background-color: #222;
+        width: 600px;
+        max-width: 100%;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+        box-sizing: border-box;
+      }
+      img {
+        max-width: 100%;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <script>
+      // https://garten.salat.dev/idlecycles/chapter1.html
+      class Pattern {
+        constructor(query) {
+          this.query = query;
+        }
+      }
+      // Pattern creation shortcut:
+      let P = (q) => new Pattern(q);
+      let cycle = (callback) =>
+        P((a, b) => {
+          // ^ this line is new
+          a = Math.floor(a);
+          b = Math.ceil(b);
+          let bag = [];
+          while (a < b) {
+            const haps = callback(a, a + 1);
+            for (let hap of haps) {
+              if (hap.value instanceof Pattern) {
+                // ^ here, we're now testing for a Pattern
+                bag = bag.concat(hap.value.query(hap.a, hap.b));
+                //                         ^ calling query
+              } else {
+                bag.push(hap);
+              }
+            }
+            a++;
+          }
+          return bag;
+        });
+
+      let repeat = (value) => cycle((a, b) => [{ a, b, value }]);
+      let cat = (...values) =>
+        cycle((a, b) => {
+          let value = values[a % values.length];
+          return [{ a, b, value }];
+        });
+      let seq = (...values) => fast(values.length, cat(...values));
+      let stack = (...values) =>
+        cycle((a, b) => values.map((value) => ({ a, b, value })));
+
+      let register = (name, fn) => {
+        let q = (...args) => joinArgs(fn, args);
+        Pattern.prototype[name] = function (...args) {
+          return q(...args, this);
+        };
+        return q;
+      };
+      function joinArgs(fn, args) {
+        // interpret strings as mini notation
+        args = args.map((arg) => (typeof arg === "string" ? mini(arg) : arg));
+        const pat = args[args.length - 1]; // last argument = pattern that defines structure
+        const rest = args.slice(0, -1); // extra arguments
+        // if we dont have extra arguments, or no extra argument is a pattern, we dont need to join
+        if (!rest.length || !rest.find((arg) => arg instanceof Pattern)) {
+          return fn(...args);
+        }
+        // for simplicity, let's not care about more than 1 extra argument
+        if (rest.length > 1) {
+          throw new Error(
+            "not supported yet: joinArgs for functions with > 2 args"
+          );
+        }
+        // create a pattern of patterns (hap values are patterns)
+        const patpat = rest[0].withValue((v) => fn(v, pat));
+        return P((a, b) =>
+          patpat
+            .query(a, b)
+            .map((hap) => hap.value.query(hap.a, hap.b))
+            .flat()
+        );
+      }
+      let fast = register("fast", (factor, pat) =>
+        // the P(...) wraps our query function in a Pattern
+        // + pat is now a Pattern, which has to queried by calling pat.query
+        P((a, b) =>
+          pat.query(a * factor, b * factor).map((hap) => ({
+            a: hap.a / factor,
+            b: hap.b / factor,
+            value: hap.value,
+          }))
+        )
+      );
+      let slow = register("slow", (factor, pat) => fast(1 / factor, pat));
+      let firstOf = register("firstOf", (n, fn, pat) =>
+        cycle((a, b) => (a % n === 0 ? fn(pat) : pat).query(a, b))
+      );
+      let lastOf = register("lastOf", (n, fn, pat) =>
+        cycle((a, b) => (a % n === n - 1 ? fn(pat) : pat).query(a, b))
+      );
+
+      // mini parser
+      let token_types = {
+        open_cat: /^\</, // "<"
+        close_cat: /^\>/, // ">"
+        open_seq: /^\[/, // "["
+        close_seq: /^\]/, // "]"
+        plain: /^[a-zA-Z0-9\.\#\-]+/, // values
+      };
+
+      function next_token(code) {
+        for (let type in token_types) {
+          const match = code.match(token_types[type]);
+          if (match) {
+            return { type, value: match[0] };
+          }
+        }
+        throw new Error(`could not match "${code}"`);
+      }
+
+      function tokenize(code) {
+        let tokens = [];
+        while (code.length > 0) {
+          code = code.trim(); // trim white spaces
+          const token = next_token(code);
+          code = code.slice(token.value.length);
+          tokens.push(token);
+        }
+        return tokens;
+      }
+
+      class Parser {
+        parse(code) {
+          this.tokens = tokenize(code);
+          //return this.parse_expr();
+          const args = this.parse_args();
+          if (args.length === 1) {
+            return args[0];
+          }
+          // multiple top level args are interpreted as a seq
+          return { type: "seq", args };
+        }
+        consume(type) {
+          const token = this.tokens.shift();
+          if (token.type !== type) {
+            throw new Error(`expected token type ${type}, got ${token.type}`);
+          }
+          return token;
+        }
+        parse_expr() {
+          let next = this.tokens[0]?.type;
+          if (next === "open_cat") {
+            return this.parse_cat();
+          }
+          if (next === "open_seq") {
+            return this.parse_seq();
+          }
+          if (next === "plain") {
+            return this.consume("plain");
+          }
+          throw new Error(
+            `unexpected token "${this.tokens[0].value}" of type ${this.tokens[0].type}`
+          );
+        }
+        parse_args(close_type) {
+          const args = [];
+          while (this.tokens[0]?.type !== close_type) {
+            args.push(this.parse_expr());
+          }
+          return args;
+        }
+        parse_seq() {
+          this.consume("open_seq");
+          const args = this.parse_args("close_seq");
+          this.consume("close_seq");
+          return { type: "seq", args };
+        }
+        parse_cat() {
+          this.consume("open_cat");
+          const args = this.parse_args("close_cat");
+          this.consume("close_cat");
+          return { type: "cat", args };
+        }
+      }
+
+      function patternifyTree(tree) {
+        if (tree.type === "cat") {
+          const args = tree.args.map((arg) => patternifyTree(arg));
+          return cat(...args);
+        }
+        if (tree.type === "seq") {
+          const args = tree.args.map((arg) => patternifyTree(arg));
+          return seq(...args);
+        }
+        if (tree.type === "plain") {
+          return tree.value;
+        }
+      }
+      const parser = new Parser();
+
+      let mini = (code) => {
+        const tree = parser.parse(code);
+        const pat = patternifyTree(tree);
+        if (pat instanceof Pattern) {
+          return pat;
+        }
+        return repeat(pat); // repeat plain values
+      };
+
+      let withValue = register("withValue", (fn, pat) =>
+        P((a, b) =>
+          pat.query(a, b).map((hap) => ({ ...hap, value: fn(hap.value) }))
+        )
+      );
+      let add = register("add", (n, pat) => pat.withValue((v) => v + n));
+      let sub = register("sub", (n, pat) => pat.withValue((v) => v - n));
+      let mul = register("mul", (n, pat) => pat.withValue((v) => v * n));
+      let div = register("div", (n, pat) => pat.withValue((v) => v / n));
+      let mod = register("mod", (n, pat) => pat.withValue((v) => v % n));
+
+      let control = (name) =>
+        register(name, (value, pat) => {
+          if (pat) {
+            // e.g. s(.5).h(.1) === h(.1, s(.5))
+            return pat.withValue((v) => Object.assign(v, { [name]: value }));
+          }
+          // e.g. h(cat(.1, .2, .3))
+          if (value instanceof Pattern) {
+            return value.withValue((v) => ({ [name]: v }));
+          }
+          // e.g. h(.3)
+          return repeat({ [name]: value });
+        });
+
+      let s = control("s");
+      let speed = control("speed");
+      let silence = P(() => []);
+
+      // webaudio
+      // https://garten.salat.dev/webaudio/clock.html
+      class Clock {
+        constructor(ac, onTick) {
+          this.ac = ac;
+          this.runs = false;
+          this.onTick = onTick;
+          // we need this for safari: https://stackoverflow.com/questions/61101474/onended-does-not-fire-in-safari-or-on-ios
+          // thanks Joni Korpi for the bug report
+          this.dummyGain = this.ac.createGain();
+          this.dummyGain.gain.value = 0; // make it inaudible
+          this.dummyGain.connect(this.ac.destination);
+          return this;
+        }
+        timeout(onComplete, startTime, stopTime) {
+          const constantNode = this.ac.createConstantSource();
+          constantNode.connect(this.dummyGain);
+          constantNode.start(startTime);
+          constantNode.stop(stopTime);
+          constantNode.onended = () => {
+            onComplete();
+            constantNode.disconnect();
+          };
+        }
+        stop() {
+          this.runs = false;
+        }
+        start(begin = ac.currentTime + 0.01, duration = 0.1) {
+          if (this.runs) {
+            return;
+          }
+          this.runs = true;
+          this.tick(begin, duration);
+        }
+        tick(begin, duration) {
+          this.runs = true;
+          this.onTick(begin);
+          const end = begin + duration;
+          this.timeout(
+            () => {
+              this.runs && this.tick(end, duration);
+            },
+            begin,
+            end
+          );
+        }
+      }
+
+      // cyclist
+      class Cyclist {
+        duration = 0.125; // how many cycles / seconds we're querying per tick
+        origin; // absolute time of first cycle (phase 0)
+        phase = 0; // from origin to last tick
+        pattern; // pattern to query
+        constructor(ac, handler) {
+          this.ac = ac; // audio context
+          this.handler = handler; // will be called for each hap
+          this.clock = new Clock(ac, () => {
+            const a = this.phase;
+            const b = Math.round((this.phase + this.duration) * 1000) / 1000;
+            this.pattern
+              .query(a, b)
+              .filter((hap) => hap.a >= a && hap.a < b)
+              .forEach((hap) => {
+                const time = this.origin + hap.a;
+                this.handler(hap, time);
+              });
+            this.phase = b;
+          });
+        }
+        play(pat) {
+          this.pattern = pat;
+          this.phase = 0;
+          this.origin = this.ac.currentTime;
+          this.clock.start(undefined, this.duration);
+        }
+        stop() {
+          this.clock.stop();
+        }
+      }
+      // sampler
+
+      // https://garten.salat.dev/webaudio/sampler.html
+      let loadSample = async (url, ac) =>
+        fetch(url)
+          .then((res) => res.arrayBuffer())
+          .then((buf) => ac.decodeAudioData(buf));
+      let audioBuffers = new Map(); // cache
+      let playSample = async (url, ac, t, speed = 1) => {
+        !audioBuffers.has(url) && audioBuffers.set(url, loadSample(url, ac));
+        const src = ac.createBufferSource();
+        src.buffer = await audioBuffers.get(url);
+        src.playbackRate.value = Number(speed);
+        src.connect(ac.destination);
+        src.start(t);
+      };
+
+      // init audio
+      const ac = new AudioContext();
+      document.addEventListener("click", function init() {
+        ac.resume();
+        document.removeEventListener("click", init);
+      });
+      // samples
+      let sounds = {
+        bd: "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/808bd/BD0000.WAV",
+        perc: "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/perc/000_perc0.wav",
+        hh: "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/808hc/HC00.WAV",
+        cp: "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/808/CP.WAV",
+        click:
+          "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/click/000_click0.wav",
+        coins:
+          "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/coins/coins.wav",
+        jazz: "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/jazz/000_BD.wav",
+        jvbass:
+          "https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/jvbass/000_01.wav",
+      };
+      console.log(Object.keys(sounds).join(" "));
+
+      // debug helper
+      function showHap(hap) {
+        return (
+          `${hap.a.toFixed(3)} ${hap.b.toFixed(3)}: ` +
+          Object.entries(hap.value)
+            .map(([key, value]) => `${key}=${value}`)
+            .join(" ")
+        );
+      }
+      const cyclist = new Cyclist(ac, (hap, time) => {
+        if (hap.value?.s === "-") {
+          return; // "-" = rest
+        }
+        const url = sounds[hap.value?.s];
+        !url && console.log(`s "${hap.value?.s}" not found`, hap);
+        url && playSample(url, ac, time + 0.1, hap.value.speed);
+        console.log(showHap(hap)); // debug
+      });
+
+      // lisp parser
+      // https://garten.salat.dev/lisp/parser.html
+      class LispParser {
+        // these are the tokens we expect
+        token_types = {
+          open_list: /^\(/,
+          close_list: /^\)/,
+          plain: /^[a-zA-Z0-9\.\#]+/,
+        };
+        // matches next token
+        next_token(code) {
+          for (let type in this.token_types) {
+            const match = code.match(this.token_types[type]);
+            if (match) {
+              return { type, value: match[0] };
+            }
+          }
+          throw new Error(`could not match "${code}"`);
+        }
+        // takes code string, returns list of matched tokens (if valid)
+        tokenize(code) {
+          let tokens = [];
+          while (code.length > 0) {
+            code = code.trim();
+            const token = this.next_token(code);
+            code = code.slice(token.value.length);
+            tokens.push(token);
+          }
+          return tokens;
+        }
+        // take code, return abstract syntax tree
+        parse(code) {
+          this.tokens = this.tokenize(code);
+          return this.parse_expr();
+        }
+        // parses any valid expression
+        parse_expr() {
+          let next = this.tokens[0]?.type;
+          if (next === "open_list") {
+            return this.parse_list();
+          }
+          if (next === "plain") {
+            return this.consume("plain");
+          }
+          if (!this.tokens[0]) {
+            throw new Error(`unexpected end of file`);
+          }
+          throw new Error(
+            `unexpected token "${this.tokens[0].value}" of type ${this.tokens[0].type}`
+          );
+        }
+        parse_list() {
+          this.consume("open_list");
+          const children = [];
+          while (this.tokens[0]?.type !== "close_list") {
+            children.push(this.parse_expr());
+          }
+          this.consume("close_list");
+          return { type: "list", children };
+        }
+        consume(type) {
+          // shift removes first element and returns it
+          const token = this.tokens.shift();
+          if (token.type !== type) {
+            throw new Error(`expected token type ${type}, got ${token.type}`);
+          }
+          return token;
+        }
+      }
+
+      // lisp runner
+      class LispRunner {
+        constructor(lib) {
+          this.parser = new LispParser();
+          this.lib = lib;
+        }
+        // a helper to check conditions and throw if they are not met
+        assert(condition, error) {
+          if (!condition) {
+            throw new Error(error);
+          }
+        }
+        run(code) {
+          const ast = this.parser.parse(code);
+          return this.call(ast);
+        }
+        call(ast) {
+          // for a node to be callable, it needs to be a list
+          this.assert(
+            ast.type === "list",
+            `function call: expected list, got ${ast.type}`
+          );
+          // the first element is expected to be the function name
+          this.assert(
+            ast.children[0]?.type === "plain",
+            `function call: expected first child to be plain, got ${ast.type}`
+          );
+          // look up function in lib
+          const name = ast.children[0].value;
+          const fn = this.lib[name];
+          this.assert(fn, `function call: unknown function name "${name}"`);
+
+          // process args
+          const args = ast.children.slice(1).map((arg) => {
+            if (arg.type !== "plain") {
+              return this.call(arg);
+            }
+            return arg.value;
+          });
+
+          // call function
+          return fn(...args);
+        }
+      }
+
+      // repl
+      class MiniREPL extends HTMLElement {
+        static observedAttributes = ["code", "rows"];
+
+        constructor() {
+          super();
+        }
+        init() {
+          this.lisp = new LispRunner({
+            cat,
+            seq,
+            stack,
+            fast,
+            slow,
+            add,
+            sub,
+            mul,
+            div,
+            mod,
+            s,
+            speed,
+          });
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "").replace("<!--", "").replace("-->", "").trim();
+          const rows = this.getAttribute("rows");
+          if (!code) {
+            return;
+          }
+          this.innerHTML = "";
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div class="editor-wrapper">
+    <button class="play">play</button>
+    <button class="stop">stop</button>
+    <textarea id="code" spellcheck="false" rows="${rows}">${code}</textarea>
+  </div>`
+          );
+          // repl logic
+          const input = this.querySelector("textarea");
+          input.value = code;
+
+          input.addEventListener("keydown", (e) => {
+            if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+              this.update(input.value);
+            }
+            if ((e.ctrlKey || e.altKey) && e.keyCode === 190) {
+              // period
+              e.preventDefault();
+              cyclist.stop();
+            }
+          });
+          const playButton = this.querySelector(".play");
+          playButton.addEventListener("click", () => this.update(input.value));
+          const stopButton = this.querySelector(".stop");
+          stopButton.addEventListener("click", () => cyclist.stop());
+        }
+        async update(code) {
+          const pat = this.lisp.run(code);
+          if (!cyclist.clock.runs) {
+            cyclist.play(pat);
+          } else {
+            cyclist.pattern = pat;
+          }
+        }
+
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          this.init();
+        }
+      }
+      customElements.define("mini-repl", MiniREPL);
+    </script>
+    <h2>🌱 uzulang</h2>
+    <h2>Chapter 1: a new beginning</h2>
+    <p>talk about uzulangs..</p>
+
+    <mini-repl rows="6"><!-- (s (seq jazz (seq jvbass hh))) --></mini-repl>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <p>
+      <a href="/LICENSE">license: AGPL-3.0</a><br /><br />
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      // render source code
+      fetch(window.location.href)
+        .then((response) => response.text())
+        .then((html) => {
+          const label = `show source (${html.split("\n").length} loc)`;
+          document.querySelector("#pre").textContent = html;
+          document.querySelector("#loc").textContent = label;
+        });
+    </script>
+  </body>
+</html>
