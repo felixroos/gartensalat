@@ -66,10 +66,23 @@
       }
     </script>
     <script>
+      function intersects(h1, h2) {
+        return h1.a < h2.b && h2.a < h1.b;
+      }
       // https://garten.salat.dev/idlecycles/chapter1.html
       class Pattern {
         constructor(query) {
           this.query = query;
+        }
+        // part is the region of the hap that is active during the query
+        queryWithParts(a, b) {
+          return this.query(a, b)
+            .map((hap) => ({
+              ...hap,
+              _a: Math.max(hap.a, a),
+              _b: Math.min(hap.b, b),
+            }))
+            .filter((hap) => intersects(hap, { a: hap._a, b: hap._b }));
         }
       }
       // Pattern creation shortcut:
@@ -113,6 +126,7 @@
         };
         return q;
       };
+
       function joinArgs(fn, args) {
         // interpret strings as mini notation
         args = args.map((arg) => (typeof arg === "string" ? mini(arg) : arg));
@@ -134,7 +148,7 @@
         return P((a, b) =>
           patpat
             .query(a, b)
-            .map((hap) => hap.value.query(hap.a, hap.b))
+            .map((hap) => hap.value.queryWithParts(hap.a, hap.b))
             .flat()
         );
       }
@@ -501,20 +515,21 @@
           return this.consume(next);
         }
         resolve_pipes(children) {
-          // saw 55 > lpf .5 = lpf (saw 55) .5
           while (true) {
             let pipeIndex = children.findIndex(
               (child) => child.type === "pipe"
             );
             if (pipeIndex === -1) break;
-            const leftSide = children.slice(0, pipeIndex);
-            const targetList = children[pipeIndex + 1];
-            const restArgs = children.slice(pipeIndex + 2);
-            children = [
-              targetList,
-              { type: "list", children: leftSide },
-              ...restArgs,
-            ];
+            let leftSide = children.slice(0, pipeIndex);
+            if (leftSide.length === 1) {
+              leftSide = leftSide[0];
+            } else {
+              // wrap in (..) if multiple items on the left side
+              leftSide = { type: "list", children: leftSide };
+            }
+            const callee = children[pipeIndex + 1];
+            const rightSide = children.slice(pipeIndex + 2);
+            children = [callee, leftSide, ...rightSide];
           }
           return children;
         }
@@ -530,23 +545,22 @@
           let children = this.parse_args("close_list");
           this.consume("close_list");
           children = this.resolve_pipes(children);
-          console.log("children", children);
           return { type: "list", children };
         }
         parse_cat() {
           this.consume("open_cat");
           let children = this.parse_args("close_cat");
           this.consume("close_cat");
-          children = [{ type: "plain", value: "cat" }, ...children];
           children = this.resolve_pipes(children);
+          children = [{ type: "plain", value: "cat" }, ...children];
           return { type: "list", children };
         }
         parse_seq() {
           this.consume("open_seq");
           let children = this.parse_args("close_seq");
           this.consume("close_seq");
-          children = [{ type: "plain", value: "seq" }, ...children];
           children = this.resolve_pipes(children);
+          children = [{ type: "plain", value: "seq" }, ...children];
           return { type: "list", children };
         }
         consume(type) {
@@ -627,7 +641,9 @@
             seq,
             stack,
             fast,
+            "*": fast,
             slow,
+            "/": slow,
             add,
             sub,
             mul,
@@ -697,8 +713,8 @@
       ><!-- 
 stack
   (s [jazz [perc click] cp hh])
-  (s [jvbass - - jvbass - - jvbass -])
-! speed <.9 .8 .7 .63>
+  (s [jvbass - - jvbass - - jvbass -] !* <1 2 1 3>)
+! speed (<.9 .8 .7 [8 .63]> !/ 2)
 --></mini-repl
     >
     <p>again, this is the equivalent code in strudel style:</p>
