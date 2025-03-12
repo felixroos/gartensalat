@@ -573,6 +573,20 @@
         }
       }
 
+      function printAst(ast, lvl = 0) {
+        const spaces = Array(lvl).fill(" ").join("");
+        if (ast.type === "list") {
+          return `${lvl ? "\n" : ""}${spaces}(${ast.children
+            .map((child) => printAst(child, lvl + 1))
+            .join(" ")}${
+            ast.children.find((child) => child.type === "list")
+              ? `\n${spaces})`
+              : ")"
+          }`;
+        }
+        return `${ast.value}`;
+      }
+
       // lisp runner
       class LispRunner {
         constructor(lib) {
@@ -666,6 +680,8 @@
         <button class="play">play</button>
         <button class="stop">stop</button>
         <textarea id="code" spellcheck="false" rows="${rows}">${code}</textarea>
+        <span>ast:</span>
+        <pre class="ast"></pre>
       </div>`
           );
           // repl logic
@@ -686,9 +702,14 @@
           playButton.addEventListener("click", () => this.update(input.value));
           const stopButton = this.querySelector(".stop");
           stopButton.addEventListener("click", () => cyclist.stop());
+
+          const ast = this.lisp.parser.parse(code);
+          this.querySelector(".ast").innerText = printAst(ast);
         }
         async update(code) {
-          const pat = this.lisp.run(code);
+          const ast = this.lisp.parser.parse(code);
+          this.querySelector(".ast").innerText = printAst(ast);
+          const pat = this.lisp.call(ast);
           if (!cyclist.clock.runs) {
             cyclist.play(pat);
           } else {
@@ -709,22 +730,6 @@
     </script>
     <h2>🌱 lispy uzulang #2</h2>
     <p><a href="https://garten.salat.dev/lisp/sugar.html">sugar</a></p>
-    <mini-repl rows="6"
-      ><!-- 
-stack
-  (s [jazz [perc click] cp hh])
-  (s [jvbass - - jvbass - - jvbass -] !* <1 2 1 3>)
-! speed (<.9 .8 .7 [8 .63]> !/ 2)
---></mini-repl
-    >
-    <p>this is the equivalent code in strudel style:</p>
-    <pre>
-stack(
-  s("jazz [perc click] cp hh"),
-  s("[jvbass - - jvbass - - jvbass -]".fast("&lt;1 2 1 3&gt;"))
-).speed("&lt;.9 .8 .7 .6&gt;".slow(2))
-    </pre>
-    <p>just drums:</p>
     <mini-repl rows="6"
       ><!-- 
 s [jazz [perc click] cp hh] !* <1 2 1 3>
