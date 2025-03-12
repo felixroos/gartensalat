@@ -115,7 +115,7 @@
       };
       function joinArgs(fn, args) {
         // interpret strings as mini notation
-        args = args.map((arg) => (typeof arg === "string" ? mini(arg) : arg));
+        // args = args.map((arg) => (typeof arg === "string" ? mini(arg) : arg));
         const pat = args[args.length - 1]; // last argument = pattern that defines structure
         const rest = args.slice(0, -1); // extra arguments
         // if we dont have extra arguments, or no extra argument is a pattern, we dont need to join
@@ -155,114 +155,6 @@
       let lastOf = register("lastOf", (n, fn, pat) =>
         cycle((a, b) => (a % n === n - 1 ? fn(pat) : pat).query(a, b))
       );
-
-      // mini parser
-      let token_types = {
-        open_cat: /^\</, // "<"
-        close_cat: /^\>/, // ">"
-        open_seq: /^\[/, // "["
-        close_seq: /^\]/, // "]"
-        plain: /^[a-zA-Z0-9\.\#\-]+/, // values
-      };
-
-      function next_token(code) {
-        for (let type in token_types) {
-          const match = code.match(token_types[type]);
-          if (match) {
-            return { type, value: match[0] };
-          }
-        }
-        throw new Error(`could not match "${code}"`);
-      }
-
-      function tokenize(code) {
-        let tokens = [];
-        while (code.length > 0) {
-          code = code.trim(); // trim white spaces
-          const token = next_token(code);
-          code = code.slice(token.value.length);
-          tokens.push(token);
-        }
-        return tokens;
-      }
-
-      class Parser {
-        parse(code) {
-          this.tokens = tokenize(code);
-          //return this.parse_expr();
-          const args = this.parse_args();
-          if (args.length === 1) {
-            return args[0];
-          }
-          // multiple top level args are interpreted as a seq
-          return { type: "seq", args };
-        }
-        consume(type) {
-          const token = this.tokens.shift();
-          if (token.type !== type) {
-            throw new Error(`expected token type ${type}, got ${token.type}`);
-          }
-          return token;
-        }
-        parse_expr() {
-          let next = this.tokens[0]?.type;
-          if (next === "open_cat") {
-            return this.parse_cat();
-          }
-          if (next === "open_seq") {
-            return this.parse_seq();
-          }
-          if (next === "plain") {
-            return this.consume("plain");
-          }
-          throw new Error(
-            `unexpected token "${this.tokens[0].value}" of type ${this.tokens[0].type}`
-          );
-        }
-        parse_args(close_type) {
-          const args = [];
-          while (this.tokens[0]?.type !== close_type) {
-            args.push(this.parse_expr());
-          }
-          return args;
-        }
-        parse_seq() {
-          this.consume("open_seq");
-          const args = this.parse_args("close_seq");
-          this.consume("close_seq");
-          return { type: "seq", args };
-        }
-        parse_cat() {
-          this.consume("open_cat");
-          const args = this.parse_args("close_cat");
-          this.consume("close_cat");
-          return { type: "cat", args };
-        }
-      }
-
-      function patternifyTree(tree) {
-        if (tree.type === "cat") {
-          const args = tree.args.map((arg) => patternifyTree(arg));
-          return cat(...args);
-        }
-        if (tree.type === "seq") {
-          const args = tree.args.map((arg) => patternifyTree(arg));
-          return seq(...args);
-        }
-        if (tree.type === "plain") {
-          return tree.value;
-        }
-      }
-      const parser = new Parser();
-
-      let mini = (code) => {
-        const tree = parser.parse(code);
-        const pat = patternifyTree(tree);
-        if (pat instanceof Pattern) {
-          return pat;
-        }
-        return repeat(pat); // repeat plain values
-      };
 
       let withValue = register("withValue", (fn, pat) =>
         P((a, b) =>
@@ -438,7 +330,7 @@
         token_types = {
           open_list: /^\(/,
           close_list: /^\)/,
-          plain: /^[a-zA-Z0-9\.\#]+/,
+          plain: /^[a-zA-Z0-9\.\#\-]+/,
         };
         // matches next token
         next_token(code) {
@@ -623,11 +515,93 @@
       }
       customElements.define("mini-repl", MiniREPL);
     </script>
-    <h2>🌱 uzulang</h2>
-    <h2>Chapter 1: a new beginning</h2>
-    <p>talk about uzulangs..</p>
-
-    <mini-repl rows="6"><!-- (s (seq jazz (seq jvbass hh))) --></mini-repl>
+    <h2>🌱 lispy uzulang</h2>
+    <p>
+      after writing a minimal strudel-like language from scratch in the
+      <a href="https://garten.salat.dev/idlecycles/chapter1.html"
+        >the idlecycles series</a
+      >, i want to cross-pollinate it with other ideas that grew in my garden.
+      let's start with expressing patterns as
+      <a href="https://garten.salat.dev/lisp/interpreter.html">s-expressions</a
+      >!
+    </p>
+    <h3>uzu what?</h3>
+    <p>
+      before we begin, let me write a few words about the name
+      <strong>uzulang</strong>. after tidal has been ported to a few programming
+      languages under different names (vortex, strudel, web tidal, ..), there
+      was some discussion about finding a new name for the family of tidal-like
+      languages. right now, "tidal" stands both for the haskell version of
+      TidalCycles (sometimes also called mainline tidal), and also for the
+      "language" of tidal, which starts to trancend its original implementation.
+    </p>
+    <p>
+      Alex McLean suggested the name
+      <a href="https://skdesu.com/en/meaning/%E6%B8%A6-uzu/">uzu</a> or
+      "uzulang", which i'm trying to embrace from now on for my experiments
+      here. you could say, i've implemented a minimal uzulang in my recent
+      posts.
+    </p>
+    <h3>let's go</h3>
+    <p>
+      as a first step, i've copy pasted my lisp interpreter and the
+      <a href="https://garten.salat.dev/idlecycles/chapter6.html"
+        >latest state of the idlecycles series</a
+      >
+      into this document. to keep it simple, i want to start with sugar free
+      s-expressions, also i've omitted the mini notation parser. i've adapted
+      the mini-repl to run the code through the
+      <a href="https://garten.salat.dev/lisp/interpreter.html"
+        >lisp interpreter</a
+      >, and now we're here:
+    </p>
+    <mini-repl rows="6"
+      ><!-- 
+(speed (cat .9 .8 .7 .6) 
+ (stack
+  (s (seq jazz (seq perc click) cp hh))
+  (s (seq jvbass - - jvbass - - jvbass -))
+ )
+) 
+--></mini-repl
+    >
+    <p>that seems to work! this is the equivalent code in strudel style:</p>
+    <pre>
+stack(
+  s("jazz [perc click] cp hh"),
+  s("[jvbass - - jvbass - - jvbass -]")
+).speed("&lt;.9 .8 .7 .6&gt;")
+    </pre>
+    <p>
+      personally, i wouldn't want to live code in plain s-expression, but it's
+      probably a good foundation to start building a custom language. imo there
+      are some advantages of a fully custom language:
+    </p>
+    <ul>
+      <li>
+        custom syntax: obviously, we can decide how our syntax looks like. we're
+        not limited by the capabilities of the host language. because the goal
+        is not a general purpose language, we can save characters
+      </li>
+      <li>
+        better errors: in js, it's sometimes impossible to know in which part of
+        the user code an error happened. with a custom parser, we always know
+        the location
+      </li>
+      <li>
+        portability: we're not directly relying on js, so the language could
+        potentially be ported more easily to another language
+      </li>
+      <li>
+        security: we're not directly evaluating js from the user, so it's
+        impossible to write malicious code
+      </li>
+    </ul>
+    <p>
+      there are many ways we can go from here. in the next post, i'll probably
+      add more <a href="https://garten.salat.dev/lisp/sugar.html">sugar</a> to
+      this language, to make it more writable. until then, cheers!
+    </p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
