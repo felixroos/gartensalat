@@ -529,22 +529,30 @@
           children = this.resolve_pipes(children);
           return children;
         }
+        // Token[] => Token[][] . returns empty list if type not found
+        split_children(children, type) {
+          const chunks = [];
+          while (true) {
+            let commaIndex = children.findIndex((child) => child.type === type);
+            if (commaIndex === -1) break;
+            const chunk = children.slice(0, commaIndex);
+            chunks.push(chunk);
+            children = children.slice(commaIndex + 1);
+          }
+          if (!chunks.length) {
+            return [];
+          }
+          chunks.push(children);
+          return chunks;
+        }
         desugar_stack(children) {
           let [type, ...rest] = children;
           // children is expected to contain seq or cat as first item
-          const chunks = [];
-          while (true) {
-            let commaIndex = rest.findIndex((child) => child.type === "stack");
-            if (commaIndex === -1) break;
-            const chunk = rest.slice(0, commaIndex);
-            chunks.push(chunk);
-            rest = rest.slice(commaIndex + 1);
-          }
+          const chunks = this.split_children(rest, "stack");
           if (!chunks.length) {
             // no stack
             return children;
           }
-          chunks.push(rest);
           // collect args of stack function
           const args = chunks.map((chunk) => {
             if (chunk.length === 1) {
@@ -619,36 +627,29 @@
           }
           return children;
         }
-        parse_args(close_type) {
-          const args = [];
+        parse_pair(open_type, close_type) {
+          this.consume(open_type);
+          const children = [];
           while (this.tokens[0]?.type !== close_type) {
-            args.push(this.parse_expr());
+            children.push(this.parse_expr());
           }
-          return args;
+          this.consume(close_type);
+          return this.desugar_children(children);
         }
         parse_list() {
-          this.consume("open_list");
-          let children = this.parse_args("close_list");
-          this.consume("close_list");
-          children = this.desugar_children(children);
+          let children = this.parse_pair("open_list", "close_list");
           return { type: "list", children };
         }
         parse_cat() {
-          this.consume("open_cat");
-          let children = this.parse_args("close_cat");
-          this.consume("close_cat");
-          children = this.desugar_children(children);
+          let children = this.parse_pair("open_cat", "close_cat");
           children = [{ type: "plain", value: "cat" }, ...children];
-          children = this.desugar_stack(children);
+          children = this.desugar_stack(children, "cat");
           return { type: "list", children };
         }
         parse_seq() {
-          this.consume("open_seq");
-          let children = this.parse_args("close_seq");
-          this.consume("close_seq");
-          children = this.desugar_children(children);
+          let children = this.parse_pair("open_seq", "close_seq");
           children = [{ type: "plain", value: "seq" }, ...children];
-          children = this.desugar_stack(children);
+          children = this.desugar_stack(children, "seq");
           return { type: "list", children };
         }
         consume(type) {
