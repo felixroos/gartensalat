@@ -611,7 +611,7 @@
             let leftSide = children.slice(0, pipeIndex);
             if (leftSide.length === 0) {
               // . as lambda: (.fast 2) = x=>x.fast(2)
-              children[pipeIndex] = { type: "plain", value: this.pipe };
+              children[pipeIndex] = { type: "plain", value: "." };
               continue;
             }
             if (leftSide.length === 1) {
@@ -677,7 +677,6 @@
 
       // lisp runner
       class LispRunner {
-        pipe = ".";
         constructor(lib) {
           this.parser = new LispParser();
           this.lib = lib;
@@ -719,7 +718,7 @@
           });
 
           const name = ast.children[0].value;
-          if (name === this.pipe) {
+          if (name === ".") {
             // (.fast 2) = x=>fast(2, x)
             const callee = ast.children[1].value;
             const innerFn = this.lib[callee];
@@ -733,19 +732,14 @@
           // look up function in lib
           const fn = this.lib[name];
           this.assert(fn, `function call: unknown function name "${name}"`);
-
-          // call function
-          const flip = !["seq", "cat", "stack"].includes(name); // this is hacky...
-          if (flip) {
-            // move pat from first to last arg to avoid refactoring all functions..
-            // but maybe its better when pat is first, because we then can have optional args...
-            const [pat, ...rest] = args;
-            return fn(...rest, pat);
-          }
           return fn(...args);
         }
       }
 
+      let swapFn =
+        (fn) =>
+        (pat, ...args) =>
+          fn(...args, pat);
       // repl
       class MiniREPL extends HTMLElement {
         static observedAttributes = ["code", "rows"];
@@ -758,19 +752,19 @@
             cat,
             seq,
             stack,
-            fast,
-            "*": fast,
-            slow,
-            "/": slow,
-            add,
-            sub,
-            mul,
-            div,
-            mod,
-            s,
-            speed,
-            lastOf,
-            firstOf,
+            fast: swapFn(fast),
+            "*": swapFn(fast),
+            slow: swapFn(slow),
+            "/": swapFn(slow),
+            add: swapFn(add),
+            sub: swapFn(sub),
+            mul: swapFn(mul),
+            div: swapFn(div),
+            mod: swapFn(mod),
+            s: swapFn(s),
+            speed: swapFn(speed),
+            lastOf: swapFn(lastOf),
+            firstOf: swapFn(firstOf),
           });
           const code =
             this.getAttribute("code") ||
@@ -864,8 +858,8 @@ s [jazz [perc click] cp hh] * <1 2 1 3>
         <code>(cat a b c)</code>
       </li>
       <li>
-        "" double quotes for classic mini notation. i'm not sure if this is a
-        good idea yet, but it's at least possible
+        <code>""</code> double quotes for classic mini notation. i'm not sure if
+        this is a good idea yet, but it's at least possible
       </li>
     </ul>
     <h3>operators</h3>
