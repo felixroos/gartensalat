@@ -527,17 +527,19 @@
           while (true) {
             let opIndex = children.findIndex((child) => child.type === "op");
             if (opIndex === -1) break;
-            if (opIndex === 0) {
-              throw new Error(
-                `cannot use operator as first child. todo: return lambda`
-              );
-            }
+            const op = { type: "plain", value: children[opIndex].value };
             if (opIndex === children.length - 1) {
               throw new Error(`cannot use operator as last child.`);
             }
+            if (opIndex === 0) {
+              children[opIndex] = op;
+              // regular function call (assuming each operator exists as function)
+              // children = [{ type: "plain", value: "!" }, ...children];
+              // ^ that makes it a lambda, but it breaks prefix notation and thus asts wont work anymore
+              continue;
+            }
             const left = children[opIndex - 1];
             const right = children[opIndex + 1];
-            const op = { type: "plain", value: children[opIndex].value };
             if (left.type === "pipe") {
               // "x !* 2" => (* 2 x)
               children[opIndex] = op;
