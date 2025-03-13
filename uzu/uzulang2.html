@@ -547,12 +547,17 @@
             }
             // convert infix to prefix notation
             const call = { type: "list", children: [op, left, right] };
-            // insert prefix call
+            // insert call while keeping other siblings
             children = [
               ...children.slice(0, opIndex - 1),
               call,
               ...children.slice(opIndex + 2),
             ];
+            // unwrap double list.. e.g. (s jazz) * 2
+            if (children.length === 1) {
+              // there might be a cleaner solution
+              children = children[0].children;
+            }
           }
           return children;
         }
