@@ -561,6 +561,11 @@
             );
             if (pipeIndex === -1) break;
             let leftSide = children.slice(0, pipeIndex);
+            if (leftSide.length === 0) {
+              // ! as lambda: (! fast 2) = x=>x.fast(2)
+              children[pipeIndex] = { type: "plain", value: "!" };
+              continue;
+            }
             if (leftSide.length === 1) {
               leftSide = leftSide[0];
             } else {
@@ -654,10 +659,6 @@
             ast.children[0]?.type === "plain",
             `function call: expected first child to be plain, got ${ast.type}`
           );
-          // look up function in lib
-          const name = ast.children[0].value;
-          const fn = this.lib[name];
-          this.assert(fn, `function call: unknown function name "${name}"`);
 
           // process args
           const args = ast.children.slice(1).map((arg) => {
@@ -665,10 +666,30 @@
               return arg.value.slice(1, -1);
             }
             if (arg.type === "plain") {
+              if (!isNaN(Number(arg.value))) {
+                // convert from string to number to avoid mini calls
+                return Number(arg.value); // todo: parse numbers in tokenizer?
+              }
               return arg.value;
             }
             return this.call(arg);
           });
+
+          const name = ast.children[0].value;
+          if (name === "!") {
+            // (! fast 2) = x=>fast(2, x)
+            const callee = ast.children[1].value;
+            const innerFn = this.lib[callee];
+            this.assert(
+              innerFn,
+              `function call: unknown function name "${callee}"`
+            );
+            return (pat) => innerFn(args.slice(1), pat);
+          }
+
+          // look up function in lib
+          const fn = this.lib[name];
+          this.assert(fn, `function call: unknown function name "${name}"`);
 
           // call function
           const flip = !["seq", "cat", "stack"].includes(name); // this is hacky...
@@ -705,6 +726,8 @@
             mod,
             s,
             speed,
+            lastOf,
+            firstOf,
           });
           const code =
             this.getAttribute("code") ||
