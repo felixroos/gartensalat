@@ -460,7 +460,8 @@
           open_seq: /^\[/,
           close_seq: /^\]/,
           pipe: /^\!/,
-          plain: /^[a-zA-Z0-9\.\#\+\-\*\/\-]+/,
+          op: /^[\*\/]/,
+          plain: /^[a-zA-Z0-9\.\#\+\-]+/,
         };
         // matches next token
         next_token(code) {
@@ -492,7 +493,10 @@
           }
           // do we have multiple top level expressions or a single non list?
           if (expressions.length > 1 || expressions[0].type !== "list") {
-            return { type: "list", children: this.resolve_pipes(expressions) };
+            return {
+              type: "list",
+              children: this.desugar_children(expressions),
+            };
           }
           // we have a single list
           return expressions[0];
@@ -513,6 +517,41 @@
             return this.parse_seq();
           }
           return this.consume(next);
+        }
+        desugar_children(children) {
+          children = this.resolve_pipes(children);
+          children = this.resolve_ops(children);
+          return children;
+        }
+        resolve_ops(children) {
+          while (true) {
+            let opIndex = children.findIndex((child) => child.type === "op");
+            if (opIndex === -1) break;
+            if (opIndex === 0) {
+              throw new Error(
+                `cannot use operator as first child. todo: return lambda`
+              );
+            }
+            if (opIndex === children.length - 1) {
+              throw new Error(`cannot use operator as last child.`);
+            }
+            // convert infix to prefix call
+            let call = {
+              type: "list",
+              children: [
+                { type: "plain", value: children[opIndex].value },
+                children[opIndex - 1],
+                children[opIndex + 1],
+              ],
+            };
+            // insert call
+            children = [
+              ...children.slice(0, opIndex - 1),
+              call,
+              ...children.slice(opIndex + 2),
+            ];
+          }
+          return children;
         }
         resolve_pipes(children) {
           while (true) {
@@ -544,14 +583,14 @@
           this.consume("open_list");
           let children = this.parse_args("close_list");
           this.consume("close_list");
-          children = this.resolve_pipes(children);
+          children = this.desugar_children(children);
           return { type: "list", children };
         }
         parse_cat() {
           this.consume("open_cat");
           let children = this.parse_args("close_cat");
           this.consume("close_cat");
-          children = this.resolve_pipes(children);
+          children = this.desugar_children(children);
           children = [{ type: "plain", value: "cat" }, ...children];
           return { type: "list", children };
         }
@@ -559,7 +598,7 @@
           this.consume("open_seq");
           let children = this.parse_args("close_seq");
           this.consume("close_seq");
-          children = this.resolve_pipes(children);
+          children = this.desugar_children(children);
           children = [{ type: "plain", value: "seq" }, ...children];
           return { type: "list", children };
         }
@@ -732,10 +771,47 @@
     <p><a href="https://garten.salat.dev/lisp/sugar.html">sugar</a></p>
     <mini-repl rows="6"
       ><!-- 
-s [jazz [perc click] cp hh] !* <1 2 1 3>
-! speed (<.9 .8 .7 [7.9 .63]> !/ 2)
+s [jazz [perc click] cp hh] !fast <1 2 1 3>
+! speed <.9 .8 .7 [7.9 .63]>/2
 --></mini-repl
     >
+    <h3>brackets</h3>
+    <p>there are 4 types of brackets:</p>
+    <ul>
+      <li>
+        () round brackets are for function calls. the first element is the
+        function name, the rest are the arguments. example
+        <code>(seq a b c)</code> =
+        <code>seq(a,b,c)</code>
+      </li>
+      <li>
+        [] square brackets are for single cycle sequences (like in tidal mini
+        notation). they are syntax sugar for <code>seq</code> function calls:
+        <code>[a b c]</code> = <code>(seq a b c)</code>
+      </li>
+      <li>
+        <> angle brackets are for multi cycle sequences, (like in tidal mini
+        notation). they are syntax sugar for <code>cat</code> function calls:
+        <code>&lt;a b c&gt;</code> = <code>(cat a b c)</code>
+      </li>
+      <li>
+        "" double quotes for classic mini notation. i'm not sure if this is a
+        good idea yet, but it's at least possible
+      </li>
+    </ul>
+    <h3>operators</h3>
+    <ul>
+      <li>
+        ! bang operator for function piping. <code>[a b] ! fast 2</code> =
+        <code>(fast 2 [a b])</code>. the left side will become the last argument
+        of the call on the right. it works like the dot operator in
+        strudel/hydra: <code>s("jazz").fast(2)</code> =
+        <code>s jazz ! fast 2</code>
+      </li>
+      <li>* for fast: <code>s jazz*2</code> = <code>s (fast 2 jazz)</code></li>
+      <li>/ for slow: <code>s jazz/2</code> = <code>s (slow 2 jazz)</code></li>
+    </ul>
+    <ul></ul>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
