@@ -44,6 +44,11 @@
         width: 100%;
         box-sizing: border-box;
       }
+      code {
+        background-color: #ffffff20;
+        padding: 0 3px;
+        border-radius: 2px;
+      }
     </style>
   </head>
   <body>
@@ -460,6 +465,7 @@
           open_seq: /^\[/,
           close_seq: /^\]/,
           pipe: /^\!/,
+          stack: /^\,/,
           op: /^[\*\/]/,
           plain: /^[a-zA-Z0-9\.\#\+\-]+/,
         };
@@ -522,6 +528,34 @@
           children = this.resolve_ops(children);
           children = this.resolve_pipes(children);
           return children;
+        }
+        desugar_stack(children) {
+          let [type, ...rest] = children;
+          // children is expected to contain seq or cat as first item
+          const chunks = [];
+          while (true) {
+            let commaIndex = rest.findIndex((child) => child.type === "stack");
+            if (commaIndex === -1) break;
+            const chunk = rest.slice(0, commaIndex);
+            chunks.push(chunk);
+            rest = rest.slice(commaIndex + 1);
+          }
+          if (!chunks.length) {
+            // no stack
+            return children;
+          }
+          chunks.push(rest);
+          // collect args of stack function
+          const args = chunks.map((chunk) => {
+            if (chunk.length === 1) {
+              // chunks of one element can be added to the stack as is
+              return chunk[0];
+            } else {
+              // chunks of multiple args are added to a subsequence of type
+              return { type: "list", children: [type, ...chunk] };
+            }
+          });
+          return [{ type: "plain", value: "stack" }, ...args];
         }
         resolve_ops(children) {
           while (true) {
@@ -605,6 +639,7 @@
           this.consume("close_cat");
           children = this.desugar_children(children);
           children = [{ type: "plain", value: "cat" }, ...children];
+          children = this.desugar_stack(children);
           return { type: "list", children };
         }
         parse_seq() {
@@ -613,6 +648,7 @@
           this.consume("close_seq");
           children = this.desugar_children(children);
           children = [{ type: "plain", value: "seq" }, ...children];
+          children = this.desugar_stack(children);
           return { type: "list", children };
         }
         consume(type) {
@@ -810,20 +846,22 @@ s [jazz [perc click] cp hh] * <1 2 1 3>
     <p>there are 4 types of brackets:</p>
     <ul>
       <li>
-        () round brackets are for function calls. the first element is the
-        function name, the rest are the arguments. example
+        <code>()</code> round brackets are for function calls. the first element
+        is the function name, the rest are the arguments. example
         <code>(seq a b c)</code> =
         <code>seq(a,b,c)</code>
       </li>
       <li>
-        [] square brackets are for single cycle sequences (like in tidal mini
-        notation). they are syntax sugar for <code>seq</code> function calls:
-        <code>[a b c]</code> = <code>(seq a b c)</code>
+        <code>[]</code> square brackets are for single cycle sequences (like in
+        tidal mini notation). they are syntax sugar for
+        <code>seq</code> function calls: <code>[a b c]</code> =
+        <code>(seq a b c)</code>
       </li>
       <li>
-        <> angle brackets are for multi cycle sequences, (like in tidal mini
-        notation). they are syntax sugar for <code>cat</code> function calls:
-        <code>&lt;a b c&gt;</code> = <code>(cat a b c)</code>
+        <code><></code> angle brackets are for multi cycle sequences, (like in
+        tidal mini notation). they are syntax sugar for
+        <code>cat</code> function calls: <code>&lt;a b c&gt;</code> =
+        <code>(cat a b c)</code>
       </li>
       <li>
         "" double quotes for classic mini notation. i'm not sure if this is a
@@ -833,23 +871,35 @@ s [jazz [perc click] cp hh] * <1 2 1 3>
     <h3>operators</h3>
     <ul>
       <li>
-        ! bang operator for function piping. <code>[a b] ! fast 2</code> =
-        <code>(fast 2 [a b])</code>. the left side will become the last argument
-        of the call on the right. it works like the dot operator in
-        strudel/hydra: <code>s("jazz").fast(2)</code> =
+        <code>!</code> bang operator for function piping.
+        <code>[a b] ! fast 2</code> = <code>(fast 2 [a b])</code>. the left side
+        will become the last argument of the call on the right. it works like
+        the dot operator in strudel/hydra: <code>s("jazz").fast(2)</code> =
         <code>s jazz ! fast 2</code>
       </li>
-      <li>* for fast: <code>s jazz*2</code> = <code>s (fast 2 jazz)</code></li>
-      <li>/ for slow: <code>s jazz/2</code> = <code>s (slow 2 jazz)</code></li>
+      <li>
+        <code>,</code> for stack: <code>s [jazz, hh hh]</code> =
+        <code>s (stack jazz [hh hh])</code>
+      </li>
+      <li>
+        <code>*</code> for fast: <code>s jazz*2</code> =
+        <code>s (fast 2 jazz)</code>
+      </li>
+      <li>
+        <code>/</code> for slow: <code>s jazz/2</code> =
+        <code>s (slow 2 jazz)</code>
+      </li>
     </ul>
     <h3>special char functions</h3>
     <p>some functions are overloaded with a special char:</p>
     <ul>
       <li>
-        * for fast: <code>s jazz!*2</code> = <code>(fast 2 (s jazz))</code>
+        <code>*</code> for fast: <code>s jazz!*2</code> =
+        <code>(fast 2 (s jazz))</code>
       </li>
       <li>
-        / for slow: <code>s jazz!/2</code> = <code>(slow 2 (s jazz))</code>
+        <code>/</code> for slow: <code>s jazz!/2</code> =
+        <code>(slow 2 (s jazz))</code>
       </li>
     </ul>
     <details>
