@@ -509,24 +509,39 @@
             let pipeIndex = children.findIndex(
               (child) => child.type === "pipe"
             );
+            // no pipe => we're done
             if (pipeIndex === -1) break;
-            let leftSide = children.slice(0, pipeIndex);
-            if (leftSide.length === 0) {
+            // pipe up front => lambda
+            if (pipeIndex === 0) {
               // . as lambda: (.fast 2) = x=>x.fast(2)
               // TODO: this doesn't work for (.fast 2 .speed 2)
               // probably needs proper ast representation of lambda
               children[pipeIndex] = { type: "plain", value: "." };
               continue;
             }
-            if (leftSide.length === 1) {
-              leftSide = leftSide[0];
-            } else {
-              // wrap in (..) if multiple items on the left side
-              leftSide = { type: "list", children: leftSide };
-            }
-            const callee = children[pipeIndex + 1];
             const rightSide = children.slice(pipeIndex + 2);
-            children = [callee, leftSide, ...rightSide];
+            const right = children[pipeIndex + 1];
+            if (right.type === "list") {
+              // apply function only to left sibling (high precedence)
+              // s jazz.(fast 2) => s (fast jazz 2)
+              const [callee, ...rest] = right.children;
+              const leftSide = children.slice(0, pipeIndex - 1);
+              const left = children[pipeIndex - 1];
+              const args = [callee, left, ...rest];
+              const call = { type: "list", children: args };
+              children = [...leftSide, call, ...rightSide];
+            } else {
+              // apply function to all left siblings (low precedence)
+              // s jazz . fast 2 => fast (s jazz) 2
+              let leftSide = children.slice(0, pipeIndex);
+              if (leftSide.length === 1) {
+                leftSide = leftSide[0];
+              } else {
+                // wrap in (..) if multiple items on the left side
+                leftSide = { type: "list", children: leftSide };
+              }
+              children = [right, leftSide, ...rightSide];
+            }
           }
           return children;
         }
@@ -537,21 +552,24 @@
             children.push(this.parse_expr());
           }
           this.consume(close_type);
-          return this.desugar_children(children);
+          return children;
         }
         parse_list() {
           let children = this.parse_pair("open_list", "close_list");
+          children = this.desugar_children(children);
           return { type: "list", children };
         }
         parse_cat() {
           let children = this.parse_pair("open_cat", "close_cat");
           children = [{ type: "plain", value: "cat" }, ...children];
+          children = this.desugar_children(children);
           children = this.desugar_stack(children, "cat");
           return { type: "list", children };
         }
         parse_seq() {
           let children = this.parse_pair("open_seq", "close_seq");
           children = [{ type: "plain", value: "seq" }, ...children];
+          children = this.desugar_children(children);
           children = this.desugar_stack(children, "seq");
           return { type: "list", children };
         }
