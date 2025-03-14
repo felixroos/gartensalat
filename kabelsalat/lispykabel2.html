@@ -292,14 +292,6 @@
             })
             .join("\n\n");
         }
-        process_args(args) {
-          return args.map((arg) => {
-            if (arg.type === "list") {
-              return this.evaluate(arg);
-            }
-            return arg.value;
-          });
-        }
         evaluate(ast) {
           // console.log("call", ast);
           // for a node to be callable, it needs to be a list
@@ -337,7 +329,12 @@
             return this.handle({ type: "def", name, body });
           }
           // process args
-          const args = this.process_args(ast.children.slice(1));
+          const args = ast.children.slice(1).map((arg) => {
+            if (arg.type === "list") {
+              return this.evaluate(arg);
+            }
+            return arg.value;
+          });
           return this.handle({ type: "eval", name, args });
         }
       }
