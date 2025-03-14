@@ -861,9 +861,9 @@ s [jazz [perc click] cp hh] * <1 2 1 3>
     <ul>
       <li>
         <code>.</code> for function piping. <code>s jazz . fast 2</code> =
-        <code>(fast 2 (s jazz))</code>. the left side will become the last
-        argument of the call on the right. it works like the dot operator in
-        strudel: <code>s("jazz").fast(2)</code>
+        <code>(fast 2 (s jazz))</code>. the left side will become the first
+        argument of the function call on the right. it works like the dot
+        operator in strudel: <code>s("jazz").fast(2)</code>*
       </li>
       <li>
         <code>.()</code> for local function piping. if you use round brackets
@@ -943,6 +943,13 @@ s [jazz [hh jvbass]] .apply <(.id) (.speed 2) (.id) (.fast 2)>
       requires more work to make it smooth. also, this could be moved to a new
       package in the strudel repo at some point. i can't wait to try this with
       all strudel functions and superdough!
+    </p>
+    <p>
+      *probably nobody noticed that, but in strudel the method chaining actually
+      pipes the left side to the last argument. I've flipped that around,
+      similar to how it works in kabelsalat. it allows using optional arguments
+      in the future, but it makes currying less useful. let's see how this turns
+      out..
     </p>
     <details>
       <summary id="loc">show page source</summary>
