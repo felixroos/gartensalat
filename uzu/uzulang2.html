@@ -132,9 +132,16 @@
         return q;
       };
 
+      function reify(pat) {
+        if (pat instanceof Pattern) {
+          return pat;
+        }
+        return repeat(pat);
+      }
+
       function joinArgs(fn, args) {
         // interpret strings as mini notation
-        args = args.map((arg) => (typeof arg === "string" ? mini(arg) : arg));
+        // args = args.map((arg) => (typeof arg === "string" ? mini(arg) : arg));
         const pat = args[args.length - 1]; // last argument = pattern that defines structure
         const rest = args.slice(0, -1); // extra arguments
         // if we dont have extra arguments, or no extra argument is a pattern, we dont need to join
@@ -175,6 +182,7 @@
       let lastOf = register("lastOf", (n, fn, pat) =>
         cycle((a, b) => (a % n === n - 1 ? fn(pat) : pat).query(a, b))
       );
+      let apply = register("apply", (fn, pat) => fn(pat));
 
       let withValue = register("withValue", (fn, pat) =>
         P((a, b) =>
@@ -204,115 +212,6 @@
       let s = control("s");
       let speed = control("speed");
       let silence = P(() => []);
-
-      // mini parser
-
-      let token_types = {
-        open_cat: /^\</, // "<"
-        close_cat: /^\>/, // ">"
-        open_seq: /^\[/, // "["
-        close_seq: /^\]/, // "]"
-        plain: /^[a-zA-Z0-9\.\#\-]+/, // values
-      };
-
-      function next_token(code) {
-        for (let type in token_types) {
-          const match = code.match(token_types[type]);
-          if (match) {
-            return { type, value: match[0] };
-          }
-        }
-        throw new Error(`mini: could not match '${code}'`);
-      }
-
-      function tokenize(code) {
-        let tokens = [];
-        while (code.length > 0) {
-          code = code.trim(); // trim white spaces
-          const token = next_token(code);
-          code = code.slice(token.value.length);
-          tokens.push(token);
-        }
-        return tokens;
-      }
-
-      class Parser {
-        parse(code) {
-          this.tokens = tokenize(code);
-          //return this.parse_expr();
-          const args = this.parse_args();
-          if (args.length === 1) {
-            return args[0];
-          }
-          // multiple top level args are interpreted as a seq
-          return { type: "seq", args };
-        }
-        consume(type) {
-          const token = this.tokens.shift();
-          if (token.type !== type) {
-            throw new Error(`expected token type ${type}, got ${token.type}`);
-          }
-          return token;
-        }
-        parse_expr() {
-          let next = this.tokens[0]?.type;
-          if (next === "open_cat") {
-            return this.parse_cat();
-          }
-          if (next === "open_seq") {
-            return this.parse_seq();
-          }
-          if (next === "plain") {
-            return this.consume("plain");
-          }
-          throw new Error(
-            `unexpected token "${this.tokens[0].value}" of type ${this.tokens[0].type}`
-          );
-        }
-        parse_args(close_type) {
-          const args = [];
-          while (this.tokens[0]?.type !== close_type) {
-            args.push(this.parse_expr());
-          }
-          return args;
-        }
-        parse_seq() {
-          this.consume("open_seq");
-          const args = this.parse_args("close_seq");
-          this.consume("close_seq");
-          return { type: "seq", args };
-        }
-        parse_cat() {
-          this.consume("open_cat");
-          const args = this.parse_args("close_cat");
-          this.consume("close_cat");
-          return { type: "cat", args };
-        }
-      }
-
-      function patternifyTree(tree) {
-        if (tree.type === "cat") {
-          const args = tree.args.map((arg) => patternifyTree(arg));
-          return cat(...args);
-        }
-        if (tree.type === "seq") {
-          const args = tree.args.map((arg) => patternifyTree(arg));
-          return seq(...args);
-        }
-        if (tree.type === "plain") {
-          return tree.value;
-        }
-      }
-      const parser = new Parser();
-
-      let mini = (code) => {
-        const tree = parser.parse(code);
-        const pat = patternifyTree(tree);
-        if (pat instanceof Pattern) {
-          return pat;
-        }
-        return repeat(pat); // repeat plain values
-      };
 
       // webaudio
       // https://garten.salat.dev/webaudio/clock.html
@@ -403,6 +302,9 @@
           .then((buf) => ac.decodeAudioData(buf));
       let audioBuffers = new Map(); // cache
       let playSample = async (url, ac, t, speed = 1) => {
+        if (speed === 0) {
+          return;
+        }
         !audioBuffers.has(url) && audioBuffers.set(url, loadSample(url, ac));
         const src = ac.createBufferSource();
         src.buffer = await audioBuffers.get(url);
@@ -468,7 +370,7 @@
           pipe: /^\./,
           stack: /^\,/,
           op: /^[\*\/]/,
-          plain: /^[a-zA-Z0-9]+/,
+          plain: /^[a-zA-Z0-9\-]+/,
         };
         // matches next token
         next_token(code) {
@@ -611,6 +513,8 @@
             let leftSide = children.slice(0, pipeIndex);
             if (leftSide.length === 0) {
               // . as lambda: (.fast 2) = x=>x.fast(2)
+              // TODO: this doesn't work for (.fast 2 .speed 2)
+              // probably needs proper ast representation of lambda
               children[pipeIndex] = { type: "plain", value: "." };
               continue;
             }
@@ -706,27 +610,27 @@
           // process args
           const args = ast.children.slice(1).map((arg) => {
             if (arg.type === "string") {
-              return arg.value.slice(1, -1);
+              return this.lib.string(arg.value.slice(1, -1));
             }
             if (arg.type === "plain") {
-              return arg.value;
+              return this.lib.plain(arg.value);
             }
             if (arg.type === "number") {
-              return Number(arg.value);
+              return this.lib.number(Number(arg.value));
             }
             return this.call(arg);
           });
 
           const name = ast.children[0].value;
           if (name === ".") {
-            // (.fast 2) = x=>fast(2, x)
+            // lambda : (.fast 2) = x=>fast(2, x)
             const callee = ast.children[1].value;
             const innerFn = this.lib[callee];
             this.assert(
               innerFn,
               `function call: unknown function name "${callee}"`
             );
-            return (pat) => innerFn(args.slice(1), pat);
+            return (pat) => innerFn(pat, args.slice(1));
           }
 
           // look up function in lib
@@ -742,13 +646,16 @@
           fn(...args, pat);
       // repl
       class MiniREPL extends HTMLElement {
-        static observedAttributes = ["code", "rows"];
+        static observedAttributes = ["code", "rows", "ast"];
 
         constructor() {
           super();
         }
         init() {
           this.lisp = new LispRunner({
+            number: (x) => x,
+            string: (x) => x,
+            plain: reify, // to be able to do s jvbass*2
             cat,
             seq,
             stack,
@@ -763,6 +670,8 @@
             mod: swapFn(mod),
             s: swapFn(s),
             speed: swapFn(speed),
+            apply: swapFn(apply),
+            id: (x) => x,
             lastOf: swapFn(lastOf),
             firstOf: swapFn(firstOf),
           });
@@ -770,6 +679,7 @@
             this.getAttribute("code") ||
             (this.innerHTML + "").replace("<!--", "").replace("-->", "").trim();
           const rows = this.getAttribute("rows");
+          this.showAst = this.getAttribute("ast") || false;
           if (!code) {
             return;
           }
@@ -780,8 +690,7 @@
         <button class="play">play</button>
         <button class="stop">stop</button>
         <textarea id="code" spellcheck="false" rows="${rows}">${code}</textarea>
-        <span>ast:</span>
-        <pre class="ast"></pre>
+        ${this.showAst ? `<span>ast:</span><pre class="ast"></pre>` : ""}
       </div>`
           );
           // repl logic
@@ -804,11 +713,13 @@
           stopButton.addEventListener("click", () => cyclist.stop());
 
           const ast = this.lisp.parser.parse(code);
-          this.querySelector(".ast").innerText = printAst(ast);
+          this.showAst &&
+            (this.querySelector(".ast").innerText = printAst(ast));
         }
         async update(code) {
           const ast = this.lisp.parser.parse(code);
-          this.querySelector(".ast").innerText = printAst(ast);
+          this.showAst &&
+            (this.querySelector(".ast").innerText = printAst(ast));
           const pat = this.lisp.call(ast);
           if (!cyclist.clock.runs) {
             cyclist.play(pat);
@@ -828,22 +739,88 @@
       }
       customElements.define("mini-repl", MiniREPL);
     </script>
-    <h2>🌱 lispy uzulang #2</h2>
-    <p><a href="https://garten.salat.dev/lisp/sugar.html">sugar</a></p>
-    <mini-repl rows="6"
+    <h2>🌱 lispy uzulang #2: adding sugar</h2>
+    <p>
+      after beginning my
+      <a href="https://garten.salat.dev/uzu/uzulang1.html">uzulang</a> with just
+      s-expressions, i want to add some
+      <a href="https://garten.salat.dev/lisp/sugar.html">sugar</a> now.. before
+      we begin, let's add some context:
+    </p>
+    <h3>mini notation</h3>
+    <p>
+      as you might know, tidal is a haskell based dsl that contains a second,
+      custom dsl called "mini notation". similarly, in strudel, the "outer" dsl
+      is written in javascript, with "mini notation" snippets sprinkled in.
+    </p>
+    <p>
+      under the hood, mini notation is transformed to regular function calls
+      within the host language. this means that any pattern can be written
+      without using any mini notation, with the cost of being more verbose and
+      more difficult to write and read. there is a trade-off between terseness
+      (mini notation) and flexibility (host language).
+    </p>
+    <p>
+      mini notation alone is not enough to write typical patterns, as it doesn't
+      support all features of the host dsl. while this tradeoff works well, its
+      inherent flaw is that you cannot easily move between the 2 languages.
+    </p>
+    <p>
+      to solve this tension, we could go full custom dsl, which supports all
+      mini notation features but also every other feature, so the host language
+      wouldn't be needed anymore. for more info, see
+      <a
+        href="https://github.com/tidalcycles/strudel/discussions/96"
+        target="_blank"
+        style="color: yellow"
+        >this discussion</a
+      >.
+    </p>
+    <p>
+      there's already another haskell based uzulang called
+      <a
+        href="https://github.com/polymorphicengine/zwirn/tree/main"
+        target="_blank"
+        style="color: yellow"
+        >zwirn</a
+      >
+      by Martin Gius, which breaks up these language boundaries in a nice way.
+      getting deeper into parsers lately, i've decided to also try to tackle
+      this problem in my garden today!
+    </p>
+    <h3>ok now go</h3>
+    <p>
+      so i've now implemented a lot of syntax sugar, kind of throwing my
+      <a href="https://garten.salat.dev/kabelsalat/lispykabel.html"
+        >kabelsalat dsl</a
+      >
+      and my
+      <a href="https://garten.salat.dev/idlecycles/chapter4.html"
+        >mini notation parser</a
+      >
+      into a mixer. here's how it looks like:
+    </p>
+    <mini-repl rows="6" ast="1"
       ><!-- 
 s [jazz [perc click] cp hh] * <1 2 1 3>
 . speed <.9 .8 .7 [7.9 .63]>/2
 --></mini-repl
     >
+    <p>
+      if you've seen strudel code before, you might notice that it looks very
+      similar, except having less parens and quotes. in the bottom box, you can
+      see the s-expressions after all syntax sugar has been transformed. a nice
+      party trick is that you can copy paste the ast to the code input, and it
+      will still work!
+    </p>
+    <p>here's some more info on the syntax:</p>
     <h3>brackets</h3>
-    <p>there are 4 types of brackets:</p>
+    <p>there are 3 types of brackets:</p>
     <ul>
       <li>
         <code>()</code> round brackets are for function calls. the first element
         is the function name, the rest are the arguments. example
-        <code>(seq a b c)</code> =
-        <code>seq(a,b,c)</code>
+        <code>(seq a b c)</code> = <code>seq(a,b,c)</code> (js)
       </li>
       <li>
         <code>[]</code> square brackets are for single cycle sequences (like in
@@ -857,10 +834,10 @@ s [jazz [perc click] cp hh] * <1 2 1 3>
         <code>cat</code> function calls: <code>&lt;a b c&gt;</code> =
         <code>(cat a b c)</code>
       </li>
-      <li>
+      <!-- <li>
         <code>""</code> double quotes for classic mini notation. i'm not sure if
         this is a good idea yet, but it's at least possible
-      </li>
+      </li> -->
     </ul>
     <h3>operators</h3>
     <ul>
@@ -868,7 +845,7 @@ s [jazz [perc click] cp hh] * <1 2 1 3>
         <code>.</code> for function piping. <code>s jazz . fast 2</code> =
         <code>(fast 2 (s jazz))</code>. the left side will become the last
         argument of the call on the right. it works like the dot operator in
-        strudel/hydra: <code>s("jazz").fast(2)</code> =
+        strudel: <code>s("jazz").fast(2)</code> =
         <code>s jazz . fast 2</code>
       </li>
       <li>
@@ -896,6 +873,52 @@ s [jazz [perc click] cp hh] * <1 2 1 3>
         <code>(slow 2 (s jazz))</code>
       </li>
     </ul>
+    <mini-repl rows="8"
+      ><!--
+stack 
+(s [jazz jazz]) 
+(speed [1 0 0 1.5 0 0 2 0]. s jvbass)
+(s [- hh]*2 . speed .966)
+(s <- cp - perc*4>*2)
+--></mini-repl
+    >
+    <h3>local vs global operators</h3>
+    <p>try changing <code>* 2</code> to <code>.* 2</code> in this example:</p>
+    <mini-repl rows="2" ast="1"
+      ><!-- 
+s [jvbass - - jvbass - - jvbass -].speed<1 2> * 2
+--></mini-repl
+    >
+    <p>
+      we can see that without "." as a prefix, "*" acts like it would in mini
+      notation, only speeding up the preceeding element. when using ".*", the
+      speedup is applied to the whole pattern instead! the ast also reflects
+      that..
+    </p>
+    <h3>lambdas</h3>
+    <p>the dot operator can also be used as a lambda function like this:</p>
+    <mini-repl rows="2"
+      ><!-- 
+s [jazz [hh jvbass]] .lastOf 2 (.speed 2)
+--></mini-repl
+    >
+    <p>
+      these lambdas are purely for transforming a pattern, so the pattern
+      argument is implicit. the neat thing is that we get function patterning
+      for free:
+    </p>
+    <mini-repl rows="2"
+      ><!-- 
+s [jazz [hh jvbass]] .apply <(.id) (.speed 2) (.id) (.fast 2)>
+--></mini-repl
+    >
+
+    <p>
+      that's it for today! so far i really like this language, but it certainly
+      requires more work to make it smooth. also, this could be moved to a new
+      package in the strudel repo at some point. i can't wait to try this with
+      all strudel functions and superdough!
+    </p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
