@@ -869,7 +869,9 @@ s [jazz [perc click] cp hh] * <1 2 1 3>
         <code>.()</code> for local function piping. if you use round brackets
         after the dot, the function inside the brackets will only be applied to
         the element left of the dot, instead of everything on the left. for
-        example <code>s [jazz hh.(* 2)]</code> = <code>s [jazz hh*2]</code>
+        example <code>s [jazz [cp hh].(ply 2)]</code> =
+        <code>s [jazz (ply [cp hh] 2)]</code> (ply doesn't work yet here, but
+        you get the idea)
       </li>
       <li>
         <code>,</code> for stack: <code>s [jazz, hh hh]</code> =
