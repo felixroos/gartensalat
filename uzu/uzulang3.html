@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html>
+  <!-- This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details. You should have received a copy of the GNU Affero General Public License along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 uzulang III: looking inside</title>
+    <style>
+      body {
+        background-color: #222;
+        width: 600px;
+        max-width: 100%;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+        box-sizing: border-box;
+      }
+      img {
+        max-width: 100%;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        overflow: auto;
+        outline: none;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      code {
+        background-color: #ffffff20;
+        padding: 0 3px;
+        border-radius: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        setTimeout(() => {
+          const pre = document.createElement("pre");
+          pre.textContent = getCode(scriptElement, indent);
+          script.after(pre);
+        }, 1);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <script>
+      /*
+mondo.mjs - <short description TODO>
+Copyright (C) 2022 Strudel contributors - see <https://github.com/tidalcycles/strudel/blob/main/packages/mini/test/mini.test.mjs>
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details. You should have received a copy of the GNU Affero General Public License along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+      // evolved from https://garten.salat.dev/lisp/parser.html
+      class MondoParser {
+        // these are the tokens we expect
+        token_types = {
+          quotes_double: /^"(.*?)"/,
+          quotes_single: /^'(.*?)'/,
+          open_list: /^\(/,
+          close_list: /^\)/,
+          open_cat: /^</,
+          close_cat: /^>/,
+          open_seq: /^\[/,
+          close_seq: /^\]/,
+          number: /^-?[0-9]*\.?[0-9]+/, // before pipe!
+          pipe: /^[\.#]/,
+          stack: /^[,$]/,
+          op: /^[*/]/,
+          plain: /^[a-zA-Z0-9-~_^]+/,
+        };
+        // matches next token
+        next_token(code, offset = 0) {
+          for (let type in this.token_types) {
+            const match = code.match(this.token_types[type]);
+            if (match) {
+              let token = { type, value: match[0] };
+              if (offset !== -1) {
+                // add location
+                token.loc = [offset, offset + match[0].length];
+              }
+              return token;
+            }
+          }
+          throw new Error(`mondo: could not match '${code}'`);
+        }
+        // takes code string, returns list of matched tokens (if valid)
+        tokenize(code, offset = 0) {
+          let tokens = [];
+          let locEnabled = offset !== -1;
+          let trim = () => {
+            // trim whitespace at start, update offset
+            offset += code.length - code.trimStart().length;
+            // trim start and end to not confuse parser
+            return code.trim();
+          };
+          code = trim();
+          while (code.length > 0) {
+            code = trim();
+            const token = this.next_token(code, locEnabled ? offset : -1);
+            code = code.slice(token.value.length);
+            offset += token.value.length;
+            tokens.push(token);
+          }
+          return tokens;
+        }
+        // take code, return abstract syntax tree
+        parse(code, offset) {
+          this.tokens = this.tokenize(code, offset);
+          const expressions = [];
+          while (this.tokens.length) {
+            expressions.push(this.parse_expr());
+          }
+          if (expressions.length === 0) {
+            // empty case
+            return { type: "list", children: [] };
+          }
+          // do we have multiple top level expressions or a single non list?
+          if (expressions.length > 1 || expressions[0].type !== "list") {
+            return {
+              type: "list",
+              children: this.desugar(expressions),
+            };
+          }
+          // we have a single list
+          return expressions[0];
+        }
+        // parses any valid expression
+        parse_expr() {
+          if (!this.tokens[0]) {
+            throw new Error(`unexpected end of file`);
+          }
+          let next = this.tokens[0]?.type;
+          if (next === "open_list") {
+            return this.parse_list();
+          }
+          if (next === "open_cat") {
+            return this.parse_cat();
+          }
+          if (next === "open_seq") {
+            return this.parse_seq();
+          }
+          return this.consume(next);
+        }
+        desugar_children(children) {
+          children = this.resolve_ops(children);
+          children = this.resolve_pipes(children);
+          return children;
+        }
+        // Token[] => Token[][] . returns empty list if type not found
+        split_children(children, split_type, sequence_type) {
+          let originalChildren = children;
+          if (sequence_type) {
+            // if given, the first child is ignored
+            children = children.slice(1);
+          }
+          const chunks = [];
+          while (true) {
+            let commaIndex = children.findIndex(
+              (child) => child.type === split_type
+            );
+            if (commaIndex === -1) break;
+            const chunk = children.slice(0, commaIndex);
+            chunk.length && chunks.push(chunk);
+            children = children.slice(commaIndex + 1);
+          }
+          if (!chunks.length) {
+            return [originalChildren];
+          }
+          chunks.push(children);
+          return chunks;
+        }
+        desugar_stack(children, sequence_type) {
+          // children is expected to contain seq or cat as first item
+          const chunks = this.split_children(children, "stack", sequence_type);
+          if (chunks.length === 1) {
+            return this.desugar_children(chunks[0]);
+          }
+          // collect args of stack function
+          const args = chunks.map((chunk) => {
+            if (chunk.length === 1) {
+              // chunks of one element can be added to the stack as is
+              return chunk[0];
+            } else {
+              // chunks of multiple args
+              if (sequence_type) {
+                // if given, each chunk needs to be prefixed
+                // [a b, c d] => (stack (seq a b) (seq c d))
+                chunk = [{ type: "plain", value: sequence_type }, ...chunk];
+              }
+              chunk = this.desugar_children(chunk);
+              return { type: "list", children: chunk };
+            }
+          });
+          return [{ type: "plain", value: "stack" }, ...args];
+        }
+        resolve_ops(children) {
+          while (true) {
+            let opIndex = children.findIndex((child) => child.type === "op");
+            if (opIndex === -1) break;
+            const op = { type: "plain", value: children[opIndex].value };
+            if (opIndex === children.length - 1) {
+              throw new Error(`cannot use operator as last child.`);
+            }
+            if (opIndex === 0) {
+              // regular function call (assuming each operator exists as function)
+              children[opIndex] = op;
+              continue;
+            }
+            const left = children[opIndex - 1];
+            const right = children[opIndex + 1];
+            if (left.type === "pipe") {
+              // "x !* 2" => (* 2 x)
+              children[opIndex] = op;
+              continue;
+            }
+            // convert infix to prefix notation
+            const call = { type: "list", children: [op, left, right] };
+            // insert call while keeping other siblings
+            children = [
+              ...children.slice(0, opIndex - 1),
+              call,
+              ...children.slice(opIndex + 2),
+            ];
+            // unwrap double list.. e.g. (s jazz) * 2
+            if (children.length === 1) {
+              // there might be a cleaner solution
+              children = children[0].children;
+            }
+          }
+          return children;
+        }
+        resolve_pipes(children) {
+          while (true) {
+            let pipeIndex = children.findIndex(
+              (child) => child.type === "pipe"
+            );
+            // no pipe => we're done
+            if (pipeIndex === -1) break;
+            // pipe up front => lambda
+            if (pipeIndex === 0) {
+              // . as lambda: (.fast 2) = x=>x.fast(2)
+              // TODO: this doesn't work for (.fast 2 .speed 2)
+              // probably needs proper ast representation of lambda
+              children[pipeIndex] = { type: "plain", value: "." };
+              continue;
+            }
+            const rightSide = children.slice(pipeIndex + 2);
+            const right = children[pipeIndex + 1];
+            if (right.type === "list") {
+              // apply function only to left sibling (high precedence)
+              // s jazz.(fast 2) => s (fast jazz 2)
+              const [callee, ...rest] = right.children;
+              const leftSide = children.slice(0, pipeIndex - 1);
+              const left = children[pipeIndex - 1];
+              let args = [callee, left, ...rest];
+              const call = { type: "list", children: args };
+              children = [...leftSide, call, ...rightSide];
+            } else {
+              // apply function to all left siblings (low precedence)
+              // s jazz . fast 2 => fast (s jazz) 2
+              let leftSide = children.slice(0, pipeIndex);
+              if (leftSide.length === 1) {
+                leftSide = leftSide[0];
+              } else {
+                // wrap in (..) if multiple items on the left side
+                leftSide = { type: "list", children: leftSide };
+              }
+              children = [right, leftSide, ...rightSide];
+            }
+          }
+          return children;
+        }
+        parse_pair(open_type, close_type, call_type) {
+          this.consume(open_type);
+          const children = [];
+          while (this.tokens[0]?.type !== close_type) {
+            children.push(this.parse_expr());
+          }
+          this.consume(close_type);
+          if (call_type) {
+            return [{ type: "plain", value: call_type }, ...children];
+          }
+          return children;
+        }
+        desugar(children, type) {
+          // not really needed but more readable and might be extended in the future
+          children = this.desugar_stack(children, type);
+          return children;
+        }
+        parse_list() {
+          let children = this.parse_pair("open_list", "close_list");
+          children = this.desugar(children);
+          return { type: "list", children };
+        }
+        parse_cat() {
+          let children = this.parse_pair("open_cat", "close_cat", "cat");
+          children = this.desugar(children, "cat");
+          return { type: "list", children };
+        }
+        parse_seq() {
+          let children = this.parse_pair("open_seq", "close_seq", "seq");
+          children = this.desugar(children, "seq");
+          return { type: "list", children };
+        }
+        consume(type) {
+          // shift removes first element and returns it
+          const token = this.tokens.shift();
+          if (token.type !== type) {
+            throw new Error(`expected token type ${type}, got ${token.type}`);
+          }
+          return token;
+        }
+        get_locations(code, offset = 0) {
+          let walk = (ast, locations = []) => {
+            if (ast.type === "list") {
+              return ast.children
+                .slice(1)
+                .forEach((child) => walk(child, locations));
+            }
+            if (ast.loc) {
+              locations.push(ast.loc);
+            }
+          };
+          const ast = this.parse(code, offset);
+          let locations = [];
+          walk(ast, locations);
+          return locations;
+        }
+      }
+
+      function printAst(ast, compact = false, lvl = 0) {
+        const br = compact ? "" : "\n";
+        const repeat = compact ? "" : Array(lvl).fill(" ").join("");
+        if (ast.type === "list") {
+          return `${lvl ? br : ""}${repeat}(${ast.children
+            ?.map((child) => printAst(child, compact, lvl + 1))
+            ?.join(" ")}${
+            ast.children.find((child) => child.type === "list")
+              ? `${br}${repeat})`
+              : ")"
+          }`;
+        }
+        return `${ast.value}`;
+      }
+    </script>
+    <h2>🌱 uzulang III: looking inside</h2>
+    <p>
+      last time, i added a bunch of features to my
+      <a href="https://garten.salat.dev/uzu/uzulang2.html">uzulang</a>, which is
+      now called mondo. today, i want to try to get more insight into the inner
+      workings of it. one good way for me to learn how an algorithm works is to
+      step through it with the debugger. still, the debugger is very generic and
+      it cannot be part of a blog post, so i thought i'd try to write a custom
+      debugger:
+    </p>
+    <parser-debugger
+      ><!-- s [bd hh*2, - cp] .fast 2 .jux <rev press> --></parser-debugger
+    >
+    <p>by pressing "step", you can see what the parser does.</p>
+    <h3>How it works</h3>
+    <p>
+      the parser i want to debug is a single class, with a bunch of methods that
+      call each other, often recursively. my first idea was to add a "debug"
+      callback to the class, that i can call each time i want debug information.
+      while this works, it is tedious to add to every function + it makes the
+      code less readable + it might even degrade performance. so i've looked for
+      something else..
+    </p>
+    <h3>Proxies</h3>
+    <p>
+      then i remembered a very meta programming friendly js feature called
+      Proxies. they allow you to observe an object from the outside. this is
+      what i came up with:
+    </p>
+    <script>
+      class Debugger {
+        calltree;
+        parent;
+        constructor(OriginalClass, methods) {
+          this.methods = methods;
+          this.init();
+          this.instance = this.createProxyInstance(OriginalClass);
+        }
+        static deepCopy(obj) {
+          return JSON.parse(JSON.stringify(obj));
+        }
+        init() {
+          this.calltree = { name: "root", children: [] };
+          this.parent = this.calltree;
+        }
+        createProxyInstance(OriginalClass) {
+          const instance = new OriginalClass();
+          const self = this;
+          const proxy = new Proxy(instance, {
+            get(target, name) {
+              const value = target[name];
+              if (typeof value === "function") {
+                return (...args) => {
+                  if (!self.methods.includes(name)) {
+                    return value.apply(proxy, args);
+                  }
+                  const child = {
+                    name,
+                    args: Debugger.deepCopy(args),
+                    children: [],
+                  };
+                  self.parent.children.push(child);
+                  child.parent = self.parent;
+                  self.parent = child;
+                  child.self = Debugger.deepCopy(target);
+                  const result = value.apply(proxy, args);
+                  child.result = Debugger.deepCopy(result);
+                  self.parent = child.parent;
+                  delete child.parent;
+                  return result;
+                };
+              }
+              return value;
+            },
+          });
+          return proxy;
+        }
+
+        *render(node = this.calltree, lvl = 0) {
+          if (node.children.length && node.name !== "root") {
+            yield { type: "enter", node, lvl };
+            lvl++;
+          }
+          for (let child of node.children) {
+            yield* this.render(child, lvl);
+          }
+          if (node.name !== "root") {
+            yield { type: "exit", node, lvl };
+            lvl--;
+          }
+        }
+      }
+      const debug = new Debugger(MondoParser, [
+        "desugar_children",
+        "desugar",
+        "split_children",
+        "desugar_stack",
+        "resolve_ops",
+        "resolve_pipes",
+        "parse_pair",
+        "parse_list",
+        "parse_cat",
+        "parse_seq",
+        "consume",
+      ]);
+      const parser = debug.instance;
+      parser.parse("s bd");
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>
+      as soon as we call a method of the instance, the proxy will kick in. for
+      any method that we want to observe, a node will be created in the
+      calltree. the render method then lets us walk through the call tree step
+      by step?.
+    </p>
+    <p>
+      the fact that the Debugger doesn't know any internals, we could use it to
+      debug any class..
+    </p>
+    <script>
+      class ParserDebugger extends HTMLElement {
+        static observedAttributes = ["code", "rows"];
+        init() {
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "").replace("<!--", "").replace("-->", "").trim();
+          const rows = this.getAttribute("rows");
+          if (!code) {
+            return;
+          }
+          this.innerHTML = "";
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div class="editor-wrapper" style="border:2px solid cyan;margin-bottom:4px">
+    <textarea spellcheck="false" rows="${rows}">${code}</textarea>
+    <button class="step" style="width:100%;height:60px;background:#111;color:white;border:0">step</button>
+    <div class="viz" style="max-height:300px;overflow:auto"></div>
+  </div>`
+          );
+          const doc = {
+            desugar_children: "rewrite any syntax sugar to s-expressions",
+            desugar: "transforms any syntax sugar to s-expressions",
+            split_children:
+              "create subgroups that are divided by the given type",
+            desugar_stack: "rewrite commas to stack calls",
+            resolve_ops: "rewrite infix operators to prefix notation",
+            resolve_pipes: "rewrite . to s-expressions",
+            parse_pair: "parse a bracket pair.",
+            parse_list: "parse a list enclosed by (round brackets)",
+            parse_cat: "parse a list enclosed by <angle brackets>",
+            parse_seq: "parse a list enclosed by [square brackets]",
+            consume: "take a token from the stack",
+          };
+
+          const debug = new Debugger(MondoParser, [
+            /*"next_token",
+            "tokenize",
+            "parse",
+            "parse_expr", */
+            "desugar_children",
+            //"desugar",
+            "split_children",
+            "desugar_stack",
+            "resolve_ops",
+            "resolve_pipes",
+            "parse_pair",
+            "parse_list",
+            "parse_cat",
+            "parse_seq",
+            "consume",
+            /*"get_locations", */
+          ]);
+          const parser = debug.instance;
+
+          const viz = this.querySelector(".viz");
+          const input = this.querySelector("textarea");
+          const stepButton = this.querySelector(".step");
+          input.value = code;
+          let renderer;
+          let update = () => {
+            debug.init();
+            viz.innerText = "";
+            const res = parser.parse(input.value);
+            console.log(res);
+            console.log("calltree", debug.calltree);
+            renderer = debug.render();
+          };
+
+          let repeat = (n, s = " ") => "".padStart(n, s);
+
+          let printToken = (token, lvl) => {
+            const space = repeat(lvl);
+            return `${space}${token.loc.join("-")} = ${token.type}`;
+          };
+          let showAst = (ast, lvl) => {
+            const space = repeat(lvl);
+            return `${space}${printAst(ast, true)}`;
+          };
+          let printTokens = (tokens, lvl) => {
+            const space = repeat(lvl);
+            return `${space}${printAst(
+              { type: "list", children: tokens },
+              true
+            )}`;
+          };
+          let showToken = (token, lvl = 0) => {
+            const space = repeat(lvl);
+            return `${space}${input.value
+              .replaceAll("\n", " ")
+              .slice(token.loc[0])}
+${space}${repeat(token.loc[1] - token.loc[0], "^")}`;
+          };
+
+          let step;
+          let insert = (v) =>
+            viz.insertAdjacentHTML(
+              "afterbegin",
+              `<pre>${v.replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</pre>`
+            );
+          stepButton.addEventListener("click", () => {
+            if (!step?.done) {
+              step = renderer.next();
+              if (step.done) {
+                return;
+              }
+              const { node, lvl, type } = step.value;
+              console.log("node", node);
+              const { name, args, children, result, self } = node;
+              const space = repeat(lvl);
+              if (type === "enter") {
+                const padded = `${repeat(lvl)}// ${doc[name]}
+${repeat(lvl)}call: ${name}`;
+                if (
+                  [
+                    "resolve_ops",
+                    "resolve_pipes",
+                    "desugar_children",
+                    "desugar_stack",
+                    "desugar",
+                  ].includes(name)
+                ) {
+                  insert(`${padded}
+${printTokens(args[0], lvl)}`);
+                } else if (name === "split_children") {
+                  insert(`${padded}(${args[1]})
+${printTokens(args[0], lvl)}`);
+                } else if (
+                  [
+                    "parse_seq",
+                    "parse_list",
+                    "parse_cat",
+                    "parse_expr",
+                  ].includes(name)
+                ) {
+                  insert(`${padded}
+${showToken(self.tokens[0], lvl)}`);
+                } else if (name === "parse_pair") {
+                  insert(`${padded}(${args.join(", ")})
+${showToken(self.tokens[0], lvl)}`);
+                } else {
+                  insert(padded);
+                }
+                return;
+              }
+
+              const latest = viz.childNodes.entries();
+              const padded = `${repeat(lvl)}// ${doc[name]}
+${repeat(lvl)}return: ${name}`;
+              if (name === "next_token") {
+                insert(
+                  `${padded}
+${showToken(result, lvl)}
+${space}${printToken(result)}
+  `
+                );
+              } else if (name === "consume") {
+                insert(`${padded}(${args[0]})
+${showToken(result, lvl)}`);
+              } else if (name === "parse_expr") {
+                insert(`${padded}
+${space}${printAst(result, true)}`);
+              } else if (
+                ["parse_seq", "parse_cat", "parse_list"].includes(name)
+              ) {
+                insert(`${padded}
+${showAst(result, lvl)}`);
+              } else if (name === "parse_pair") {
+                insert(`${padded}(${args.join(", ")})
+${printTokens(result, lvl)}`);
+              } else if (
+                [
+                  "tokenize",
+                  "resolve_ops",
+                  "resolve_pipes",
+                  "desugar_children",
+                  "desugar_stack",
+                  "desugar",
+                ].includes(name)
+              ) {
+                insert(`${padded}
+${printTokens(result, lvl)}`);
+              } else if (name === "split_children") {
+                insert(`${padded}(${args[1]})
+${result.map((chunk) => printTokens(chunk, lvl)).join("\n")}`);
+              } else if (name === "parse") {
+                insert(`${padded}
+${space}${printAst(result, true)}`);
+              } else {
+                insert(padded);
+              }
+            } else {
+              console.log("done");
+            }
+          });
+
+          update();
+          input.addEventListener("input", () => {
+            update();
+          });
+        }
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          this.init();
+        }
+      }
+      customElements.define("parser-debugger", ParserDebugger);
+    </script>
+
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <br />
+    <p>
+      <a href="/LICENSE">license: AGPL-3.0</a><br /><br />
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      // render source code
+      fetch(window.location.href)
+        .then((response) => response.text())
+        .then((html) => {
+          const label = `show source (${html.split("\n").length} loc)`;
+          document.querySelector("#pre").textContent = html;
+          document.querySelector("#loc").textContent = label;
+        });
+    </script>
+  </body>
+</html>
