@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 oscillators from scratch</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        overflow: auto;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        background-color: #44444490;
+        border: 0;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+      canvas {
+        max-width: 100%;
+        background-color: #44444490;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 oscillators from scratch</h2>
+    <p>
+      based on my <a href="/audio-dsp/worklets2.html">dsp live coding tool</a>,
+      I want to explore some basic techniques I've discovered, starting with
+      oscillators. Instead of using the built-in OscillatorNode of the web audio
+      api, I want to work with raw samples and write them
+      <a
+        style="color: yellow"
+        target="_blank"
+        href="https://www.todepond.com/sky/from-scratch-live-coding-is-a-lie/"
+        >from scratch</a
+      >
+    </p>
+
+    <script>
+      const ctx = new AudioContext();
+      // init audio context
+      document.addEventListener("click", function firstClick() {
+        ctx.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+
+      class DSPRepl extends HTMLElement {
+        static observedAttributes = ["code", "rows"];
+        worklet;
+        init() {
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "").replace("<!--", "").replace("-->", "").trim();
+
+          const rows = this.getAttribute("rows") ?? 4;
+          if (!code) {
+            return;
+          }
+          this.innerHTML = "";
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div style="position:relative;border:2px solid #222;padding:0;">
+          <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
+          <canvas height="60"></canvas>
+          <div style="position:absolute;bottom:5px;right:0px;background:#333;padding:4px;">
+          <a class="stop">stop</a> | <a class="play">play</a>
+          </div>
+          </div>
+            `
+          );
+          // draw logic
+          this.canvas = this.querySelector("canvas");
+          this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+          this.canvas.height =
+            this.canvas.clientHeight * window.devicePixelRatio;
+          this.drawContext = this.canvas.getContext("2d");
+          this.drawSilence(this.drawContext);
+
+          // repl logic
+          const input = this.querySelector("textarea");
+          input.value = code;
+          input.style = "margin:0;border-bottom:2px solid #222";
+          this.input = input;
+
+          this.querySelector(".play").onclick = () => this.play();
+          this.querySelector(".stop").onclick = () => this.stop();
+          input.addEventListener("keydown", async (e) => {
+            if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+              const hash = btoa(input.value);
+              let urlCode = window.location.hash.slice(1);
+              this.play();
+            }
+            if ((e.ctrlKey || e.altKey) && e.code === "Period") {
+              e.preventDefault();
+              this.stop();
+            }
+          });
+        }
+
+        async play() {
+          await ctx.resume();
+          this.stop();
+          this.worklet = await this.runWorklet(ctx, this.input.value);
+          this.worklet.port.onmessage = (e) =>
+            requestAnimationFrame(() =>
+              this.drawBuffer(this.drawContext, e.data)
+            );
+        }
+        stop() {
+          this.worklet?.disconnect();
+          this.worklet?.port.postMessage("stop");
+        }
+
+        async runWorklet(ac, code) {
+          const name = `worklet-${Date.now()}`;
+          const workletCode = `// start of user code
+      ${code}
+      // end of user code, I hope you have define an dsp function..
+      class MyProcessor extends AudioWorkletProcessor {
+        constructor() {
+          super();
+          this.t = 0;
+          this.active = true;
+          this.framebuffer = new Float32Array(Math.floor(sampleRate/30));
+          this.port.onmessage = (e) => e.data === "stop" && (this.active = false)
+        }
+        process(inputs, outputs, parameters) {
+          const output = outputs[0];
+          for (let i = 0; i < output[0].length; i++) {
+            let out = dsp(this.t/sampleRate)
+            for(let c in output)
+              output[c][i] = out;
+            this.t++;
+            this.framebuffer[this.t%this.framebuffer.length] = out;
+            if(this.t % this.framebuffer.length === 0 && this.t > 0) {
+              this.port.postMessage(this.framebuffer)
+            }
+          }
+          return this.active;
+        }
+      }
+      registerProcessor('${name}', MyProcessor);`;
+          await ac.resume();
+          const dataURL = `data:text/javascript;base64,${btoa(workletCode)}`;
+          await ac.audioWorklet.addModule(dataURL);
+          const node = new AudioWorkletNode(ac, name);
+          node.connect(ac.destination);
+          return node;
+        }
+
+        drawBuffer(ctx, samples) {
+          const canvas = ctx.canvas;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          this.plot(
+            (x) => samples[Math.floor(x)], // this is bad..
+            ctx,
+            [1, samples.length],
+            [-1, 1],
+            "white",
+            2
+          );
+        }
+
+        drawSilence(ctx, color = "white", lineWidth = 2) {
+          const canvas = ctx.canvas;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lineWidth;
+          ctx.beginPath();
+          ctx.moveTo(0, canvas.height / 2);
+          ctx.lineTo(canvas.width, canvas.height / 2);
+          ctx.stroke();
+        }
+
+        // plot function, see /plot.html
+        plot(
+          fn,
+          ctx,
+          xrange = [-1, 1],
+          yrange = [-1, 1],
+          color = "black",
+          lineWidth = 4
+        ) {
+          // these 3 functions are very good to know..
+          const lerp = (v, min, max) => v * (max - min) + min;
+          const invLerp = (v, min, max) => (v - min) / (max - min);
+          const remap = (v, vmin, vmax, omin, omax) =>
+            lerp(invLerp(v, vmin, vmax), omin, omax);
+          // prepare draw context
+          ctx.lineWidth = lineWidth;
+          ctx.strokeStyle = color;
+          // function ranges
+          const [x0, x1] = xrange;
+          const [y0, y1] = yrange;
+          // draw ranges
+          const [px0, px1] = [0, ctx.canvas.width];
+          const [py0, py1] = [ctx.canvas.height - ctx.lineWidth, ctx.lineWidth];
+          // actual draw logic
+          ctx.beginPath();
+          for (let px = 0; px < ctx.canvas.width; px++) {
+            const x = remap(px, px0, px1, x0, x1);
+            const y = fn(x);
+            const py = remap(y, y0, y1, py0, py1);
+            px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          this.init();
+        }
+      }
+      customElements.define("dsp-repl", DSPRepl);
+    </script>
+
+    <p>a simple sine wave can be played like this:</p>
+    <dsp-repl
+      ><!-- let sine = (f, t) => Math.sin(t*f*2*Math.PI)
+let dsp = (t) => sine(241, t)/2 --></dsp-repl
+    >
+    <p>here, we plug a frequency f and the time t into a sine function.</p>
+    <p>while this works, it has a problem when we try to modulate it:</p>
+    <dsp-repl
+      ><!-- let sine = (f, t) => Math.sin(t*f*2*Math.PI)
+let dsp = (t) => sine(241+sine(2, t)*4, t)/2 --></dsp-repl
+    >
+    <p>i would've expected a vibrato, but not this...</p>
+    <p>another problem occurs when we sequence it:</p>
+    <dsp-repl
+      ><!-- let sine = (f, t) => Math.sin(t*f*2*Math.PI)
+let seq = (vals, f, t) => vals[Math.floor(t*f)%vals.length]
+let dsp = (t) => sine(seq([120,150,180], 3.3, t), t)/2 --></dsp-repl
+    >
+    <p>here we can hear annoying cracks when the frequency changes..</p>
+
+    <h3>problem: phase jumps</h3>
+
+    <p>
+      our problem is that the phase of the sine wave can jump when we change the
+      frequency. Because we calculate the sine based of f and t, the result will
+      be relative to those numbers. for t=0, our sine will start from zero,
+      oscillating f times per second. for any t, we will get the result of the
+      sine function relative to t=0. if we change the frequency, the value of
+      the sine might jump, creating a crack.
+    </p>
+
+    <h3>solution: memory</h3>
+
+    <p>we can solve these jumps by memorizing the "phase" of our sine wave:</p>
+    <dsp-repl rows="14"
+      ><!-- const ISR = 1 / sampleRate;
+class SineOsc {
+  constructor() {
+    this.phase = 0;
+  }
+  update(freq) {
+    this.phase = (this.phase + ISR * freq) % 1;
+    return Math.sin(this.phase * 2 * Math.PI);
+  }
+}
+
+let osc1 = new SineOsc();
+let dsp = (t) => osc1.update(180)/2;
+ --></dsp-repl
+    >
+    <p>
+      now, our sine oscillator increments its phase each sample, so when we
+      change the frequency, there will be no jump! to actually show that it
+      works, here's the vibrato example from earlier:
+    </p>
+
+    <dsp-repl rows="14"
+      ><!-- const ISR = 1 / sampleRate;
+class SineOsc {
+  constructor() {
+    this.phase = 0;
+  }
+  update(freq) {
+    this.phase = (this.phase + ISR * freq) % 1;
+    return Math.sin(this.phase * 2 * Math.PI);
+  }
+}
+
+let osc1 = new SineOsc();
+let osc2 = new SineOsc();
+let dsp = (t) => osc1.update(180 + osc2.update(2)*4)/2;
+ --></dsp-repl
+    >
+    <p>Similarly, we can now sequence the frequency without cracks:</p>
+    <dsp-repl rows="16"
+      ><!-- const ISR = 1 / sampleRate;
+class SineOsc {
+  constructor() {
+    this.phase = 0;
+  }
+  update(freq) {
+    this.phase = (this.phase + ISR * freq) % 1;
+    return Math.sin(this.phase * 2 * Math.PI);
+  }
+}
+
+let seq = (vals, f, t) => vals[Math.floor(t*f)%vals.length]
+let osc1 = new SineOsc();
+let osc2 = new SineOsc();
+let dsp = (t) => osc1.update(seq([120,150,180], 3.3, t))/2;
+ --></dsp-repl
+    >
+    <p>that's it for today.. next up, we'll look at different waveforms</p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+
+    <script>
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
