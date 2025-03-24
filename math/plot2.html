@@ -185,8 +185,8 @@ plot((x) => sine(3, x)/2, {color:'yellow'})
     </p>
     <fn-plotter rows="8"
       ><!-- let dissonance = (f1, f2, a = 3.5, b = 5.75) => {
-    const deltaF = Math.abs(f2 - f1);
-    return Math.exp(-a * deltaF) - Math.exp(-b * deltaF);
+  const deltaF = Math.abs(f2 - f1);
+  return Math.exp(-a * deltaF) - Math.exp(-b * deltaF);
 }
 let lerp = (v, min, max) => v * (max - min) + min;
 let f = (x) => dissonance(440, lerp(x, 440, 450))*4
