@@ -89,12 +89,10 @@
           this.innerHTML = "";
           this.insertAdjacentHTML(
             "beforeend",
-            `<div style="position:relative;border:2px solid #222;padding:0;">
+            `<div style="border:2px solid #222;padding:0;">
           <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
           <canvas height="60"></canvas>
-          <div style="position:absolute;bottom:5px;right:0px;background:#333;padding:4px;">
-          <a class="stop">stop</a> | <a class="play">play</a>
-          </div>
+          <a class="play">play</a> | <a class="stop">stop</a>
           </div>
             `
           );
