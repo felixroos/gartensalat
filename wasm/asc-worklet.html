@@ -250,7 +250,7 @@ class MyProcessor extends AudioWorkletProcessor {
       const output = outputs[0];
       for (let i = 0; i < output[0].length; i++) {
         const out = this.dsp(this.t/44100);
-        for(let c in output)
+        for (let c = 0; c < output.length; c++) 
           output[c][i] = out;
         this.t++;
         this.framebuffer[this.t%this.framebuffer.length] = out;

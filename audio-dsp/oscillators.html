@@ -95,7 +95,7 @@
           this.insertAdjacentHTML(
             "beforeend",
             `<div style="border:2px solid #222;padding:0;">
-          <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
+          <textarea style="margin:0;border-bottom:2px solid #222" spellcheck="false" rows="${rows}"></textarea>
           <canvas height="60"></canvas>
           <a class="play">play</a> | <a class="stop">stop</a>
           </div>
@@ -103,16 +103,15 @@
           );
           // draw logic
           this.canvas = this.querySelector("canvas");
-          this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
-          this.canvas.height =
-            this.canvas.clientHeight * window.devicePixelRatio;
+          const dvp = window.devicePixelRatio;
+          this.canvas.width = this.canvas.clientWidth * dvp;
+          this.canvas.height = this.canvas.clientHeight * dvp;
           this.drawContext = this.canvas.getContext("2d");
           this.drawSilence(this.drawContext);
 
           // repl logic
           const input = this.querySelector("textarea");
           input.value = code;
-          input.style = "margin:0;border-bottom:2px solid #222";
           this.input = input;
 
           this.querySelector(".play").onclick = () => this.play();
@@ -159,7 +158,7 @@
           const output = outputs[0];
           for (let i = 0; i < output[0].length; i++) {
             let out = dsp(this.t/sampleRate)
-            for(let c in output)
+            for (let c = 0; c < output.length; c++) 
               output[c][i] = out;
             this.t++;
             this.framebuffer[this.t%this.framebuffer.length] = out;
