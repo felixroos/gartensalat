@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🌱 oscillators II: sawtooth wave</title>
+    <title>🌱 oscillators III: pulse wave</title>
     <style>
       body {
         background-color: #222;
@@ -52,14 +52,12 @@
     </style>
   </head>
   <body>
-    <h2>🌱 oscillators II: sawtooth wave</h2>
+    <h2>🌱 oscillators III: pulse wave</h2>
     <p>
-      last time, we've looked at
-      <a href="/audio-dsp/oscillators.html">sine oscillators</a>, and how to
-      make sure the phase doesn't jump. the thing we've implemented is also
-      called a phasor, which is an oscillator that ramps from 0 to 1 at a
-      certain frequency. We can use a phasor to calculate other waveforms too!
-      here's as sawtooth wave:
+      we have
+      <a href="/audio-dsp/oscillators.html">sines</a>, we have
+      <a href="/audio-dsp/oscillators2.html">saws</a>, now it's time for pulse
+      waves! Here's a naive implementation, ignoring any aliasing issues:
     </p>
 
     <script>
@@ -222,147 +220,194 @@
     </script>
 
     <dsp-repl rows="14"
-      ><!-- class SawOsc {
+      ><!-- 
+class PulseOsc {
   constructor() {
     this.phase = 0;
   }
-  update(freq) {
-    let dt = freq / sampleRate;
-    this.phase = (this.phase + dt) % 1;
-    return this.phase * 2 - 1;
+  update(freq, duty) {
+    this.phase += freq / sampleRate;
+    let cyclePos = this.phase % 1;
+    return cyclePos < duty ? 1 : -1;
   }
 }
-
-let osc1 = new SawOsc();
-let dsp = (t) => osc1.update(180)/2;
+let osc1 = new PulseOsc();
+let dsp = (t) => osc1.update(120,.2)/4;
 --></dsp-repl
     >
 
-    <p>
-      The only difference between a phasor and a sawtooth wave is that the
-      phasor goes from 0 to 1, and the sawtooth wave goes from -1 to 1.
-    </p>
+    <p></p>
     <h3>problem: aliasing</h3>
     <p>
-      our sawtooth oscillator has a flaw: aliasing. it's especially noticeable
-      with higher frequencies:
+      like with our sawtooth oscillator, this one also suffers from aliasing,
+      due to its hard edges. change the frequency above to 480 and pay attention
+      to distortion artifacts.
     </p>
 
-    <dsp-repl rows="14"
-      ><!-- class SawOsc {
-  constructor() {
-    this.phase = 0;
-  }
-  update(freq) {
-    let dt = freq / sampleRate;
-    this.phase = (this.phase + dt) % 1;
-    return this.phase * 2 - 1;
-  }
-}
-
-let osc1 = new SawOsc();
-let dsp = (t) => osc1.update(480)/2;
---></dsp-repl
-    >
-    <p>
-      ...it sounds a bit buzzy and distorted. this happens because our waveform
-      has a very sharp edge, which contains frequencies that are too high for
-      our sample rate to represent. these higher frequencies will manifest
-      themselves as lower frequency artifacts. to understand what that means,
-      let's use a different way to construct a sawtooth wave:
-    </p>
     <h3>solution 1: additive synthesis</h3>
-    <p>one way to get a clean sawtooth wave is to sum sine waves:</p>
+    <p>to be able to compare, here's a clean, additive square wave:</p>
     <dsp-repl rows="14"
-      ><!-- class AdditiveSaw {
+      ><!-- class AdditiveSquare {
   constructor(maxPartials) {
-    this.maxPartials = maxPartials
+    this.maxPartials = maxPartials;
     this.phases = new Array(maxPartials).fill(0);
   }
   update(freq) {
-    // the max frequency a partial should have
-    let nyquist = sampleRate / 2;
-    // how many partials we need for our freq (we ignore ones above nyquist)
-    let partials = Math.min(this.maxPartials, Math.floor(nyquist / freq));
+    const nyquist = sampleRate / 2;
+    let max = Math.floor(((nyquist / freq) + 1) / 2);
+    let partials = Math.min(this.maxPartials, max);
     let sum = 0;
-    for(let i = 0; i < partials; i++) {
-      let harmonic = i + 1;
+    for (let i = 0; i < partials; i++) {
+      let harmonic = 2 * i + 1;
       let dt = harmonic * freq / sampleRate;
       this.phases[i] = (this.phases[i] + dt) % 1;
-      sum -= Math.sin(this.phases[i] * 2 * Math.PI) / harmonic;
+      const phase = this.phases[i] * 2 * Math.PI;
+      sum += Math.sin(phase) / harmonic;
     }
-    return sum * (2 / Math.PI);
+    return sum * (4 / Math.PI); 
   }
 }
 
-let osc = new AdditiveSaw(64);
-let dsp = (t) => osc.update(480)/2;
+let osc = new AdditiveSquare(64);
+let dsp = (t) => osc.update(480)/4;
 --></dsp-repl
     >
-    <p>compare this one again with the one before, it sounds much cleaner!</p>
-
     <p>
-      it works like this: we're summing "partials", which are sine waves that
-      follow the harmonic series. the harmonic series consists of whole number
-      multiples of our target frequency. to avoid aliasing, we have to make sure
-      our highest partial frequency is just below the so called "nyquist
-      frequency", which is the highest frequency our sample rate can accurately
-      represent. the nyquist frequency is always half the sample rate. for
-      example, to accurately represent a sine wave of 200Hz, we need to have a
-      minimum sample rate of 400Hz to get 2 samples per sine cycle, which is
-      just enough information to reconstruct the wave.
+      i haven't managed to implement an additive pulse wave... if you know how,
+      please help me.
     </p>
     <h3>solution 2: polyblep</h3>
     <p>
-      while the additive method works, it is quite resource intensive. a
-      simpler, more pragmatic approach is to tame the waveform a bit, making
-      sure it doesn't drop from 1 to -1 within 1 sample. instead, this region is
-      interpolated by a quadratic function:
+      we can apply the same polyblep as with our saw, but this time we have 2
+      hard edges:
     </p>
     <dsp-repl rows="16"
       ><!-- 
-function polyBlep(phase, dt) {
-  // 0 <= phase < 1
-  if (phase < dt) {
-    phase /= dt;
-    // 2 * (phase - phase^2/2 - 0.5)
-    return phase + phase - phase * phase - 1;
+class PulseOsc {
+  constructor() {
+    this.phase = 0;
   }
-  // -1 < phase < 0
-  if (phase > 1 - dt) {
-    phase = (phase - 1) / dt;
-    // 2 * (phase^2/2 + phase + 0.5)
-    return phase * phase + phase + phase + 1;
+  update(freq, duty) {
+    let dt = freq / sampleRate
+    this.phase = (this.phase + dt) % 1;
+    let value = this.phase < duty ? 1 : -1;
+    value += polyBlep(this.phase, dt);
+    value -= polyBlep((this.phase + duty)%1);
+    return value
+  }
+}
+let osc1 = new PulseOsc();
+let dsp = (t) => osc1.update(480,.5)/4;
+
+function polyBlep(t, dt) {
+  // 0 <= t < 1
+  if (t < dt) {
+    t /= dt;
+    // 2 * (t - t^2/2 - 0.5)
+    return t + t - t * t - 1;
+  }
+  // -1 < t < 0
+  if (t > 1 - dt) {
+    t = (t - 1) / dt;
+    // 2 * (t^2/2 + t + 0.5)
+    return t * t + t + t + 1;
+  }
+  // 0 otherwise
+  return 0;
+}
+--></dsp-repl
+    >
+    <p>
+      the result is a bit underwhelming.. luckily, there is another trick: we
+      can get a pulse wave by subtracting two (polyblepped) saw waves:
+    </p>
+    <dsp-repl rows="16"
+      ><!-- 
+class PulseOsc {
+  constructor(phase=0) {
+    this.phase = phase;
+  }
+  saw(freq,offset,dt) {
+    let phase = (this.phase+offset)%1;
+    let p = polyBlep(phase, dt);
+    return 2 * phase - 1 - p;
+  }
+  update(freq, pw) {
+    const dt = freq / sampleRate;
+    let pulse = this.saw(freq,0,dt)-this.saw(freq,pw,dt);
+    this.phase = (this.phase + dt)%1;
+    return pulse+pw*2-1;
+  }
+}
+let osc1 = new PulseOsc();
+let dsp = (t) => osc1.update(480,.5)/4;
+
+function polyBlep(t, dt) {
+  // 0 <= t < 1
+  if (t < dt) {
+    t /= dt;
+    // 2 * (t - t^2/2 - 0.5)
+    return t + t - t * t - 1;
+  }
+  // -1 < t < 0
+  if (t > 1 - dt) {
+    t = (t - 1) / dt;
+    // 2 * (t^2/2 + t + 0.5)
+    return t * t + t + t + 1;
+  }
+  // 0 otherwise
+  return 0;
+}
+--></dsp-repl
+    >
+    <p>
+      this sounds super clean to my ears! There are a few other methods to do
+      this, but i'm happy with this one.. finally we can do some classic pulse
+      width modulation:
+    </p>
+
+    <dsp-repl rows="16"
+      ><!-- 
+class PulseOsc {
+  constructor(phase=0) {
+    this.phase = phase;
+  }
+  saw(freq,offset,dt) {
+    let phase = (this.phase+offset)%1;
+    let p = polyBlep(phase, dt);
+    return 2 * phase - 1 - p;
+  }
+  update(freq, pw) {
+    pw = Math.max(0,Math.min(pw,1))
+    const dt = freq / sampleRate;
+    let pulse = this.saw(freq,0,dt)-this.saw(freq,pw,dt);
+    this.phase = (this.phase + dt)%1;
+    return pulse+pw*2-1;
+  }
+}
+let sin = (x, t) => Math.sin(2 * Math.PI * t * x)
+let osc1 = new PulseOsc();
+let mod = (t) => (Math.sin(t)+1)/2
+let dsp = (t) => osc1.update(60,(sin(.25,t)+1)/4+.2)/4;
+function polyBlep(t, dt) {
+  // 0 <= t < 1
+  if (t < dt) {
+    t /= dt;
+    // 2 * (t - t^2/2 - 0.5)
+    return t + t - t * t - 1;
+  }
+  // -1 < t < 0
+  if (t > 1 - dt) {
+    t = (t - 1) / dt;
+    // 2 * (t^2/2 + t + 0.5)
+    return t * t + t + t + 1;
   }
   // 0 otherwise
   return 0;
 }
 
-class SawOsc {
-  constructor() {
-    this.phase = 0;
-  }
-  update(freq) {
-    const dt = freq / sampleRate;
-    let p = polyBlep(this.phase, dt);
-    let s = 2 * this.phase - 1 - p;
-    this.phase = (this.phase + dt)%1;
-    return s;
-  }
-}
-let osc1 = new SawOsc();
-let dsp = (t) => osc1.update(480)/2;
 --></dsp-repl
     >
-    <p>
-      this version is much more efficient and still sounds identical to our
-      additive variant (at least to my ears).
-    </p>
-
-    <p>
-      the same anti-aliasing techniques can be applied to pulse waves, but i'll
-      spare that for another episode
-    </p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
