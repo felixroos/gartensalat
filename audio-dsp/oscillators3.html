@@ -387,7 +387,6 @@ class PulseOsc {
 }
 let sin = (x, t) => Math.sin(2 * Math.PI * t * x)
 let osc1 = new PulseOsc();
-let mod = (t) => (Math.sin(t)+1)/2
 let dsp = (t) => osc1.update(60,(sin(.25,t)+1)/4+.2)/4;
 function polyBlep(t, dt) {
   // 0 <= t < 1
