@@ -227,8 +227,8 @@ class PulseOsc {
   }
   update(freq, duty) {
     this.phase += freq / sampleRate;
-    let cyclePos = this.phase % 1;
-    return cyclePos < duty ? 1 : -1;
+    this.phase = this.phase % 1;
+    return this.phase < duty ? 1 : -1;
   }
 }
 let osc1 = new PulseOsc();
