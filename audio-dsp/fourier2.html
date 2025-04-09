@@ -189,7 +189,7 @@ drawPhasor(x, c.width/4*3,c.height/2,60,-t/2)
           phase = -phase * Math.PI * 2;
           const phaseX = r * (Math.cos(phase) + 1) + cx - r;
           const phaseY = r * (Math.sin(phase) + 1) + cy - r;
-          ctx.strokeStyle='white'
+          ctx.strokeStyle = "white";
           ctx.beginPath();
           ctx.moveTo(cx, cy);
           ctx.lineTo(phaseX, phaseY);
@@ -300,6 +300,10 @@ x.stroke();
 }
   -->
     </canvas-garden>
+    <p>
+      this visual idea is *not* my own, i've first seen it
+      <a href="https://jackschaedler.github.io/circles-sines-signals/">here</a>
+    </p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
