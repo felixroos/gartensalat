@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 canvas playground</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        overflow: auto;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        background-color: #44444490;
+        border: 0;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+      canvas {
+        max-width: 100%;
+        background-color: #44444490;
+      }
+    </style>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        const pre = document.createElement("pre");
+        pre.textContent = getCode(scriptElement, indent);
+        script.after(pre);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+  </head>
+  <body>
+    <h2>🌱 canvas playground</h2>
+    <p>
+      i often want to draw things. i very often use the canvas api for its
+      simplicity. i want a web component that does the boilerplate, similar to
+      <a href="/audio-dsp/worklets2.html">what i did with audio worklets</a>.
+      here it is:
+    </p>
+
+    <script>
+      class CanvasGarden extends HTMLElement {
+        static observedAttributes = ["code", "rows", "width", "height"];
+        init() {
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "")
+              .replace("<!--", "")
+              .replace("-->", "")
+              .trim() ||
+            "";
+          this.innerHTML = "";
+          const rows = this.getAttribute("rows") ?? 6;
+          const width = this.getAttribute("width") ?? 800;
+          const height = this.getAttribute("height") ?? 400;
+
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div style="border:2px solid #222;padding:0;">
+            <textarea id="code" spellcheck="false" rows="${rows}" style="margin:0;border-bottom:2px solid #222;width:100%"></textarea>
+            <canvas width="${width}" height="${height}" style="max-width:100%"></canvas>
+            <div style="padding:4px;">
+            </div>
+            </div>`
+          );
+          // draw logic
+          this.canvas = this.querySelector("canvas");
+          this.ctx = this.canvas.getContext("2d");
+          // repl logic
+          const input = this.querySelector("textarea");
+          input.value = code;
+          this.input = input;
+          this.update();
+
+          input.addEventListener("keydown", (e) => {
+            if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+              this.update();
+            } else if ((e.ctrlKey || e.altKey) && e.key === ".") {
+              e.preventDefault();
+              this.stop();
+            }
+          });
+        }
+        draw(draw) {
+          this.lastFrame = this.lastFrame || 0;
+          const self = this;
+          self.frame = window.requestAnimationFrame(function paint(t) {
+            if (self.lastFrame) {
+              let dt = t - self.lastFrame;
+              draw(t / 1000, dt);
+            }
+            self.lastFrame = t;
+            self.frame = requestAnimationFrame(paint);
+          });
+        }
+        stop() {
+          if (this.frame) {
+            window.cancelAnimationFrame(this.frame);
+            return;
+          }
+        }
+        R(r, g, b, a = 1) {
+          return `rgba(${r},${g},${b},${a})`;
+        }
+        setCode(code) {
+          this.code = code;
+          this.input.value = code;
+          this.update();
+        }
+        async update() {
+          const ctx = this.ctx;
+          const math = Object.getOwnPropertyNames(Math).join(",");
+          const prelude = `const {${math}} = Math;\n`;
+          const code = `${prelude}
+const ctx = self.ctx, canvas = ctx.canvas;
+// dwitter.net style:
+const S = Math.sin, C = Math.cos, T = Math.tan, R = self.R, c = canvas, x = ctx;
+${this.input.value}
+typeof draw !== 'undefined' && self.draw(draw);`;
+          const fn = new Function("self", code);
+          this.stop();
+          fn(this);
+        }
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          if (name === "code") {
+            this.setCode(newValue);
+          }
+        }
+      }
+      customElements.define("canvas-garden", CanvasGarden);
+    </script>
+    <canvas-garden>
+      <!--
+let draw = (t) => {
+canvas.width=800
+for(i=0;i<9;i++)
+ctx.fillRect(180+i*50+Math.sin(t)*80,100,25,200)
+}
+      -->
+    </canvas-garden>
+    <p>
+      similar to my dsp playground, there's a special function called `draw`,
+      that allows you to do things for each frame. while implementing this, i've
+      noticed it's quite similar to
+      <a href="https://www.dwitter.net/" target="_blank" style="color: yellow"
+        >dwitter.net</a
+      >. i thought it might be fun to get it somewhat compatible, so you can now
+      also use these short variables:
+    </p>
+
+    <pre>
+const S = Math.sin;
+const C = Math.cos;
+const T = Math.tan;
+const R = (r,g,b,a=1) => `rgba(${r},${g},${b},${a})`;
+const c = canvas;
+const x = ctx;
+    </pre>
+    <p>with these, we can copy paste most dwitter snippets:</p>
+    <canvas-garden width="1920" height="1080">
+      <!--
+function draw(t) {
+for(d=256;--d;)for(X=-32;++X<32;x.fillRect(960+X*8e3/d,100+7e4/d-h,120,9))x.fillStyle=R(h=(C(a=d/9+t*6)+C(X/9+a/3))*35,g=h+C(X^d)*6+90,g/.8)
+}
+      -->
+    </canvas-garden>
+
+    <p>
+      the web component is less than 100 lines of code, and easily copy
+      pasteable! this might come in handy when i want to live code visuals on
+      this site.
+    </p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+
+    <script>
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
