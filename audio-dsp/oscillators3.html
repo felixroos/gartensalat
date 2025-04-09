@@ -292,7 +292,7 @@ class PulseOsc {
     this.phase = (this.phase + dt) % 1;
     let value = this.phase < duty ? 1 : -1;
     value += polyBlep(this.phase, dt);
-    value -= polyBlep((this.phase + duty)%1);
+    value -= polyBlep((this.phase + duty)%1, dt);
     return value
   }
 }
@@ -317,8 +317,13 @@ function polyBlep(t, dt) {
 }
 --></dsp-repl
     >
-    <p>
+    <p style="text-decoration: line-through">
       the result is a bit underwhelming.. luckily, there is another trick: we
+      can get a pulse wave by subtracting two (polyblepped) saw waves:
+    </p>
+    <p>
+      edit: turns out i forgot `, dt` in my original version, which is why the
+      polyblep didn't work! now the result is actually quite usable. still we
       can get a pulse wave by subtracting two (polyblepped) saw waves:
     </p>
     <dsp-repl rows="16"
