@@ -54,10 +54,15 @@
   <body>
     <h2>🌱 oscillators V: fourier series</h2>
     <p>
-      let's look closer at these additive waveforms.. they all follow the so
-      called "fourier series", which is a way to express any signal as a sum of
-      sine and cosine partials. The formula is this:
-      <!-- https://www.dspguide.com/ch13/4.htm -->
+      in the recent posts, I've looked at the basic waveforms
+      <a href="/audio-dsp/oscillators.html">sine</a>,
+      <a href="/audio-dsp/oscillators2.html">saw</a>,
+      <a href="/audio-dsp/oscillators3.html">pulse</a> and
+      <a href="/audio-dsp/oscillators4.html">triangle</a>. for each one, i've
+      constructed an additive version, which is a way to get an aliasing free
+      waveform. these additive versions all follow the so called "fourier
+      series", which is a way to express any signal as a sum of sine and cosine
+      partials. The formula is this:
     </p>
     <script>
       // render codeblock from script tag
@@ -221,6 +226,7 @@
       }
       customElements.define("fn-plotter", FnPlot);
     </script>
+    <p>here's a square wave:</p>
     <!-- square -->
     <fn-plotter rows="3"
       ><!--
@@ -229,6 +235,10 @@ let bn = () => 0;
 plotfourier(an, bn, 0, 16)
 --></fn-plotter
     >
+    <p>
+      you can see the individual partials in black, and the resulting sum in
+      white. here's triangle:
+    </p>
     <!-- triangle -->
     <fn-plotter rows="3"
       ><!--
@@ -237,6 +247,7 @@ let bn = () => 0;
 plotfourier(an, bn, 0, 16)
 --></fn-plotter
     >
+    <p>saw:</p>
     <!-- saw -->
     <fn-plotter rows="3"
       ><!--
@@ -245,6 +256,7 @@ let bn = n => 1/(n*PI);
 plotfourier(an, bn, 0, 16)
 --></fn-plotter
     >
+    <p>pulse:</p>
     <!-- pulse -->
     <fn-plotter rows="4"
       ><!--
@@ -254,6 +266,20 @@ let bn = () => 0;
 plotfourier(an, bn, pw-0.5, 16)
 --></fn-plotter
     >
+    <p>
+      i've found the formulas for these
+      <a
+        href="https://www.dspguide.com/ch13/4.htm"
+        traget="_blank"
+        style="color: yellow"
+        >here</a
+      >
+      <!-- Chapter 13, "The Fourier Series" in "The Scientist and Engineer's Guide to Digital Signal Processing", by By Steven W. Smith, Ph.D.-->
+    </p>
+    <p>
+      in the next post, i want to get a better intuition of the fourier series,
+      by looking at a different representation...
+    </p>
     <!-- <p>
       tbd: is there a way to have a single amplitude factor for only a cos (or
       only a sin, shouldn't matter) + a phase info, instead of 2 amplitude
@@ -265,10 +291,6 @@ plotfourier(an, bn, pw-0.5, 16)
       https://developer.mozilla.org/en-US/docs/Web/API/OscillatorNode/setPeriodicWave
       ?
     </p> -->
-    <p>
-      in the next post, i want to get a better intuition of the fourier series,
-      by looking at a different representation...
-    </p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
