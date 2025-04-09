@@ -56,11 +56,10 @@
     <p>
       we have
       <a href="/audio-dsp/oscillators.html">sines</a>, we have
-      <a href="/audio-dsp/oscillators2.html">saws</a>,<a
-        href="/audio-dsp/oscillators3.html"
-        >pulses</a
-      >, now it's time for triangle waves! Here's a naive implementation,
-      ignoring any aliasing issues:
+      <a href="/audio-dsp/oscillators2.html">saws</a>,
+      <a href="/audio-dsp/oscillators3.html">pulses</a>, now it's time for
+      triangle waves! Here's a naive implementation, ignoring any aliasing
+      issues:
     </p>
 
     <script>
@@ -279,6 +278,11 @@ let osc = new AdditiveTriangle(16);
 let dsp = (t) => osc.update(480)/4;
 --></dsp-repl
     >
+    <p>
+      comparing the additive with the naive version, I cannot hear any aliasing
+      arrifacts. It also looks fine on a scope, so I think I'll skip the
+      polyBlepping for this one
+    </p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
