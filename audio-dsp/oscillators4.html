@@ -225,7 +225,7 @@
       ><!-- 
 class TriangleOsc {
   constructor() {
-    this.phase = 0.25; // starts at 0
+    this.phase = 0;
   }
   update(freq) {
     let v = this.phase < 0.5 ? 
@@ -241,7 +241,6 @@ let dsp = (t) => osc1.update(120,.2)/4;
 --></dsp-repl
     >
 
-    <p></p>
     <h3>problem: aliasing?</h3>
     <p>
       compared to saws and pulses, the waveform is much more gentle, as it
@@ -278,11 +277,72 @@ let osc = new AdditiveTriangle(16);
 let dsp = (t) => osc.update(480)/4;
 --></dsp-repl
     >
-    <p>
+    <p style="text-decoration: line-through">
       comparing the additive with the naive version, I cannot hear any aliasing
       arrifacts. It also looks fine on a scope, so I think I'll skip the
       polyBlepping for this one
     </p>
+    <p>
+      after aks pointed out that there is in fact some audible aliasing (for
+      example, 2051Hz at 48kHz), let's add anti-aliasing to triangle as well:
+    </p>
+
+    <h3>solution 2: polyblep</h3>
+    <p>
+      I found a
+      <a
+        target="_blank"
+        style="color: yellow"
+        href="https://www.martin-finke.de/articles/audio-plugins-018-polyblep-oscillator/"
+        >solution by Martin Finke</a
+      >, that generates a triangle wave by integrating a polyblepped square
+      wave, using a so called leaky integrator. it looks like this:
+    </p>
+    <dsp-repl rows="14"
+      ><!-- class TriOsc {
+  constructor() {
+    this.phase = 0;
+    this.lastOutput = 0;
+  }
+  update(freq, duty) {
+    let dt = freq / sampleRate;
+    let v = this.phase < duty ? 1 : -1; 
+    // ^ this is a square wave
+    v += polyBlep(this.phase, dt);
+    v -= polyBlep((this.phase + 0.5)%1, dt);
+    // ^ now our square wave is polyblepped
+    v = dt * v + (1 - dt) * this.lastOutput;
+    // ^ this is the "leaky integrator":
+    // y[n] = A * x[n] + (1 - A) * y[n-1]
+    this.lastOutput = v;
+    this.phase += dt;
+    this.phase = this.phase % 1;
+    return v;
+  }
+}
+let osc1 = new TriOsc();
+let dsp = (t) => osc1.update(600,.5)/1;
+
+
+function polyBlep(t, dt) {
+  // 0 <= t < 1
+  if (t < dt) {
+    t /= dt;
+    // 2 * (t - t^2/2 - 0.5)
+    return t + t - t * t - 1;
+  }
+  // -1 < t < 0
+  if (t > 1 - dt) {
+    t = (t - 1) / dt;
+    // 2 * (t^2/2 + t + 0.5)
+    return t * t + t + t + 1;
+  }
+  // 0 otherwise
+  return 0;
+}
+--></dsp-repl
+    >
+
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
