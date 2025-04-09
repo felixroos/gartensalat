@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🌱 canvas playground</title>
+    <title>🌱 the fourier series II</title>
     <style>
       body {
         background-color: #222;
@@ -68,14 +68,6 @@
     </script>
   </head>
   <body>
-    <h2>🌱 canvas playground</h2>
-    <p>
-      i often want to draw things. i very often use the canvas api for its
-      simplicity. i want a web component that does the boilerplate, similar to
-      <a href="/audio-dsp/worklets2.html">what i did with audio worklets</a>.
-      here it is:
-    </p>
-
     <script>
       class CanvasGarden extends HTMLElement {
         static observedAttributes = ["code", "rows", "width", "height"];
@@ -95,8 +87,8 @@
           this.insertAdjacentHTML(
             "beforeend",
             `<div style="border:2px solid #222;padding:0;">
-            <textarea id="code" spellcheck="false" rows="${rows}" style="margin:0;border-bottom:2px solid #222;width:100%"></textarea>
-            <canvas width="${width}" height="${height}" style="max-width:100%"></canvas>
+              <canvas width="${width}" height="${height}" style="max-width:100%"></canvas>
+              <textarea id="code" spellcheck="false" rows="${rows}" style="margin:0;border-bottom:2px solid #222;width:100%"></textarea>
             </div>`
           );
           // draw logic
@@ -170,48 +162,144 @@ typeof draw !== 'undefined' && self.draw(draw);`;
       }
       customElements.define("canvas-garden", CanvasGarden);
     </script>
-    <canvas-garden>
+    <h2>🌱 the fourier series II</h2>
+    <p>
+      in the last post, we've looked at
+      <a href="/audio-dsp/fourier.html">the fourier series</a>. it was rather
+      formulaic and abstract, so now let's look at the same thing, but visually.
+      at first, let's visualise a phasor:
+    </p>
+    <canvas-garden rows="6" height="200">
       <!--
 let draw = (t) => {
-canvas.width=800
-for(i=0;i<9;i++)
-ctx.fillRect(180+i*50+Math.sin(t)*80,100,25,200)
+c.width=800
+x.strokeStyle='white'
+drawPhasor(x, c.width/4,c.height/2,80,t)
+drawPhasor(x, c.width/4*3,c.height/2,60,-t/2)
 }
-      -->
+  -->
     </canvas-garden>
-    <p>
-      similar to my dsp playground, there's a special function called `draw`,
-      that allows you to do things for each frame. while implementing this, i've
-      noticed it's quite similar to
-      <a href="https://www.dwitter.net/" target="_blank" style="color: yellow"
-        >dwitter.net</a
-      >. i thought it might be fun to get it somewhat compatible, so you can now
-      also use these short variables:
-    </p>
+    <details>
+      <summary>show drawPhasor source</summary>
+      <script>
+        function drawPhasor(ctx, cx, cy, r, phase = 0) {
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+          ctx.stroke();
+          phase = -phase * Math.PI * 2;
+          const phaseX = r * (Math.cos(phase) + 1) + cx - r;
+          const phaseY = r * (Math.sin(phase) + 1) + cy - r;
+          ctx.strokeStyle='white'
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(phaseX, phaseY);
+          ctx.stroke();
+          return [phaseX, phaseY];
+        }
+        window.drawPhasor = drawPhasor;
+        codeblock(document.currentScript, 8);
+      </script>
+    </details>
 
-    <pre>
-const S = Math.sin;
-const C = Math.cos;
-const T = Math.tan;
-const R = (r,g,b,a=1) => `rgba(${r},${g},${b},${a})`;
-const c = canvas;
-const x = ctx;
-    </pre>
-    <p>with these, we can copy paste most dwitter snippets:</p>
-    <canvas-garden width="1920" height="1080">
+    <p>
+      these circles represent a phasor of a specific frequency (speed of
+      rotation) and amplitude (radius of circle).
+    </p>
+    <p>if we plot the height of the phase against time, we get a sine wave:</p>
+    <script>
+      function plot(
+        fn,
+        ctx,
+        xrange = [],
+        yrange = [],
+        color = "white",
+        lineWidth = 1
+      ) {
+        // these 3 functions are very good to know..
+        const lerp = (v, min, max) => v * (max - min) + min;
+        const invLerp = (v, min, max) => (v - min) / (max - min);
+        const remap = (v, vmin, vmax, omin, omax) =>
+          lerp(invLerp(v, vmin, vmax), omin, omax);
+        // prepare draw context
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = color;
+        const [cw, ch] = [ctx.canvas.width, ctx.canvas.height - ctx.lineWidth];
+        const [x0 = -1, x1 = 1, px0 = 0, px1 = cw] = xrange;
+        const [y0 = -1, y1 = 1, py0 = ch, py1 = ctx.lineWidth] = yrange;
+        // actual draw logic
+        ctx.beginPath();
+        for (let px = px0; px < px1; px++) {
+          const x = remap(px, px0, px1, x0, x1);
+          const y = fn(x);
+          const py = remap(y, y0, y1, py0, py1);
+          px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+      window.plot = plot;
+    </script>
+
+    <canvas-garden rows="16" height="200">
       <!--
-// https://www.dwitter.net/d/701
-function draw(t) {
-(F=Z=>{for(x.fillStyle=R(W=1/Z*4e3,W/2,W/4),i=Z*Z*2;n=i%Z,m=i/Z|0,i--;n%2^m%2&&x.fillRect((n-t%2-1)*W,(S(t)+m-1)*W,W,W));Z&&F(Z-6)})(36)//rm
+let r = 90, f = 1;
+let center = c.height/2, bottom = center+r, plotX = r*2+20;
+let xrange = [0,Math.PI*2*f,plotX,c.width-20];
+let plotW = xrange[3]-xrange[2];
+let yrange = [-1,1,center+r,center-r];
+let draw = (t) => {
+  t=t/4
+  c.width=800
+  x.strokeStyle='gray'
+  let [px,py] = drawPhasor(ctx, r+8,center,r,t*f)
+  plot(x => Math.sin(x),x,xrange,yrange)
+  x.beginPath();
+  x.moveTo(px,py)
+  x.strokeStyle='gray'
+  x.lineTo(plotX+(t*plotW)%plotW,py)
+  x.stroke();
 }
-      -->
+  -->
     </canvas-garden>
+    <p>now, if we add multiple phasors together, it looks like this:</p>
+    <canvas-garden rows="36" height="400">
+      <!--
+let r = 90, f = 1;
+let center = c.height/2, bottom = center+r, plotX = r*2+150;
+let xrange = [0,Math.PI*2*f,plotX,c.width-20];
+let plotW = xrange[3]-xrange[2];
+let yrange = [-1,1,center+r,center-r];
 
-    <p>
-      the web component is less than 100 lines of code, and easily copy
-      pasteable! this might come in handy when i want to live code visuals on
-      this site.
-    </p>
+let colors = ['cyan','magenta','yellow']
+let phasors = [1, 0.5, 0.25];
+let fn = x => phasors.reduce((acc, amp, i) => Math.sin((i+1)*x)*amp+acc,0)
+let draw = (t) => {
+t=t/4
+c.width=800
+
+let px = plotX-r-100, py = center;
+
+phasors.forEach((amp, i) => {
+  x.strokeStyle = 'gray'
+  const [cx, cy] = drawPhasor(
+    x,
+    px,
+    py,
+    r * amp,
+    t * (i + 1)
+  );
+  px = cx;
+  py = cy;
+});
+
+plot(fn,x,xrange,yrange)
+x.beginPath();
+x.moveTo(px,py)
+x.strokeStyle='gray'
+x.lineTo(plotX+(t*plotW)%plotW,py)
+x.stroke();
+}
+  -->
+    </canvas-garden>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
