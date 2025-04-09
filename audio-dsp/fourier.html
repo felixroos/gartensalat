@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 oscillators V: fourier series</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        overflow: auto;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        background-color: #44444490;
+        border: 0;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+      canvas {
+        max-width: 100%;
+        background-color: #44444490;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🌱 oscillators V: fourier series</h2>
+    <p>
+      let's look closer at these additive waveforms.. they all follow the so
+      called "fourier series", which is a way to express any signal as a sum of
+      sine and cosine partials. The formula is this:
+      <!-- https://www.dspguide.com/ch13/4.htm -->
+    </p>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        const pre = document.createElement("pre");
+        pre.textContent = getCode(scriptElement, indent);
+        script.after(pre);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <script>
+      // f = frequency
+      // an = amplitude factor for cosine partial n
+      // bn = amplitude factor for sine partial n
+      // a0 = offset
+      let fourier = (f, an, bn, a0) => (n, t) => {
+        if (n === 0) {
+          return a0 ?? 0;
+        }
+        let phase = 2 * Math.PI * f * t * n;
+        let A = Math.cos(phase);
+        let B = Math.sin(phase);
+        return an(n) * Math.cos(phase) - bn(n) * Math.sin(phase);
+      };
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>
+      a fourier series can express any waveform, solely by specifying an, bn and
+      a0. we can plot a fourier series by summing partials:
+    </p>
+    <script>
+      // an = amplitude factor for cosine partial n
+      // bn = amplitude factor for sine partial n
+      // a0 = offset
+      let plotfourier = (an, bn, a0 = 0, partials = 8) => {
+        let series = fourier(1, an, bn, a0);
+        let partial = (n) => (t) => series(n, t);
+        plotsum(partial, 0, partials);
+      };
+      // partial = returns a function of x, given a partial index n
+      let plotsum = (partial, min = 0, max = 8) => {
+        let fns = [];
+        for (let n = min; n <= max; n++) {
+          let fn = partial(n);
+          plot(fn, { color: "#00000050" });
+          fns.push(fn);
+        }
+        let sum = (t) => fns.reduce((sum, f) => f(t) + sum, 0);
+        plot(sum, { color: "white" });
+      };
+      window.plotfourier = plotfourier;
+      codeblock(document.currentScript, 6);
+    </script>
+    <script>
+      class FnPlot extends HTMLElement {
+        static observedAttributes = ["code", "rows"];
+        worklet;
+        init() {
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "").replace("<!--", "").replace("-->", "").trim();
+          // console.log("code", code);
+          const rows = this.getAttribute("rows") ?? 4;
+          if (!code) {
+            return;
+          }
+          this.innerHTML = "";
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div style="border:2px solid #222;padding:0;">
+      <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
+      <canvas height="120"></canvas>
+      <div style="padding:4px;">
+      </div>
+      </div>
+        `
+          );
+          // draw logic
+          this.canvas = this.querySelector("canvas");
+          this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+          this.canvas.height =
+            this.canvas.clientHeight * window.devicePixelRatio;
+          this.drawContext = this.canvas.getContext("2d");
+
+          // repl logic
+          const input = this.querySelector("textarea");
+          input.value = code;
+          input.style = "margin:0;border-bottom:2px solid #222";
+          this.input = input;
+          this.update();
+
+          input.addEventListener("input", async (e) => {
+            this.update();
+          });
+        }
+
+        async update() {
+          const ctx = this.drawContext;
+          const math = Object.getOwnPropertyNames(Math).join(",");
+          const prelude = `const {${math}} = Math;\n`;
+          const code = `${prelude};\n${this.input.value}`;
+          ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+          const fn = new Function("plot", code);
+          const plot = (
+            fn,
+            { xrange = [-1, 1], yrange = [-1, 1], color, lineWidth } = {}
+          ) => this.plot(fn, xrange, yrange, color, lineWidth);
+          window.plot = plot;
+          fn(plot);
+        }
+
+        // plot function, see /plot.html
+        plot(
+          fn,
+          xrange = [0, 1],
+          yrange = [0, 1],
+          color = "cyan",
+          lineWidth = 2,
+          ctx = this.drawContext
+        ) {
+          // these 3 functions are very good to know..
+          const lerp = (v, min, max) => v * (max - min) + min;
+          const invLerp = (v, min, max) => (v - min) / (max - min);
+          const remap = (v, vmin, vmax, omin, omax) =>
+            lerp(invLerp(v, vmin, vmax), omin, omax);
+          // prepare draw context
+          ctx.lineWidth = lineWidth;
+          ctx.strokeStyle = color;
+          // function ranges
+          const [x0, x1] = xrange;
+          const [y0, y1] = yrange;
+          // draw ranges
+          const [px0, px1] = [0, ctx.canvas.width];
+          const [py0, py1] = [ctx.canvas.height - ctx.lineWidth, ctx.lineWidth];
+          // actual draw logic
+          ctx.beginPath();
+          for (let px = 0; px < ctx.canvas.width; px++) {
+            const x = remap(px, px0, px1, x0, x1);
+            const y = fn(x);
+            const py = remap(y, y0, y1, py0, py1);
+            px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          this.init();
+        }
+      }
+      customElements.define("fn-plotter", FnPlot);
+    </script>
+    <!-- square -->
+    <fn-plotter rows="3"
+      ><!--
+let an = n => n%2===1? 2/(n*PI)*sin(n*PI/2) : 0;
+let bn = () => 0;
+plotfourier(an, bn, 0, 16)
+--></fn-plotter
+    >
+    <!-- triangle -->
+    <fn-plotter rows="3"
+      ><!--
+let an = n => n%2===1? 4/(n*PI)**2 : 0
+let bn = () => 0;
+plotfourier(an, bn, 0, 16)
+--></fn-plotter
+    >
+    <!-- saw -->
+    <fn-plotter rows="3"
+      ><!--
+let an = () => 0
+let bn = n => 1/(n*PI);
+plotfourier(an, bn, 0, 16)
+--></fn-plotter
+    >
+    <!-- pulse -->
+    <fn-plotter rows="4"
+      ><!--
+let pw = .2;
+let an = n => 2/(n*PI) * sin(n*PI*pw);
+let bn = () => 0;
+plotfourier(an, bn, pw-0.5, 16)
+--></fn-plotter
+    >
+    <p>
+      tbd: is there a way to have a single amplitude factor for only a cos (or
+      only a sin, shouldn't matter) + a phase info, instead of 2 amplitude
+      factors? This is probably less complicated to calculate, also seems
+      simpler
+    </p>
+    <p>
+      is there conceptual overlap with
+      https://developer.mozilla.org/en-US/docs/Web/API/OscillatorNode/setPeriodicWave
+      ?
+    </p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+
+    <script>
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
