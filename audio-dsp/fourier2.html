@@ -186,7 +186,6 @@ drawPhasor(x, c.width/4*3,c.height/2,60,-t/2)
           ctx.beginPath();
           ctx.arc(cx, cy, r, 0, 2 * Math.PI);
           ctx.stroke();
-          phase = -phase * Math.PI * 2;
           const phaseX = r * (Math.cos(phase) + 1) + cx - r;
           const phaseY = r * (Math.sin(phase) + 1) + cy - r;
           ctx.strokeStyle = "white";
@@ -205,7 +204,10 @@ drawPhasor(x, c.width/4*3,c.height/2,60,-t/2)
       these circles represent a phasor of a specific frequency (speed of
       rotation) and amplitude (radius of circle).
     </p>
-    <p>if we plot the height of the phase against time, we get a sine wave:</p>
+    <p>
+      if we plot the height of an anti clockwise spinning phasor, we get a sine
+      wave:
+    </p>
     <script>
       function plot(
         fn,
@@ -239,7 +241,7 @@ drawPhasor(x, c.width/4*3,c.height/2,60,-t/2)
       window.plot = plot;
     </script>
 
-    <canvas-garden rows="16" height="200">
+    <canvas-garden rows="8" height="200">
       <!--
 let r = 90, f = 1;
 let center = c.height/2, bottom = center+r, plotX = r*2+20;
@@ -250,7 +252,8 @@ let draw = (t) => {
   t=t/4
   c.width=800
   x.strokeStyle='gray'
-  let [px,py] = drawPhasor(ctx, r+8,center,r,t*f)
+  let phase = -f*t*PI*2;
+  let [px,py] = drawPhasor(ctx, r+8,center,r,phase)
   plot(x => Math.sin(x),x,xrange,yrange)
   x.beginPath();
   x.moveTo(px,py)
@@ -260,49 +263,137 @@ let draw = (t) => {
 }
   -->
     </canvas-garden>
-    <p>now, if we add multiple phasors together, it looks like this:</p>
-    <canvas-garden rows="36" height="400">
+    <p>we can now add multiple phasors together:</p>
+    <canvas-garden rows="8" height="360">
       <!--
-let r = 90, f = 1;
-let center = c.height/2, bottom = center+r, plotX = r*2+150;
-let xrange = [0,Math.PI*2*f,plotX,c.width-20];
-let plotW = xrange[3]-xrange[2];
-let yrange = [-1,1,center+r,center-r];
-
-let colors = ['cyan','magenta','yellow']
-let phasors = [1, 0.5, 0.25];
-let fn = x => phasors.reduce((acc, amp, i) => Math.sin((i+1)*x)*amp+acc,0)
-let draw = (t) => {
-t=t/4
-c.width=800
-
-let px = plotX-r-100, py = center;
-
-phasors.forEach((amp, i) => {
-  x.strokeStyle = 'gray'
-  const [cx, cy] = drawPhasor(
-    x,
-    px,
-    py,
-    r * amp,
-    t * (i + 1)
-  );
-  px = cx;
-  py = cy;
+let draw = plotPhasors(x, {
+  r: 70, 
+  margin: 100, 
+  padding: 60,
+  an: n => 1/n,
+  partials: 4, 
+  f: 4
 });
+  -->
+    </canvas-garden>
+    <details>
+      <summary>show plotPhasors source</summary>
+      <script>
+        function plotPhasors(ctx, config = {}) {
+          const {
+            r = 90,
+            f = 1,
+            margin = 100,
+            padding = 50,
+            partials = 3,
+            speed = 1 / f / 4,
+            //pn = (n) => 0,
+            phi = 0,
+            F = (n) => n,
+            an,
+          } = config;
+          const c = ctx.canvas;
+          const { PI, sin, sign, abs } = Math;
+          let ycenter = c.height / 2;
+          let plotX = padding + r * 2 + margin;
 
-plot(fn,x,xrange,yrange)
-x.beginPath();
-x.moveTo(px,py)
-x.strokeStyle='gray'
-x.lineTo(plotX+(t*plotW)%plotW,py)
-x.stroke();
-}
+          let xrange = [0, 2 * PI, plotX, c.width - padding];
+          let yrange = [-1, 1, ycenter + r, ycenter - r];
+          let plotW = xrange[3] - xrange[2];
+
+          let plotFn = (x, n) => -sin(n * f * x - phi) * an(n);
+          //let phaseFn = (t, n) => n * f * t * -sign(an(n)) * PI * 2 - phi;
+          let phaseFn = (t, n) => sign(an(n)) * n * f * t * PI * 2 - phi * n;
+
+          // get function to plot
+          let fn = (t) => {
+            let sum = 0;
+            for (let i = 0; i < partials; i++) {
+              sum += plotFn(t, i + 1);
+            }
+            return sum;
+          };
+
+          let draw = (t) => {
+            t = t * speed;
+            c.width = 800;
+            // position of fundamental phasor
+            let px = padding + r;
+            let py = ycenter;
+            // draw phasors
+            for (let i = 0; i < partials; i++) {
+              ctx.strokeStyle = "gray";
+              let phase = phaseFn(t, i + 1);
+              [px, py] = drawPhasor(ctx, px, py, r * abs(an(i + 1)), phase);
+            }
+            // plot function
+            plot(fn, ctx, xrange, yrange);
+            // draw connector line
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.strokeStyle = "gray";
+            const tx = plotX + ((t * plotW) % plotW);
+            ctx.lineTo(tx, py);
+            ctx.stroke();
+
+            ctx.fillStyle = "white";
+            ctx.beginPath();
+            ctx.arc(tx, py, 4, 0, 2 * PI);
+            ctx.fill();
+          };
+          return draw;
+        }
+      </script>
+    </details>
+    <p>
+      .. which gives us a sawtooth wave for this specific `an` function, which
+      computes the amplitude of a given partial number. try changing the number
+      partials to adjust the "resolution" of the waveform.
+    </p>
+    <p>
+      i've also added a `phi` option to offset the phase. with it, we can make a
+      square wave:
+    </p>
+    <canvas-garden rows="9" height="360">
+      <!--
+let draw = plotPhasors(x, {
+  r: 140, 
+  margin: 20, 
+  padding: 20,
+  an: n => n%2===1? 2/(n*PI)*sin(n*PI/2) : 0, 
+  phi: PI/2,
+  partials: 5, 
+  f: 4
+});
+  -->
+    </canvas-garden>
+    <p>... and a triangle wave:</p>
+    <canvas-garden rows="9" height="360">
+      <!--
+let draw = plotPhasors(x, {
+  r: 120, 
+  margin: 20, 
+  padding: 30,
+  an: n => n%2===1? (-1)**((n+1)/2)*8/(PI**2*n**2):0,
+  phi: 0,
+  partials: 9, 
+  f: 4
+});
   -->
     </canvas-garden>
     <p>
+      I'm still not super confident with the math calculations.. a lot of the
+      time i had to juggle things around until it looked right.. there are also
+      probably some bugs in there
+    </p>
+    <p>
       this visual idea is *not* my own, i've first seen it
-      <a href="https://jackschaedler.github.io/circles-sines-signals/">here</a>
+      <a
+        href="https://jackschaedler.github.io/circles-sines-signals/"
+        target="_blank"
+        style="color: yellow"
+        >here</a
+      >
     </p>
     <details>
       <summary id="loc">show page source</summary>
