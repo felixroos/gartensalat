@@ -104,7 +104,11 @@
 
         async update() {
           const ctx = this.drawContext;
-          const code = `${this.input.value}`;
+
+          const math = Object.getOwnPropertyNames(Math).join(",");
+          const prelude = `const {${math}} = Math;\n`;
+          const code = `${prelude}
+${this.input.value}`;
           console.log("plot", code);
           ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
           const fn = new Function("plot", code);
@@ -162,8 +166,9 @@
       }
       customElements.define("fn-plotter", FnPlot);
     </script>
-    <fn-plotter
-      ><!-- let sine = (f, t) => Math.sin(t*f*2*Math.PI)
+    <fn-plotter rows="5"
+      ><!-- let sine = (f, t) => sin(t*f*2*PI)
+let cosine = (f, t) => cos(t*f*2*PI)
 plot((x) => sine(1, x)/2, {color:'magenta'})
 plot((x) => sine(2, x)/2, {color:'cyan'})
 plot((x) => sine(3, x)/2, {color:'yellow'})
