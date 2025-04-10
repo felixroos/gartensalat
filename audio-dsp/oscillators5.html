@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 oscillators V: harmonic oscillator</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        overflow: auto;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        background-color: #44444490;
+        border: 0;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+      canvas {
+        max-width: 100%;
+        background-color: #44444490;
+      }
+    </style>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        const pre = document.createElement("pre");
+        pre.textContent = getCode(scriptElement, indent);
+        script.after(pre);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+  </head>
+  <body>
+    <h2>🌱 oscillators V: harmonic oscillator</h2>
+    <p>
+      after looking at the fourier series, let's write a more generic additive
+      oscillator that can potentially create any possible waveform:
+    </p>
+
+    <script>
+      const ctx = new AudioContext();
+      // init audio context
+      document.addEventListener("click", function firstClick() {
+        ctx.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+
+      const lerp = (v, min, max) => v * (max - min) + min;
+      const invLerp = (v, min, max) => (v - min) / (max - min);
+      const remap = (v, vmin, vmax, omin, omax) =>
+        lerp(invLerp(v, vmin, vmax), omin, omax);
+
+      class DSPRepl extends HTMLElement {
+        static observedAttributes = ["code", "rows"];
+        worklet;
+        init() {
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "").replace("<!--", "").replace("-->", "").trim();
+
+          const rows = this.getAttribute("rows") ?? 4;
+          if (!code) {
+            return;
+          }
+          this.innerHTML = "";
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div style="border:2px solid #222;padding:0;">
+                <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
+                <canvas height="60"></canvas>
+                <a class="play">play</a> | <a class="stop">stop</a>
+                </div>
+                  `
+          );
+          // draw logic
+          this.canvas = this.querySelector("canvas");
+          this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+          this.canvas.height =
+            this.canvas.clientHeight * window.devicePixelRatio;
+          this.drawContext = this.canvas.getContext("2d");
+          this.drawSilence(this.drawContext);
+
+          // repl logic
+          const input = this.querySelector("textarea");
+          input.value = code;
+          input.style = "margin:0;border-bottom:2px solid #222";
+          this.input = input;
+
+          this.querySelector(".play").onclick = () => this.play();
+          this.querySelector(".stop").onclick = () => this.stop();
+          input.addEventListener("keydown", async (e) => {
+            if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+              const hash = btoa(input.value);
+              let urlCode = window.location.hash.slice(1);
+              this.play();
+            }
+            if ((e.ctrlKey || e.altKey) && e.code === "Period") {
+              e.preventDefault();
+              this.stop();
+            }
+          });
+        }
+
+        async play() {
+          await ctx.resume();
+          this.stop();
+          this.worklet = await this.runWorklet(ctx, this.input.value);
+          this.worklet.port.onmessage = (e) =>
+            requestAnimationFrame(() => this.drawBuffer(e.data));
+        }
+        stop() {
+          this.worklet?.disconnect();
+          this.worklet?.port.postMessage("stop");
+        }
+
+        async runWorklet(ac, code) {
+          const name = `worklet-${Date.now()}`;
+          const math = Object.getOwnPropertyNames(Math).join(",");
+          let prelude = `const {${math}} = Math;\n`;
+          const dspScripts = document
+            .querySelectorAll("script.dsp-prelude")
+            .forEach((script) => {
+              prelude += script.textContent;
+            });
+          const workletCode = `${prelude}
+      // start of user code
+      ${code}
+      // end of user code, I hope you have define an dsp function..
+            class MyProcessor extends AudioWorkletProcessor {
+              constructor() {
+                super();
+                this.t = 0;
+                this.active = true;
+                this.framebuffer = new Float32Array(Math.floor(sampleRate/30));
+                this.port.onmessage = (e) => e.data === "stop" && (this.active = false)
+              }
+              process(inputs, outputs, parameters) {
+                const output = outputs[0];
+                for (let i = 0; i < output[0].length; i++) {
+                  let out = dsp(this.t/sampleRate)
+                  for (let c = 0; c < output.length; c++)
+                    output[c][i] = out;
+                  this.t++;
+                  this.framebuffer[this.t%this.framebuffer.length] = out;
+                  if(this.t % this.framebuffer.length === 0 && this.t > 0) {
+                    this.port.postMessage(this.framebuffer)
+                  }
+                }
+                return this.active;
+              }
+            }
+            registerProcessor('${name}', MyProcessor);`;
+          await ac.resume();
+          const dataURL = `data:text/javascript;base64,${btoa(workletCode)}`;
+          await ac.audioWorklet.addModule(dataURL);
+          const node = new AudioWorkletNode(ac, name);
+          node.connect(ac.destination);
+          return node;
+        }
+
+        drawBuffer(samples) {
+          const ctx = this.drawContext;
+          const canvas = ctx.canvas;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "white";
+          let x0 = 1;
+          let x1 = samples.length;
+          let y0 = -1;
+          let y1 = 1;
+          let px0 = 0;
+          let px1 = ctx.canvas.width;
+          let py0 = ctx.canvas.height - ctx.lineWidth;
+          let py1 = ctx.lineWidth;
+          ctx.beginPath();
+          for (let px = 0; px < ctx.canvas.width; px++) {
+            const x = remap(px, px0, px1, x0, x1);
+            const y = samples[Math.floor(x)];
+            const py = remap(y, y0, y1, py0, py1);
+            px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+
+        drawSilence(ctx, color = "white", lineWidth = 2) {
+          const canvas = ctx.canvas;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lineWidth;
+          ctx.beginPath();
+          ctx.moveTo(0, canvas.height / 2);
+          ctx.lineTo(canvas.width, canvas.height / 2);
+          ctx.stroke();
+        }
+
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          this.init();
+        }
+      }
+      customElements.define("dsp-repl", DSPRepl);
+    </script>
+    <script type="text/javascript" class="dsp-prelude">
+      class HarmonicOsc {
+        constructor(amplitudes, phase = 0) {
+          this.amplitudes = amplitudes;
+          this.phases = new Array(amplitudes.length).fill(phase);
+          this.nyquist = sampleRate / 2;
+        }
+        update(freq, maxPartials = this.amplitudes.length, a0 = 0) {
+          let max = Math.floor((this.nyquist / freq + 1) / 2);
+          let amps = this.amplitudes.length;
+          let partials = Math.min(max, amps);
+          let sum = a0;
+          for (let i = 0; i < partials; i++) {
+            let harmonic = i + 1;
+            let dt = (harmonic * freq) / sampleRate;
+            this.phases[i] = (this.phases[i] + dt) % 1;
+            const phase = this.phases[i] * 2 * Math.PI;
+            if (i <= maxPartials) {
+              sum += Math.sin(phase) * this.amplitudes[i];
+            }
+          }
+          return sum;
+        }
+      }
+      let harmonics = (n, fn) => {
+        let amps = new Array(n).fill(0);
+        for (let i = 0; i < n; i++) {
+          amps[i] = fn(i + 1);
+        }
+        return amps;
+      };
+    </script>
+    <script>
+      codeblock(document.querySelector(".dsp-prelude"), 6);
+    </script>
+    <p>here's a saw:</p>
+    <dsp-repl rows="8"
+      ><!-- 
+// populate first 64 partial amplitudes for a sawtooth wave
+let saw = harmonics(64, n => -1/n)
+let osc1 = new HarmonicOsc(saw)
+let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 )/4
+//                                 ^ modulate maxPartials
+--></dsp-repl
+    >
+    <p>
+      it sounds a bit like a filter, but it's not. instead we're modulating the
+      number of partials directly. let's try a square wave:
+    </p>
+    <dsp-repl rows="8"
+      ><!-- 
+// populate first 64 partial amplitudes for a square wave
+let sqr = harmonics(64, n => n%2===1 ? 2/(n*PI)*sin(n*PI/2) : 0)
+let osc1 = new HarmonicOsc(sqr,.25);
+let dsp = (t) => osc1.update(60.1)/2
+--></dsp-repl
+    >
+    <p>next up, triangle:</p>
+    <dsp-repl rows="8"
+      ><!-- 
+// populate first 64 partial amplitudes for a triangle wave
+let tri = harmonics(64, n => n%2===1? 4/(n*PI)**2 : 0)
+let osc1 = new HarmonicOsc(tri,.25);
+let dsp = (t) => osc1.update(120.1)/2
+--></dsp-repl
+    >
+    <p>pulse:</p>
+    <dsp-repl rows="8"
+      ><!-- 
+// populate first 64 partial amplitudes for a pulse wave
+let pw = .2;
+let pulse = harmonics(64, n => 2/(n*PI) * sin(n*PI*pw))
+let osc1 = new HarmonicOsc(pulse,.25);
+let dsp = (t) => osc1.update(60.1,pulse.length,pw-0.5)/2
+--></dsp-repl
+    >
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+
+    <script>
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
