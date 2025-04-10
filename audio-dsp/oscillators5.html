@@ -256,8 +256,8 @@
             let harmonic = i + 1;
             let dt = (harmonic * freq) / sampleRate;
             this.phases[i] = (this.phases[i] + dt) % 1;
-            const phase = this.phases[i] * 2 * Math.PI;
             if (i <= maxPartials) {
+              const phase = this.phases[i] * 2 * Math.PI;
               sum += Math.sin(phase) * this.amplitudes[i];
             }
           }
@@ -294,7 +294,7 @@ let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 )/4
 // populate first 64 partial amplitudes for a square wave
 let sqr = harmonics(64, n => n%2===1 ? 2/(n*PI)*sin(n*PI/2) : 0)
 let osc1 = new HarmonicOsc(sqr,.25);
-let dsp = (t) => osc1.update(60.1)/2
+let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 )/2
 --></dsp-repl
     >
     <p>next up, triangle:</p>
@@ -303,7 +303,7 @@ let dsp = (t) => osc1.update(60.1)/2
 // populate first 64 partial amplitudes for a triangle wave
 let tri = harmonics(64, n => n%2===1? 4/(n*PI)**2 : 0)
 let osc1 = new HarmonicOsc(tri,.25);
-let dsp = (t) => osc1.update(120.1)/2
+let dsp = (t) => osc1.update(120.1, (sin(t*1)+1)/2*64)
 --></dsp-repl
     >
     <p>pulse:</p>
@@ -313,9 +313,21 @@ let dsp = (t) => osc1.update(120.1)/2
 let pw = .2;
 let pulse = harmonics(64, n => 2/(n*PI) * sin(n*PI*pw))
 let osc1 = new HarmonicOsc(pulse,.25);
-let dsp = (t) => osc1.update(60.1,pulse.length,pw-0.5)/2
+let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 ,pw-0.5)/2
 --></dsp-repl
     >
+    <p>
+      i like the effect of hearing the individual harmonics when they come in,
+      but soon they merge into the timbre they create.
+    </p>
+    <p>
+      i'm not sure, but this representation is probably not able to express
+      everything the fourier series can. It probably could if the phase was also
+      an array. I guess it doesn't matter if you specify real and imaginary
+      parts (amplitudes of sin and cos) or just the sine amplitude + a phase
+      offset. i prefer the latter representation, as it's closer to the mental
+      model of a spinning circle.
+    </p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
