@@ -281,9 +281,9 @@
     <dsp-repl rows="8"
       ><!-- 
 // populate first 64 partial amplitudes for a sawtooth wave
-let saw = harmonics(64, n => -1/n)
+let saw = harmonics(64, n => -2/(n*PI))
 let osc1 = new HarmonicOsc(saw)
-let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 )/4
+let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 )/2
 //                                 ^ modulate maxPartials
 --></dsp-repl
     >
@@ -294,8 +294,8 @@ let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 )/4
     <dsp-repl rows="8"
       ><!-- 
 // populate first 64 partial amplitudes for a square wave
-let sqr = harmonics(64, n => n%2===1 ? 2/(n*PI)*sin(n*PI/2) : 0)
-let osc1 = new HarmonicOsc(sqr,.25);
+let sqr = harmonics(64, n => n%2===1?4/(n*PI):0)
+let osc1 = new HarmonicOsc(sqr);
 let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 )/2
 --></dsp-repl
     >
@@ -303,9 +303,9 @@ let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 )/2
     <dsp-repl rows="8"
       ><!-- 
 // populate first 64 partial amplitudes for a triangle wave
-let tri = harmonics(64, n => n%2===1? 4/(n*PI)**2 : 0)
+let tri = harmonics(64, n => n%2===1? 8/(n*PI)**2 : 0)
 let osc1 = new HarmonicOsc(tri,.25);
-let dsp = (t) => osc1.update(120.1, (sin(t*1)+1)/2*64)
+let dsp = (t) => osc1.update(120.1, (sin(t*1)+1)/2*64)/2
 --></dsp-repl
     >
     <p>pulse:</p>
@@ -313,9 +313,9 @@ let dsp = (t) => osc1.update(120.1, (sin(t*1)+1)/2*64)
       ><!-- 
 // populate first 64 partial amplitudes for a pulse wave
 let pw = .2;
-let pulse = harmonics(64, n => 2/(n*PI) * sin(n*PI*pw))
+let pulse = harmonics(64, n => 4/(n*PI) * sin(n*PI*pw))
 let osc1 = new HarmonicOsc(pulse,.25);
-let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 ,pw-0.5)/2
+let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 ,2*pw-1)/2
 --></dsp-repl
     >
     <p>
@@ -329,6 +329,69 @@ let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 ,pw-0.5)/2
       parts (amplitudes of sin and cos) or just the sine amplitude + a phase
       offset. i prefer the latter representation, as it's closer to the mental
       model of a spinning circle.
+    </p>
+    <p>
+      i was almost about to end this post there, but i discovered the fourier
+      series actually has another variant that's called amplitude-phase form.
+    </p>
+    <h3>bonus: amplitude + phase form</h3>
+    <p>
+      the typical textbook form of the fourier series is the sine-cosine form:
+    </p>
+    <pre>(N) => a0 + sum(1, N, (n) => a(n)*cos(phase) - b(n)*sin(phase) )</pre>
+    <p>
+      when thinking about phasors, i find it's more intuitive to use the
+      amplitude-phase form:
+    </p>
+    <pre>(N) => a0 + sum(1, N, (n) => A(n)*sin(phase+phi(n)) )</pre>
+    <p>
+      (we could also swap sin with cos, and adjust our phi(n) accordingly,
+      because sin(x) = cos(x+pi/2))
+    </p>
+    <p>
+      in both cases, we have three "inputs" that define our waveform. for the
+      sine-cosine form, it's:
+    </p>
+    <ol>
+      <li>a0: dc offset</li>
+      <li>a(n): cosine coefficient (aka real part)</li>
+      <li>b(n): sine coefficient (aka imaginary part)</li>
+    </ol>
+    <p>for the amplitude-phase form, we have</p>
+    <ol>
+      <li>a0: dc offset</li>
+      <li>A(n): amplitude of phasor</li>
+      <li>phi(n): phase of phasor</li>
+    </ol>
+    <p>
+      at the end of the day, both representations encode the same phasor in a
+      different way! the sine-cosine form encodes 2 sides (base and altitude) of
+      the right triangle inside our phasor, whereas the amplitude-phase form
+      encodes the magnitude and angle of the hypothenuse of that same triangle
+    </p>
+    <p>
+      therefor, to translate from sine-cosine form to amplitude-phase form, we
+      can use:
+    </p>
+    <pre>A(n) = sqrt(a(n)^2 + b(n)^2)</pre>
+    <pre>phi(n) = atan(b(n)/a(n))</pre>
+    <p>
+      these can be simplified when either a(n) or b(n) is zero, which is the
+      case for all of the
+      <a
+        href="https://www.dspguide.com/ch13/4.htm"
+        traget="_blank"
+        style="color: yellow"
+        >basic waveforms</a
+      >. In that case, we get:
+    </p>
+
+    <pre>A(n) = b(n) === 0 ? a(n) : a(n) === 0 ? b(n) : ...</pre>
+    <pre>phi(n) = b(n) === 0 ? 0 : a(n) === 0 ? pi/2 : ...</pre>
+    <p>
+      technically, a(n) === 0 would be undefined, because we divide by 0, but we
+      know atan approaches pi/2. also, for floating point numbers, 1/0 is
+      actually infinity, which is handy in this case.
     </p>
     <details>
       <summary id="loc">show page source</summary>
