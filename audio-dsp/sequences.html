@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 sequences</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        overflow: auto;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        background-color: #44444490;
+        border: 0;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+      canvas {
+        max-width: 100%;
+        background-color: #44444490;
+      }
+    </style>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        const pre = document.createElement("pre");
+        pre.textContent = getCode(scriptElement, indent);
+        script.after(pre);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <script>
+      const ctx = new AudioContext();
+      // init audio context
+      document.addEventListener("click", function firstClick() {
+        ctx.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+
+      const lerp = (v, min, max) => v * (max - min) + min;
+      const invLerp = (v, min, max) => (v - min) / (max - min);
+      const remap = (v, vmin, vmax, omin, omax) =>
+        lerp(invLerp(v, vmin, vmax), omin, omax);
+
+      class DSPRepl extends HTMLElement {
+        static observedAttributes = ["code", "rows"];
+        worklet;
+        init() {
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "").replace("<!--", "").replace("-->", "").trim();
+
+          const rows = this.getAttribute("rows") ?? 4;
+          if (!code) {
+            return;
+          }
+          this.innerHTML = "";
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div style="border:2px solid #222;padding:0;">
+                <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
+                <canvas height="60"></canvas>
+                <a class="play">play</a> | <a class="stop">stop</a>
+                </div>
+                  `
+          );
+          // draw logic
+          this.canvas = this.querySelector("canvas");
+          this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+          this.canvas.height =
+            this.canvas.clientHeight * window.devicePixelRatio;
+          this.drawContext = this.canvas.getContext("2d");
+          this.drawSilence(this.drawContext);
+
+          // repl logic
+          const input = this.querySelector("textarea");
+          input.value = code;
+          input.style = "margin:0;border-bottom:2px solid #222";
+          this.input = input;
+
+          this.querySelector(".play").onclick = () => this.play();
+          this.querySelector(".stop").onclick = () => this.stop();
+          input.addEventListener("keydown", async (e) => {
+            if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+              const hash = btoa(input.value);
+              let urlCode = window.location.hash.slice(1);
+              this.play();
+            }
+            if ((e.ctrlKey || e.altKey) && e.code === "Period") {
+              e.preventDefault();
+              this.stop();
+            }
+          });
+        }
+
+        async play() {
+          await ctx.resume();
+          this.stop();
+          this.worklet = await this.runWorklet(ctx, this.input.value);
+          this.worklet.port.onmessage = (e) =>
+            requestAnimationFrame(() => this.drawBuffer(e.data));
+        }
+        stop() {
+          this.worklet?.disconnect();
+          this.worklet?.port.postMessage("stop");
+        }
+
+        async runWorklet(ac, code) {
+          const name = `worklet-${Date.now()}`;
+          const math = Object.getOwnPropertyNames(Math).join(",");
+          let prelude = `const {${math}} = Math;\n`;
+          const dspScripts = document
+            .querySelectorAll("script.dsp-prelude")
+            .forEach((script) => {
+              prelude += script.textContent;
+            });
+          const workletCode = `${prelude}
+      // start of user code
+      ${code}
+      // end of user code, I hope you have define an dsp function..
+            class MyProcessor extends AudioWorkletProcessor {
+              constructor() {
+                super();
+                this.t = 0;
+                this.active = true;
+                this.framebuffer = new Float32Array(Math.floor(sampleRate/30));
+                this.port.onmessage = (e) => e.data === "stop" && (this.active = false)
+              }
+              process(inputs, outputs, parameters) {
+                const output = outputs[0];
+                for (let i = 0; i < output[0].length; i++) {
+                  let out = dsp(this.t/sampleRate)
+                  for (let c = 0; c < output.length; c++)
+                    output[c][i] = out;
+                  this.t++;
+                  this.framebuffer[this.t%this.framebuffer.length] = out;
+                  if(this.t % this.framebuffer.length === 0 && this.t > 0) {
+                    this.port.postMessage(this.framebuffer)
+                  }
+                }
+                return this.active;
+              }
+            }
+            registerProcessor('${name}', MyProcessor);`;
+          await ac.resume();
+          const dataURL = `data:text/javascript;base64,${btoa(workletCode)}`;
+          await ac.audioWorklet.addModule(dataURL);
+          const node = new AudioWorkletNode(ac, name);
+          node.connect(ac.destination);
+          return node;
+        }
+
+        drawBuffer(samples) {
+          const ctx = this.drawContext;
+          const canvas = ctx.canvas;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "white";
+          let x0 = 1;
+          let x1 = samples.length;
+          let y0 = -1;
+          let y1 = 1;
+          let px0 = 0;
+          let px1 = ctx.canvas.width;
+          let py0 = ctx.canvas.height - ctx.lineWidth;
+          let py1 = ctx.lineWidth;
+          ctx.beginPath();
+          for (let px = 0; px < ctx.canvas.width; px++) {
+            const x = remap(px, px0, px1, x0, x1);
+            const y = samples[Math.floor(x)];
+            const py = remap(y, y0, y1, py0, py1);
+            px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+
+        drawSilence(ctx, color = "white", lineWidth = 2) {
+          const canvas = ctx.canvas;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lineWidth;
+          ctx.beginPath();
+          ctx.moveTo(0, canvas.height / 2);
+          ctx.lineTo(canvas.width, canvas.height / 2);
+          ctx.stroke();
+        }
+
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          this.init();
+        }
+      }
+      customElements.define("dsp-repl", DSPRepl);
+    </script>
+    <script type="text/javascript" class="dsp-prelude">
+      // https://garten.salat.dev/audio-dsp/oscillators.html
+      class SineOsc {
+        constructor() {
+          this.phase = 0;
+        }
+        update(freq) {
+          this.phase = (this.phase + freq / sampleRate) % 1;
+          return Math.sin(this.phase * 2 * Math.PI);
+        }
+      }
+      // https://garten.salat.dev/audio-dsp/oscillators2.html
+      function polyBlep(phase, dt) {
+        // 0 <= phase < 1
+        if (phase < dt) {
+          phase /= dt;
+          // 2 * (phase - phase^2/2 - 0.5)
+          return phase + phase - phase * phase - 1;
+        }
+        // -1 < phase < 0
+        if (phase > 1 - dt) {
+          phase = (phase - 1) / dt;
+          // 2 * (phase^2/2 + phase + 0.5)
+          return phase * phase + phase + phase + 1;
+        }
+        // 0 otherwise
+        return 0;
+      }
+      class SawOsc {
+        constructor() {
+          this.phase = 0;
+        }
+        update(freq) {
+          const dt = freq / sampleRate;
+          let p = polyBlep(this.phase, dt);
+          let s = 2 * this.phase - 1 - p;
+          this.phase = (this.phase + dt) % 1;
+          return s;
+        }
+      }
+      // https://garten.salat.dev/audio-dsp/oscillators3.html
+      class PulseOsc {
+        constructor(phase = 0) {
+          this.phase = phase;
+        }
+        saw(freq, offset, dt) {
+          let phase = (this.phase + offset) % 1;
+          let p = polyBlep(phase, dt);
+          return 2 * phase - 1 - p;
+        }
+        update(freq, pw) {
+          const dt = freq / sampleRate;
+          let pulse = this.saw(freq, 0, dt) - this.saw(freq, pw, dt);
+          this.phase = (this.phase + dt) % 1;
+          return pulse + pw * 2 - 1;
+        }
+      }
+      // https://garten.salat.dev/audio-dsp/oscillators4.html
+      class TriOsc {
+        constructor() {
+          this.phase = 0;
+          this.lastOutput = 0;
+        }
+        update(freq) {
+          let dt = freq / sampleRate;
+          let v = this.phase < 0.5 ? 1 : -1;
+          v += polyBlep(this.phase, dt);
+          v -= polyBlep((this.phase + 0.5) % 1, dt);
+          v = dt * v + (1 - dt) * this.lastOutput;
+          this.lastOutput = v;
+          this.phase += dt;
+          this.phase = this.phase % 1;
+          return v;
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <h2>🌱 sequences</h2>
+    <p>
+      we have all of the basic oscillator waveforms down, but so far they've
+      only played a single, everylasting note. how can we program a sequence?
+      here's a simplistic simple approach:
+    </p>
+    <dsp-repl rows="8"
+      ><!-- 
+let osc1 = new TriOsc();
+let sequence = (t, freq, steps) => steps[Math.floor(t*freq)%steps.length]
+let tune = [220, 330, 440, 550]
+
+let dsp = (t) => osc1.update(sequence(t, 2, tune))/4
+--></dsp-repl
+    >
+    <p>
+      using raw frequencies can be a bit unwieldy, so let's add a helper
+      function `midi2freq` to convert midi numbers to frequencies:
+    </p>
+    <script type="text/javascript" class="dsp-prelude" id="prelude-midi2freq">
+      let midi2freq = (midi) => Math.pow(2, (midi - 69) / 12) * 440;
+    </script>
+    <script>
+      codeblock(document.querySelector("#prelude-midi2freq"), 6);
+    </script>
+    <p>usage:</p>
+    <dsp-repl rows="10"
+      ><!-- 
+let osc1 = new TriOsc();
+let sequence = (t, freq, steps) => steps[Math.floor(t*freq)%steps.length]
+let tune = [0,3,7,10].map(n => midi2freq(n+52))
+let dsp = (t) => {
+  let freq = sequence(t, 2, tune)
+  return osc1.update(freq)/2
+}
+--></dsp-repl
+    >
+    <p>
+      a sequence with a constant tempo is a bit boring. maybe can modulate the
+      tempo with a second sequence:
+    </p>
+    <dsp-repl rows="12"
+      ><!-- 
+let osc1 = new TriOsc();
+let sequence = (t, freq, steps) => steps[Math.floor(t*freq)%steps.length]
+let tune = [0,3,7,10].map(n => midi2freq(n+52))
+let speed = [2,4]
+let dsp = (t) => {
+  let freq = sequence(t, sequence(t, 1, speed), tune)
+  return osc1.update(freq)/2
+}
+--></dsp-repl
+    >
+    <h3>problem: phase jumps</h3>
+    <p>
+      something seems off.. if we listen closely, we can make out the pattern `0
+      3 [0 3] [7 10]`. it turns out the sequence does not play in order, as it
+      jumps from 3 back to 0 when the tempo changes. this happens because our
+      sequence is effectively relative to t=0. changing the speed will cause a
+      "phase jump", similar to
+      <a href="/audio-dsp/oscillators.html"
+        >what happened earlier with sine oscillators</a
+      >.
+    </p>
+    <h3>solution: memory</h3>
+    <p>to fix this, we need a phasor + remember the active step:</p>
+    <script type="text/javascript" class="dsp-prelude" id="prelude1">
+      class Sequencer {
+        constructor(steps) {
+          this.steps = steps;
+          this.step = 0;
+          this.phase = 0;
+        }
+        update(freq) {
+          let nextPhase = this.phase + freq / sampleRate;
+          if (nextPhase > 1) {
+            // when the phasor overflows, we go to the next step
+            this.step = (this.step + 1) % this.steps.length;
+          }
+          this.phase = nextPhase % 1;
+          return this.steps[this.step];
+        }
+      }
+    </script>
+    <script>
+      codeblock(document.querySelector("#prelude1"), 6);
+    </script>
+    <p>now, we can use this to express our earlier example:</p>
+
+    <dsp-repl rows="10"
+      ><!-- 
+let osc1 = new TriOsc();
+let tune = [0,3,7,10].map(n => midi2freq(n+52))
+let seq = new Sequencer(tune)
+let speed = new Sequencer([2,4])
+
+let dsp = (t) => {
+  let freq = seq.update(speed.update(1))
+  return osc1.update(freq)/2
+}
+--></dsp-repl
+    >
+    <p>
+      we get `0 3 [7 10] [0 3] 7 10 [0 3] [7 10]`, which is exactly what we
+      wanted: no phase jumps, but changing tempo. this is (probably) what
+      theorists call an isorhythm.
+    </p>
+    <!-- <h3>trigger impulses</h3>
+    <script type="text/javascript" class="dsp-prelude" id="prelude2">
+      class ImpulseOsc {
+        constructor() {
+          this.phase = 1;
+        }
+
+        update(freq) {
+          this.phase += freq / sampleRate;
+          let v = this.phase >= 1 ? 1 : 0;
+          this.phase = this.phase % 1;
+          return v;
+        }
+      }
+
+      class Sequence {
+        constructor(steps) {
+          this.trigger = true;
+          this.step = 0;
+          this.steps = steps;
+        }
+        update(trigger) {
+          if (!this.trigger && trigger > 0) {
+            this.step = (this.step + 1) % this.steps.length;
+          }
+          this.trigger = trigger > 0;
+          return this.steps[this.step];
+        }
+      }
+    </script>
+    <script>
+      codeblock(document.querySelector("#prelude2"), 6);
+    </script> -->
+    <h3>more advanced</h3>
+    <p>we can now already write some basic melodies with this:</p>
+
+    <dsp-repl rows="14"
+      ><!-- 
+let osc1 = new TriOsc();
+let tune = [
+7, 2,3, 5, 3,2, 
+0, 0,3, 7, 5,3, 
+2, 2,3, 5, 7,7,
+3, 0,0, 0, 0,0
+].map(n => midi2freq(n+52))
+let seq = new Sequencer(tune)
+let speed = new Sequencer([2,4])
+
+let dsp = (t) => {
+  let freq = seq.update(speed.update(2))
+  return osc1.update(freq)/2
+}
+--></dsp-repl
+    >
+    <p>
+      while this works, the separation of pitch and tempo is not very practical.
+      let's fix that:
+    </p>
+    <dsp-repl rows="14"
+      ><!-- 
+const seq = chunks2seq([
+  [4, 7], [8, 2,3], [4, 5], [8, 3,2],
+  [4, 0], [8, 0,3], [4, 7], [8, 5,3], 
+  [4, 2], [8, 2,3], [4, 5, 7],
+  [4, 3, 0], [2,0]
+])
+
+let osc1 = new TriOsc();
+let dsp = (t) => {
+  const n = seq(t,.5)
+  const freq = midi2freq(n+52)
+  return osc1.update(freq)/2
+}
+--></dsp-repl
+    >
+    <p>
+      the chunks2seq function will takes an array of [division, ...steps]
+      chunks, and returns a function that sequences them using 2 Sequencers:
+    </p>
+    <script type="text/javascript" class="dsp-prelude" id="prelude-chunks2seq">
+      let chunks2seq = (chunks) => {
+        let values = chunks.map((items) => items.slice(1)).flat();
+        /* if (mapValues) {
+          values = values.map(mapValues);
+        } */
+        let div = Math.max(...chunks.map((step) => step[0])); // max division
+        let tempos = chunks
+          .map(([tempo, ...steps]) => {
+            let len = Math.ceil((steps.length * div) / tempo);
+            return Array(len).fill(tempo);
+          })
+          .flat();
+
+        let valueSeq = new Sequencer(values);
+        let tempoSeq = new Sequencer(tempos);
+
+        return (t, f = 1) => valueSeq.update(tempoSeq.update(div * f) * f);
+      };
+    </script>
+    <script>
+      codeblock(document.querySelector("#prelude-chunks2seq"), 6);
+    </script>
+    <p>here's another way we could write it:</p>
+    <dsp-repl rows="14"
+      ><!-- 
+const seq = steps2seq([
+  7, [2,3], 5, [3,2],
+  0, [0,3], 7, [5,3],
+  2, [2,3], 5, 7,
+  3, 0, 0, 0
+])
+  
+let osc1 = new TriOsc();
+let dsp = (t) => {
+  const n = seq(t, 1 / 8);
+  const freq = midi2freq(n + 52);
+  return osc1.update(freq) / 2;
+};
+
+--></dsp-repl
+    >
+    <p>
+      this versino works similar to tidal mini notation, where nested arrays
+      create a new subdivided group. here's the steps2seq function:
+    </p>
+    <script type="text/javascript" class="dsp-prelude" id="prelude-steps2seq">
+      let steps2seq = (steps) => {
+        let stepify = (seq, divisor = 1) => {
+          divisor *= seq.length;
+          return seq.reduce((acc, step) => {
+            if (!Array.isArray(step)) {
+              acc.push([divisor, step]);
+            } else {
+              acc = acc.concat(stepify(step, divisor));
+            }
+            return acc;
+          }, []);
+        };
+        return chunks2seq(stepify(steps));
+      };
+    </script>
+    <script>
+      codeblock(document.querySelector("#prelude-steps2seq"), 6);
+    </script>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+
+    <script>
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
