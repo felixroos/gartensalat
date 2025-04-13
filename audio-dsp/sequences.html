@@ -341,7 +341,7 @@ let dsp = (t) => osc1.update(sequence(t, 2, tune))/4
       ><!-- 
 let osc1 = new TriOsc();
 let sequence = (t, freq, steps) => steps[Math.floor(t*freq)%steps.length]
-let tune = [0,3,7,10].map(n => midi2freq(n+52))
+let tune = [0,3,7,10].map(n => midi2freq(n+57))
 let dsp = (t) => {
   let freq = sequence(t, 2, tune)
   return osc1.update(freq)/2
@@ -356,7 +356,7 @@ let dsp = (t) => {
       ><!-- 
 let osc1 = new TriOsc();
 let sequence = (t, freq, steps) => steps[Math.floor(t*freq)%steps.length]
-let tune = [0,3,7,10].map(n => midi2freq(n+52))
+let tune = [0,3,7,10].map(n => midi2freq(n+57))
 let speed = [2,4]
 let dsp = (t) => {
   let freq = sequence(t, sequence(t, 1, speed), tune)
@@ -403,7 +403,7 @@ let dsp = (t) => {
     <dsp-repl rows="10"
       ><!-- 
 let osc1 = new TriOsc();
-let tune = [0,3,7,10].map(n => midi2freq(n+52))
+let tune = [0,3,7,10].map(n => midi2freq(n+57))
 let seq = new Sequencer(tune)
 let speed = new Sequencer([2,4])
 
@@ -462,7 +462,7 @@ let tune = [
 0, 0,3, 7, 5,3, 
 2, 2,3, 5, 7,7,
 3, 0,0, 0, 0,0
-].map(n => midi2freq(n+52))
+].map(n => midi2freq(n+57))
 let seq = new Sequencer(tune)
 let speed = new Sequencer([2,4])
 
@@ -490,7 +490,7 @@ const seq = chunks2seq([
 let osc1 = new TriOsc();
 let dsp = (t) => {
   const n = seq(t,.5)
-  const freq = midi2freq(n+52)
+  const freq = midi2freq(n+57)
   return osc1.update(freq)/2
 }
 --></dsp-repl
@@ -532,8 +532,8 @@ const seq = steps2seq([
   
 let osc1 = new TriOsc();
 let dsp = (t) => {
-  const n = seq(t, 1 / 8);
-  const freq = midi2freq(n + 52);
+  const n = seq(t, 2);
+  const freq = midi2freq(n + 57);
   return osc1.update(freq) / 2;
 };
 
@@ -556,7 +556,7 @@ let dsp = (t) => {
             return acc;
           }, []);
         };
-        return chunks2seq(stepify(steps));
+        return chunks2seq(stepify(steps, 1 / steps.length));
       };
     </script>
     <script>
@@ -564,19 +564,27 @@ let dsp = (t) => {
     </script>
     <h3>bonus: polyphony</h3>
     <p>as a little bonus, here's the tune with multiple voices:</p>
-    <dsp-repl rows="14"
+    <dsp-repl rows="24"
       ><!-- 
 const melody = steps2seq([
   7, [2,3], 5, [3,2],
   0, [0,3], 7, [5,3],
   2, [2,3], 5, 7,
-  3, 0, 0, 0
+  3, 0, 0, 0,
+  [0, 5], [5,8], 12, [10,8],
+  7, [7,3], 7, [5,3],
+  2, [2,3], 5, 7,
+  3, 0, 0, 0,
 ])
 const bass = steps2seq([
 [0,12],[0,12],[0,12],[0,12],
 [5,17],[5,17],[5,17],[5,17],
 [4,16],[4,16],[0,12],[0,12],
-[5,17],[5,17],[5,17],[7,8]
+[5,17],[5,17],[5,17],[-5,-4],
+[-2,10],[-2,10],[-2,10],[-2,10],
+[-4,8],[-4,8],[-4,8],[-4,8],
+[-5,7],[-5,7],[0,12],[0,12],
+[-7,5],[-7,5],[-7,5],[-7,5]
 ])
 
 let voice = (t, seq, osc, offset=52, divisor=1) => {
@@ -588,8 +596,8 @@ let voice = (t, seq, osc, offset=52, divisor=1) => {
 let osc1 = new TriOsc();
 let osc2 = new TriOsc();
 let dsp = (t) => {
-  return voice(t, melody, osc1, 57+12, 1/8)/2
-+ voice(t, bass, osc2, 40, 1/8)/2
+  return voice(t, melody, osc1, 57+12, 2)/2
++ voice(t, bass, osc2, 40, 2)/2
 };
 --></dsp-repl
     >
