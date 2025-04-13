@@ -585,11 +585,11 @@ let voice = (t, seq, osc, offset=52, divisor=1) => {
   return osc.update(freq);
 }
   
-let osc1 = new SawOsc();
-let osc2 = new SawOsc();
+let osc1 = new TriOsc();
+let osc2 = new TriOsc();
 let dsp = (t) => {
-  return voice(t, melody, osc1, 57+12, 1/8)/10
-+ voice(t, bass, osc2, 40, 1/8)/10
+  return voice(t, melody, osc1, 57+12, 1/8)/2
++ voice(t, bass, osc2, 40, 1/8)/2
 };
 --></dsp-repl
     >
