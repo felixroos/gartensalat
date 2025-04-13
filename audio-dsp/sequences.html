@@ -314,7 +314,7 @@
     <p>
       we have all of the basic oscillator waveforms down, but so far they've
       only played a single, everylasting note. how can we program a sequence?
-      here's a simplistic simple approach:
+      here's a simplistic approach:
     </p>
     <dsp-repl rows="8"
       ><!-- 
@@ -499,9 +499,6 @@ let dsp = (t) => {
     <script type="text/javascript" class="dsp-prelude" id="prelude-chunks2seq">
       let chunks2seq = (chunks) => {
         let values = chunks.map((items) => items.slice(1)).flat();
-        /* if (mapValues) {
-          values = values.map(mapValues);
-        } */
         let div = Math.max(...chunks.map((step) => step[0])); // max division
         let tempos = chunks
           .map(([tempo, ...steps]) => {
