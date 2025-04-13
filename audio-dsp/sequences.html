@@ -472,9 +472,11 @@ let dsp = (t) => {
 }
 --></dsp-repl
     >
+    <h3>chunk notation</h3>
     <p>
       while this works, the separation of pitch and tempo is not very practical.
-      let's fix that:
+      let's fix that with a notation that groups the sequence into chunks of
+      items with a divison prefix:
     </p>
     <dsp-repl rows="14"
       ><!-- 
@@ -517,6 +519,7 @@ let dsp = (t) => {
     <script>
       codeblock(document.querySelector("#prelude-chunks2seq"), 6);
     </script>
+    <h3>nested array notation</h3>
     <p>here's another way we could write it:</p>
     <dsp-repl rows="14"
       ><!-- 
@@ -559,6 +562,41 @@ let dsp = (t) => {
     <script>
       codeblock(document.querySelector("#prelude-steps2seq"), 6);
     </script>
+    <h3>bonus: polyphony</h3>
+    <p>as a little bonus, here's the tune with multiple voices:</p>
+    <dsp-repl rows="14"
+      ><!-- 
+const melody = steps2seq([
+  7, [2,3], 5, [3,2],
+  0, [0,3], 7, [5,3],
+  2, [2,3], 5, 7,
+  3, 0, 0, 0
+])
+const bass = steps2seq([
+[0,12],[0,12],[0,12],[0,12],
+[5,17],[5,17],[5,17],[5,17],
+[4,16],[4,16],[0,12],[0,12],
+[5,17],[5,17],[5,17],[7,8]
+])
+
+let voice = (t, seq, osc, offset=52, divisor=1) => {
+  const n = seq(t, divisor);
+  const freq = midi2freq(n + offset);
+  return osc.update(freq);
+}
+  
+let osc1 = new SawOsc();
+let osc2 = new SawOsc();
+let dsp = (t) => {
+  return voice(t, melody, osc1, 57+12, 1/8)/10
++ voice(t, bass, osc2, 40, 1/8)/10
+};
+--></dsp-repl
+    >
+    <p>
+      this should be enough sequencing for a start. the sound is still very
+      boring because we don't have any means to shape the waveforms..
+    </p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
