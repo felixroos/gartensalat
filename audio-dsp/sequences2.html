@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🌱 envelopes</title>
+    <title>🌱 sequences & envelopes</title>
     <style>
       body {
         background-color: #222;
@@ -308,104 +308,8 @@
           return v;
         }
       }
-    </script>
-  </head>
-  <body>
-    <h2>🌱 envelopes</h2>
-    <p>
-      last time, we started <a href="/audio-dsp/sequences.html">sequencing</a>.
-      the result sounded a bit flat, because we are still missing envelopes.
-      envelopes can be used to shape the countour of a signal. to shape our
-      envelope we will extensively use the good old lerp function:
-    </p>
-    <script type="text/javascript" class="dsp-prelude" id="lerp">
+      let midi2freq = (midi) => Math.pow(2, (midi - 69) / 12) * 440;
       let lerp = (v, min, max) => v * (max - min) + min;
-    </script>
-    <script>
-      codeblock(document.querySelector("#lerp"), 6);
-    </script>
-    <p>with it, we can build a simplistic envelope:</p>
-    <dsp-repl rows="2"
-      ><!-- 
-let osc1 = new TriOsc();
-let dsp = (t) => osc1.update(240.1) * lerp((t*2)%1, 0, 1)
---></dsp-repl
-    >
-    <p>
-      you could call this a looping attack envelope. try switching 0 and 1 to
-      get a decay..
-    </p>
-    <h3>adsr</h3>
-    <p>
-      with this basic idea, we can create an ADSR envelope with a few
-      conditionals:
-    </p>
-    <dsp-repl rows="20">
-      <!-- 
-function adsr(t, a = 0.001, d = 0.001, s = 1, h = 0.1, r = 0.001) {
-  let gain = 0;
-  if (t < a) {
-    gain = t / a;
-  } else if (t < a + d) {
-    gain = lerp((t - a) / d, 1, s);
-  } else if (t < a + d + h) {
-    gain = s;
-  } else if (t < a + d + h + r) {
-    gain = lerp((t - a - d - h) / r, s, 0);
-  }
-  return gain;
-}
-
-let osc1 = new TriOsc();
-let dsp = (t) => osc1.update(240.1) 
-* adsr(t % 1, 0.1, 0.2, 0.5, 0.4, 0.2);
-//            ^att ^dec ^sus ^hold ^rel
-      -->
-    </dsp-repl>
-
-    <h3>linseg</h3>
-    <p>
-      instead of hard coding a/d/s/r, we can create any linear envelope by
-      combining a variable number of line segments:
-    </p>
-    <dsp-repl rows="24">
-      <!-- 
-function linseg(t, ...args) {
-  let [v, ...rest] = args;
-  let a = 0, s = t;
-  while (a < rest.length) {
-    const dur = rest[a];
-    const next = rest[a + 1];
-    if (s < dur) {
-      return lerp(s / dur, v, next);
-    }
-    s -= dur;
-    v = next;
-    a += 2;
-  }
-  return args[args.length - 1];
-}
-let adsr = (t, a = 0.001, d = 0.001, s = 1, h = 0.1, r = 0.001) => linseg(t%1, 0, a,1, d,s, h,s, r,0)
-
-let osc1 = new TriOsc();
-let dsp = (t) => osc1.update(240.1) 
-* adsr(t % 1, 0.1, 0.2, 0.5, 0.4, 0.2);
-//            ^att ^dec ^sus ^hold ^rel
-      -->
-    </dsp-repl>
-    <p>
-      we can now express adsr as a special case of linseg. this function is
-      inspired by csound.
-    </p>
-    <h3>triggering envelopes</h3>
-    <p>
-      the envelopes above are not very practical when we want to sequence them.
-      we might even want to control our synth live, so we won't know in advance
-      how long our note is sustained. the conventional way to approach this is
-      using triggers and gates. here's a simple trigger generator:
-    </p>
-
-    <script type="text/javascript" class="dsp-prelude" id="impulse">
       class ImpulseOsc {
         constructor() {
           this.phase = 1;
@@ -418,37 +322,6 @@ let dsp = (t) => osc1.update(240.1)
           return this.value;
         }
       }
-    </script>
-    <script>
-      codeblock(document.querySelector("#impulse"), 6);
-    </script>
-    <p>example use:</p>
-    <dsp-repl rows="2">
-      <!-- 
-const trigger = new ImpulseOsc();
-let dsp = t => trigger.update(1)
-  -->
-    </dsp-repl>
-    <p>
-      on its own, it's not very exciting, but we can use it to trigger an
-      envelope like this:
-    </p>
-    <dsp-repl rows="6">
-      <!-- 
-let osc1 = new TriOsc();
-let env = new AREnvelope();
-let trigger = new ImpulseOsc()
-let dsp = (t) => osc1.update(240) 
-* env.update(trigger.update( t%4 +1 ), .1, .2)
-//                           ^freq     ^att ^dec
-      -->
-    </dsp-repl>
-    <p>
-      i've used a rising frequency of the trigger to showcase that the envelope
-      adapts dynamically to the trigger.
-    </p>
-    <p>the AREnvelope works like a state machine:</p>
-    <script type="text/javascript" class="dsp-prelude" id="ar-envelope">
       class AREnvelope {
         constructor() {
           this.state = "off";
@@ -497,20 +370,241 @@ let dsp = (t) => osc1.update(240)
         }
       }
     </script>
+  </head>
+  <body>
+    <h2>🌱 sequences & envelopes</h2>
+    <p>
+      after looking at <a href="/audio-dsp/sequences.html">sequences</a> and
+      <a href="/audio-dsp/envelopes.html">envelopes</a>, it's time to fuse them.
+      so far, our sequences had a built in phasor. to allow us to sync them with
+      envelopes, we need to rewrite them to react to an incoming trigger as
+      well:
+    </p>
+    <script type="text/javascript" class="dsp-prelude" id="sequence">
+      class Sequence {
+        constructor(steps) {
+          this.trigger = true;
+          this.step = 0;
+          this.steps = steps;
+        }
+        update(trigger) {
+          if (!this.trigger && trigger > 0) {
+            this.step = (this.step + 1) % this.steps.length;
+          }
+          this.trigger = trigger > 0;
+          return this.steps[this.step];
+        }
+      }
+      // shortcut to create sequence along with impulse:
+      let sequence = (values) => {
+        let seq = new Sequence(values);
+        let impulse = new ImpulseOsc();
+        return {
+          update: (f) => seq.update(impulse.update(f)),
+          impulse,
+          trigger: () => impulse.value,
+          gate: () => 1 - impulse.value,
+        };
+      };
+    </script>
     <script>
-      codeblock(document.querySelector("#ar-envelope"), 6);
+      codeblock(document.querySelector("#sequence"), 6);
     </script>
     <p>
-      while this contains a bit more logic compared to our previous adsr, it's
-      more dynamic. we could now play this live if we had implemented any MIDI
-      communication going. i've first discovered this type of envelope (and many
-      other dsp tricks) in
-      <a href="https://noisecraft.app/" target="_blank" style="color: yellow"
-        >noisecraft</a
-      >.
+      with that in place, we can use the same trigger for our sequence and
+      envelope:
     </p>
-    <p>in the next post, we will combine envelopes and sequences</p>
+    <dsp-repl rows="10">
+      <!-- 
+let osc1 = new TriOsc();
+let seq = new Sequence([220,330,440,550]);
+let trigger = new ImpulseOsc()
+let env = new AREnvelope();
+let dsp = (t) => {
+  let imp = trigger.update( t%5+2 );
+  let freq = seq.update(imp)
+  return osc1.update(freq) * env.update(imp, .01, .4)
+}
+      --></dsp-repl
+    >
+    <!-- 
+let osc1 = new TriOsc();
+let seq = sequence([220,330,440,550]);
+let env = new AREnvelope();
+let dsp = (t) => {
+  let freq = seq.update(2)
+  return osc1.update(freq) * env.update(seq.trigger(), .01, .5)
+}
+      -->
 
+    <p>let's now rewrite the chunks2seq function</p>
+    <dsp-repl rows="15">
+      <!-- 
+const seq = chunks2seq([
+  [4, 7], [8, 2,3], [4, 5], [8, 3,2],
+  [4, 0], [8, 0,3], [4, 7], [8, 5,3], 
+  [4, 2], [8, 2,3], [4, 5, 7],
+  [4, 3, 0], [2,0]
+])
+
+let osc1 = new TriOsc();
+let env = new AREnvelope();
+let dsp = (t) => {
+  const n = seq.update(t,.5)
+  const freq = midi2freq(n+57)
+  return osc1.update(freq) * env.update(seq.trigger(), .01, .2)
+}
+      -->
+    </dsp-repl>
+    <details>
+      <summary>show modified chunks2seq</summary>
+      <script
+        type="text/javascript"
+        class="dsp-prelude"
+        id="prelude-chunks2seq"
+      >
+        let chunks2seq = (chunks) => {
+          let values = chunks.map((items) => items.slice(1)).flat();
+          let div = Math.max(...chunks.map((step) => step[0])); // max division
+          let tempos = chunks
+            .map(([tempo, ...steps]) => {
+              let len = Math.ceil((steps.length * div) / tempo);
+              return Array(len).fill(tempo);
+            })
+            .flat();
+
+          let valueSeq = sequence(values);
+          let tempoSeq = sequence(tempos);
+
+          return {
+            ...valueSeq,
+            update: (t, f = 1) => {
+              const tempo = tempoSeq.update(div * f);
+              return valueSeq.update(tempo * f);
+            },
+          };
+        };
+      </script>
+      <script>
+        codeblock(document.querySelector("#prelude-chunks2seq"), 8);
+      </script>
+    </details>
+    <p>
+      great! now we can sync envelopes and sequences. the fact that we use
+      triggers means we don't have any control over the envelope duration.
+    </p>
+    <h3>adsr with gates</h3>
+    <p>
+      while triggers only have a duration of a single sample, a gate can last as
+      long as we want. a simple way to get a gate is to invert the trigger. if
+      we have an envelope that supports a gate input, we can have sustained
+      notes:
+    </p>
+
+    <dsp-repl rows="15">
+      <!-- 
+const seq = chunks2seq([
+[4, 7], [8, 2,3], [4, 5], [8, 3,2],
+[4, 0], [8, 0,3], [4, 7], [8, 5,3], 
+[4, 2], [8, 2,3], [4, 5, 7],
+[4, 3, 0], [2,0]
+])
+
+let osc1 = new TriOsc();
+let env = new ADSREnvelope();
+let dsp = (t) => {
+const n = seq.update(t,.5)
+const freq = midi2freq(n+57)
+return osc1.update(freq) * env.update(t, seq.gate(), .01, .2, .4, .1)
+}
+  -->
+    </dsp-repl>
+    <details>
+      <summary>show ADSREnvelope source</summary>
+      <script type="text/javascript" class="dsp-prelude" id="prelude-adsr">
+        class ADSREnvelope {
+          constructor() {
+            this.state = "off";
+            this.dt = 1 / sampleRate;
+            this.phase = 0;
+            this.startValue = 0;
+          }
+          update(t, gate, attack, decay, sustain, release) {
+            switch (this.state) {
+              case "off": {
+                if (gate > 0) {
+                  this.state = "attack";
+                  this.startTime = t;
+                  this.startVal = 0;
+                }
+                return 0;
+              }
+
+              case "attack": {
+                let time = t - this.startTime;
+
+                if (time > attack) {
+                  this.state = "decay";
+                  this.startTime = t;
+                  return 1;
+                }
+                return lerp(time / attack, this.startVal, 1);
+              }
+
+              case "decay": {
+                let time = t - this.startTime;
+                let curVal = lerp(time / decay, 1, sustain);
+
+                if (gate <= 0) {
+                  this.state = "release";
+                  this.startTime = t;
+                  this.startVal = curVal;
+                  return curVal;
+                }
+
+                if (time > decay) {
+                  this.state = "sustain";
+                  this.startTime = t;
+                  return sustain;
+                }
+
+                return curVal;
+              }
+
+              case "sustain": {
+                if (gate <= 0) {
+                  this.state = "release";
+                  this.startTime = t;
+                  this.startVal = sustain;
+                }
+                return sustain;
+              }
+
+              case "release": {
+                let time = t - this.startTime;
+                if (time > release) {
+                  this.state = "off";
+                  return 0;
+                }
+
+                let curVal = lerp(time / release, this.startVal, 0);
+                if (gate > 0) {
+                  this.state = "attack";
+                  this.startTime = t;
+                  this.startVal = curVal;
+                }
+                return curVal;
+              }
+            }
+          }
+        }
+      </script>
+      <script>
+        codeblock(document.querySelector("#prelude-adsr"), 6);
+      </script>
+    </details>
+
+    <p>that's it for today!</p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
