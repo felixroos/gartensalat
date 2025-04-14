@@ -66,10 +66,6 @@
           .join("\n");
       }
     </script>
-  </head>
-  <body>
-    <h2>🌱 envelopes</h2>
-    <p>...</p>
 
     <script>
       const ctx = new AudioContext();
@@ -79,10 +75,10 @@
         document.removeEventListener("click", firstClick);
       });
 
-      const lerp = (v, min, max) => v * (max - min) + min;
+      const _lerp = (v, min, max) => v * (max - min) + min;
       const invLerp = (v, min, max) => (v - min) / (max - min);
       const remap = (v, vmin, vmax, omin, omax) =>
-        lerp(invLerp(v, vmin, vmax), omin, omax);
+        _lerp(invLerp(v, vmin, vmax), omin, omax);
 
       class DSPRepl extends HTMLElement {
         static observedAttributes = ["code", "rows"];
@@ -100,11 +96,11 @@
           this.insertAdjacentHTML(
             "beforeend",
             `<div style="border:2px solid #222;padding:0;">
-                <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
-                <canvas height="60"></canvas>
-                <a class="play">play</a> | <a class="stop">stop</a>
-                </div>
-                  `
+            <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
+            <canvas height="60"></canvas>
+            <a class="play">play</a> | <a class="stop">stop</a>
+            </div>
+              `
           );
           // draw logic
           this.canvas = this.querySelector("canvas");
@@ -157,33 +153,33 @@
               prelude += script.textContent;
             });
           const workletCode = `${prelude}
-      // start of user code
-      ${code}
-      // end of user code, I hope you have define an dsp function..
-            class MyProcessor extends AudioWorkletProcessor {
-              constructor() {
-                super();
-                this.t = 0;
-                this.active = true;
-                this.framebuffer = new Float32Array(Math.floor(sampleRate/30));
-                this.port.onmessage = (e) => e.data === "stop" && (this.active = false)
-              }
-              process(inputs, outputs, parameters) {
-                const output = outputs[0];
-                for (let i = 0; i < output[0].length; i++) {
-                  let out = dsp(this.t/sampleRate)
-                  for (let c = 0; c < output.length; c++)
-                    output[c][i] = out;
-                  this.t++;
-                  this.framebuffer[this.t%this.framebuffer.length] = out;
-                  if(this.t % this.framebuffer.length === 0 && this.t > 0) {
-                    this.port.postMessage(this.framebuffer)
-                  }
-                }
-                return this.active;
+  // start of user code
+  ${code}
+  // end of user code, I hope you have define an dsp function..
+        class MyProcessor extends AudioWorkletProcessor {
+          constructor() {
+            super();
+            this.t = 0;
+            this.active = true;
+            this.framebuffer = new Float32Array(Math.floor(sampleRate/30));
+            this.port.onmessage = (e) => e.data === "stop" && (this.active = false)
+          }
+          process(inputs, outputs, parameters) {
+            const output = outputs[0];
+            for (let i = 0; i < output[0].length; i++) {
+              let out = dsp(this.t/sampleRate)
+              for (let c = 0; c < output.length; c++)
+                output[c][i] = out;
+              this.t++;
+              this.framebuffer[this.t%this.framebuffer.length] = out;
+              if(this.t % this.framebuffer.length === 0 && this.t > 0) {
+                this.port.postMessage(this.framebuffer)
               }
             }
-            registerProcessor('${name}', MyProcessor);`;
+            return this.active;
+          }
+        }
+        registerProcessor('${name}', MyProcessor);`;
           await ac.resume();
           const dataURL = `data:text/javascript;base64,${btoa(workletCode)}`;
           await ac.audioWorklet.addModule(dataURL);
@@ -313,50 +309,198 @@
         }
       }
     </script>
-    <!-- <script>
-      codeblock(document.querySelector(".dsp-prelude"), 6);
-    </script> -->
-    <dsp-repl rows="8"
+  </head>
+  <body>
+    <h2>🌱 envelopes</h2>
+    <p>
+      last time, we started <a href="/audio-dsp/sequences.html">sequencing</a>.
+      the result sounded a bit flat, because we are still missing envelopes.
+      envelopes can be used to shape the countour of a signal. to shape our
+      envelope we will extensively use the good old lerp function:
+    </p>
+    <script type="text/javascript" class="dsp-prelude" id="lerp">
+      let lerp = (v, min, max) => v * (max - min) + min;
+    </script>
+    <script>
+      codeblock(document.querySelector("#lerp"), 6);
+    </script>
+    <p>with it, we can build a simplistic envelope:</p>
+    <dsp-repl rows="2"
       ><!-- 
 let osc1 = new TriOsc();
-let rampup = (freq, t) => t*freq%1
-let dsp = (t) => osc1.update(240.1) * rampup(2, t)
+let dsp = (t) => osc1.update(240.1) * lerp((t*2)%1, 0, 1)
 --></dsp-repl
     >
     <p>
-      the rampup function creates an oscillator that rises from 0 to 1 at the
-      given frequency. it is basically a phasor without state / a (naive)
-      sawtooth wave between 0 and 1. similarly, we can crate a rampdown
-      function:
+      you could call this a looping attack envelope. try switching 0 and 1 to
+      get a decay..
     </p>
-
-    <dsp-repl rows="8"
-      ><!-- 
-let osc1 = new TriOsc();
-let rampup = (freq, t) => t*freq%1
-let rampdown = (freq, t) => 1-rampup(freq,t)
-let dsp = (t) => osc1.update(240.1) * rampdown(2, t)
---></dsp-repl
-    >
+    <h3>adsr</h3>
     <p>
-      now we have something that resembles what you'd call attack (rampup) and
-      decay (rampdown) in a synth. we can combine both ramps to create an
-      attack-decay envelope:
+      with this basic idea, we can create an ADSR envelope with a few
+      conditionals:
     </p>
-
-    <dsp-repl rows="12"
-      ><!-- 
-let osc1 = new TriOsc();
-let ad = (a,d,t) => {
-  let phase = t%(a+d);
-  if(phase<a) {
-    return phase/a;
+    <dsp-repl rows="20">
+      <!-- 
+function adsr(t, a = 0.001, d = 0.001, s = 1, h = 0.1, r = 0.001) {
+  let gain = 0;
+  if (t < a) {
+    gain = t / a;
+  } else if (t < a + d) {
+    gain = lerp((t - a) / d, 1, s);
+  } else if (t < a + d + h) {
+    gain = s;
+  } else if (t < a + d + h + r) {
+    gain = lerp((t - a - d - h) / r, s, 0);
   }
-  return 1-phase/(a+d)
+  return gain;
 }
-let dsp = (t) => osc1.update(240.1) * ad(.2,1,t)
---></dsp-repl
-    >
+
+let osc1 = new TriOsc();
+let dsp = (t) => osc1.update(240.1) 
+* adsr(t % 1, 0.1, 0.2, 0.5, 0.4, 0.2);
+//            ^att ^dec ^sus ^hold ^rel
+      -->
+    </dsp-repl>
+
+    <h3>linseg</h3>
+    <p>
+      instead of hard coding a/d/s/r, we can create any linear envelope by
+      combining a variable number of line segments:
+    </p>
+    <dsp-repl rows="24">
+      <!-- 
+function linseg(t, ...args) {
+  let [v, ...rest] = args;
+  let a = 0, s = t;
+  while (a < rest.length) {
+    const dur = rest[a];
+    const next = rest[a + 1];
+    if (s < dur) {
+      return lerp(s / dur, v, next);
+    }
+    s -= dur;
+    v = next;
+    a += 2;
+  }
+  return args[args.length - 1];
+}
+let adsr = (t, a = 0.001, d = 0.001, s = 1, h = 0.1, r = 0.001) => linseg(t%1, 0, a,1, d,s, h,s, r,0)
+
+let osc1 = new TriOsc();
+let dsp = (t) => osc1.update(240.1) 
+* adsr(t % 1, 0.1, 0.2, 0.5, 0.4, 0.2);
+//            ^att ^dec ^sus ^hold ^rel
+      -->
+    </dsp-repl>
+    <p>
+      we can now express adsr as a special case of linseg. this function is
+      inspired by csound.
+    </p>
+    <h3>triggering envelopes</h3>
+    <p>
+      the envelopes above are not very practical when we want to sequence them.
+      we might even want to control our synth live, so we won't know in advance
+      how long our note is sustained. the conventional way to approach this is
+      using triggers and gates. here's a simple trigger generator:
+    </p>
+
+    <script type="text/javascript" class="dsp-prelude" id="impulse">
+      class ImpulseOsc {
+        constructor() {
+          this.phase = 1;
+        }
+        update(freq) {
+          this.phase += freq / sampleRate;
+          let v = this.phase >= 1 ? 1 : 0;
+          this.phase = this.phase % 1;
+          return v;
+        }
+      }
+    </script>
+    <script>
+      codeblock(document.querySelector("#impulse"), 6);
+    </script>
+    <p>example use:</p>
+    <dsp-repl rows="2">
+      <!-- 
+const trigger = new ImpulseOsc();
+let dsp = t => trigger.update(1)
+  -->
+    </dsp-repl>
+    <p>
+      on its own, it's not very exciting, but we can use it to trigger an
+      envelope like this:
+    </p>
+    <dsp-repl rows="6">
+      <!-- 
+let osc1 = new TriOsc();
+let env = new AREnvelope();
+let trigger = new ImpulseOsc()
+let dsp = (t) => osc1.update(240) 
+* env.update(trigger.update(2), .1, .2)
+//                              ^att ^dec
+      -->
+    </dsp-repl>
+    <p>the AREnvelope works like a state machine:</p>
+    <script type="text/javascript" class="dsp-prelude" id="ar-envelope">
+      class AREnvelope {
+        constructor() {
+          this.state = "off";
+          this.phase = 0;
+          this.dt = 1 / sampleRate;
+          this.startValue = 0;
+        }
+        update(gate, attack, decay = attack) {
+          let value;
+          switch (this.state) {
+            case "off":
+              // go to "attack" if gate is high
+              if (gate > 0) {
+                this.state = "attack";
+                this.phase = 0;
+                this.startValue = 0;
+              }
+              return 0;
+            case "attack":
+              // go to "release" if attack is finished
+              if (this.phase > attack) {
+                this.state = "release";
+                return 1;
+              }
+              // ramp from 0 to 1
+              value = lerp(this.phase / attack, this.startValue, 1);
+              this.phase += this.dt;
+              return value;
+            case "release":
+              // go to "off" if release is finished
+              if (this.phase > attack + decay) {
+                this.state = "off";
+                this.phase = 0;
+                return 0;
+              }
+              // ramp from 1 to 0
+              value = 1 - (this.phase - attack) / decay;
+              this.phase += this.dt;
+              if (gate > 0) {
+                this.state = "attack";
+                this.phase = 0;
+                this.startValue = value;
+              }
+              return value;
+          }
+        }
+      }
+    </script>
+    <script>
+      codeblock(document.querySelector("#ar-envelope"), 6);
+    </script>
+    <p>
+      while this contains a bit more logic compared to our previous adsr, it's
+      more dynamic. we could now play this live if we had implemented any MIDI
+      communication going.
+    </p>
+    <p>in the next post, we will combine envelopes and sequences</p>
 
     <details>
       <summary id="loc">show page source</summary>
