@@ -438,10 +438,14 @@ let osc1 = new TriOsc();
 let env = new AREnvelope();
 let trigger = new ImpulseOsc()
 let dsp = (t) => osc1.update(240) 
-* env.update(trigger.update(2), .1, .2)
-//                              ^att ^dec
+* env.update(trigger.update( t%4 +1 ), .1, .2)
+//                           ^freq     ^att ^dec
       -->
     </dsp-repl>
+    <p>
+      i've used a rising frequency of the trigger to showcase that the envelope
+      adapts dynamically to the trigger.
+    </p>
     <p>the AREnvelope works like a state machine:</p>
     <script type="text/javascript" class="dsp-prelude" id="ar-envelope">
       class AREnvelope {
