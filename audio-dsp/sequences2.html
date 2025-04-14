@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🌱 sequences & envelopes</title>
+    <title>🌱 sequences II: envelope sync</title>
     <style>
       body {
         background-color: #222;
@@ -372,7 +372,7 @@
     </script>
   </head>
   <body>
-    <h2>🌱 sequences & envelopes</h2>
+    <h2>🌱 sequences II: envelope sync</h2>
     <p>
       after looking at <a href="/audio-dsp/sequences.html">sequences</a> and
       <a href="/audio-dsp/envelopes.html">envelopes</a>, it's time to fuse them.
@@ -519,92 +519,94 @@ return osc1.update(freq) * env.update(t, seq.gate(), .01, .2, .4, .1)
 }
   -->
     </dsp-repl>
-    <details>
-      <summary>show ADSREnvelope source</summary>
-      <script type="text/javascript" class="dsp-prelude" id="prelude-adsr">
-        class ADSREnvelope {
-          constructor() {
-            this.state = "off";
-            this.dt = 1 / sampleRate;
-            this.phase = 0;
-            this.startValue = 0;
-          }
-          update(t, gate, attack, decay, sustain, release) {
-            switch (this.state) {
-              case "off": {
-                if (gate > 0) {
-                  this.state = "attack";
-                  this.startTime = t;
-                  this.startVal = 0;
-                }
-                return 0;
+    <p>
+      here's the source for ADSREnvelope, which is largely based on the one from
+      <a href="https://noisecraft.app/" target="_blank" style="color: yellow"
+        >noisecraft</a
+      >:
+    </p>
+    <script type="text/javascript" class="dsp-prelude" id="prelude-adsr">
+      class ADSREnvelope {
+        constructor() {
+          this.state = "off";
+          this.dt = 1 / sampleRate;
+          this.phase = 0;
+          this.startValue = 0;
+        }
+        update(t, gate, attack, decay, sustain, release) {
+          switch (this.state) {
+            case "off": {
+              if (gate > 0) {
+                this.state = "attack";
+                this.startTime = t;
+                this.startVal = 0;
               }
+              return 0;
+            }
 
-              case "attack": {
-                let time = t - this.startTime;
+            case "attack": {
+              let time = t - this.startTime;
 
-                if (time > attack) {
-                  this.state = "decay";
-                  this.startTime = t;
-                  return 1;
-                }
-                return lerp(time / attack, this.startVal, 1);
+              if (time > attack) {
+                this.state = "decay";
+                this.startTime = t;
+                return 1;
               }
+              return lerp(time / attack, this.startVal, 1);
+            }
 
-              case "decay": {
-                let time = t - this.startTime;
-                let curVal = lerp(time / decay, 1, sustain);
+            case "decay": {
+              let time = t - this.startTime;
+              let curVal = lerp(time / decay, 1, sustain);
 
-                if (gate <= 0) {
-                  this.state = "release";
-                  this.startTime = t;
-                  this.startVal = curVal;
-                  return curVal;
-                }
-
-                if (time > decay) {
-                  this.state = "sustain";
-                  this.startTime = t;
-                  return sustain;
-                }
-
+              if (gate <= 0) {
+                this.state = "release";
+                this.startTime = t;
+                this.startVal = curVal;
                 return curVal;
               }
 
-              case "sustain": {
-                if (gate <= 0) {
-                  this.state = "release";
-                  this.startTime = t;
-                  this.startVal = sustain;
-                }
+              if (time > decay) {
+                this.state = "sustain";
+                this.startTime = t;
                 return sustain;
               }
 
-              case "release": {
-                let time = t - this.startTime;
-                if (time > release) {
-                  this.state = "off";
-                  return 0;
-                }
+              return curVal;
+            }
 
-                let curVal = lerp(time / release, this.startVal, 0);
-                if (gate > 0) {
-                  this.state = "attack";
-                  this.startTime = t;
-                  this.startVal = curVal;
-                }
-                return curVal;
+            case "sustain": {
+              if (gate <= 0) {
+                this.state = "release";
+                this.startTime = t;
+                this.startVal = sustain;
               }
+              return sustain;
+            }
+
+            case "release": {
+              let time = t - this.startTime;
+              if (time > release) {
+                this.state = "off";
+                return 0;
+              }
+
+              let curVal = lerp(time / release, this.startVal, 0);
+              if (gate > 0) {
+                this.state = "attack";
+                this.startTime = t;
+                this.startVal = curVal;
+              }
+              return curVal;
             }
           }
         }
-      </script>
-      <script>
-        codeblock(document.querySelector("#prelude-adsr"), 6);
-      </script>
-    </details>
+      }
+    </script>
+    <script>
+      codeblock(document.querySelector("#prelude-adsr"), 6);
+    </script>
 
-    <p>that's it for today!</p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
