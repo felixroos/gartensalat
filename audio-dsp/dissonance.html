@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🌱 dissonance curves</title>
+    <title>🌱 dissonance</title>
     <style>
       body {
         background-color: #222;
@@ -50,6 +50,7 @@
         background-color: #44444490;
       }
     </style>
+    <!-- codeblock -->
     <script>
       // render codeblock from script tag
       let codeblock = (scriptElement, indent = 0) => {
@@ -66,11 +67,7 @@
           .join("\n");
       }
     </script>
-  </head>
-  <body>
-    <h2>🌱 dissonance curves</h2>
-    <p>...</p>
-
+    <!-- dsp-repl -->
     <script>
       const ctx = new AudioContext();
       // init audio context
@@ -237,7 +234,19 @@
       }
       customElements.define("dsp-repl", DSPRepl);
     </script>
-
+    <script type="text/javascript" class="dsp-prelude">
+      // https://garten.salat.dev/audio-dsp/oscillators.html
+      class SineOsc {
+        constructor() {
+          this.phase = 0;
+        }
+        update(freq) {
+          this.phase = (this.phase + freq / sampleRate) % 1;
+          return Math.sin(this.phase * 2 * Math.PI);
+        }
+      }
+    </script>
+    <!-- canvas-garden -->
     <script>
       class CanvasGarden extends HTMLElement {
         static observedAttributes = ["code", "rows", "width", "height"];
@@ -332,7 +341,7 @@ typeof draw !== 'undefined' && self.draw(draw);`;
       }
       customElements.define("canvas-garden", CanvasGarden);
     </script>
-
+    <!-- plot -->
     <script>
       function plot(
         fn,
@@ -363,43 +372,179 @@ typeof draw !== 'undefined' && self.draw(draw);`;
         }
         ctx.stroke();
       }
+      let line = (ctx, x0, y0, x1, y1) => {
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+      };
       window.plot = plot;
     </script>
-    <canvas-garden rows="16">
+  </head>
+  <body>
+    <h2>🌱 dissonance</h2>
+    <p>
+      what is musical dissonance? whats makes a particular combination of notes
+      sound better than another? there's an exciting theory called "spectral
+      interference", which explains dissonance as a function of spectrum. i've
+      first found out about this on the
+      <a
+        href="https://www.youtube.com/@new_tonality"
+        target="_blank"
+        style="color: yellow"
+        >new tonality channel on youtube</a
+      >. you can find all the details in
+      <a
+        href="https://sethares.engr.wisc.edu/paperspdf/consonance.pdf"
+        target="_blank"
+        style="color: yellow"
+        >this paper</a
+      >.
+    </p>
+    <h3>roughness curve</h3>
+    <p>
+      the core of the theory is built on the phenomenon of beating, which occurs
+      when 2 sine waves with a similar frequency are played at the same time:
+    </p>
+    <dsp-repl rows="3"
+      ><!-- 
+let osc1 = new SineOsc()
+let osc2 = new SineOsc()
+let dsp = (t) => ( osc1.update(240) + osc2.update(244) )/4
+--></dsp-repl
+    >
+
+    <p>
+      instead of hearing 2 individual pitches, we can only hear a single pitch
+      with a "beating" amplitude. the difference of the 2 frequencies controls
+      the frequency of this amplitude modulation, for example, 240 and 244 will
+      beat at 4Hz.
+    </p>
+    <p>
+      the faster the beating, the "rougher" the sound will be, as very fast
+      beating is more unpleasant. at some point, we can recognize the 2
+      frequencies as 2 individual pitches, and the sound will gradually become
+      smoother again. we can describe the roughness of 2 frequencies f1 and f2
+      as:
+    </p>
+    <script>
+      let roughness = (f1, f2, a = 3.5, b = 5.75) => {
+        const deltaF = Math.abs(f2 - f1);
+        return Math.exp(-a * deltaF) - Math.exp(-b * deltaF);
+      };
+      codeblock(document.currentScript, 6);
+    </script>
+    <canvas-garden rows="4" height="200">
       <!--
-let dissonance = (f1, f2, a = 3.5, b = 5.75) => {
-  const deltaF = Math.abs(f2 - f1);
-  return Math.exp(-a * deltaF) - Math.exp(-b * deltaF);
-}
-
-let harmonicity = (spectrum, base, ratio) => {
-  let sum = 0;
-  for (let i = 0; i < spectrum.length; i++) {
-    for (let j = 0; j < spectrum.length; j++) {
-      const f1 = spectrum[i]*base;
-      const f2 = spectrum[j]*base*ratio;
-      const dis = dissonance(f1,f2,.1,.2);
-      sum+=dis
-    }
-  }
-  return sum
-};
-
-let spectrum = [1,2,3,4,5,6];
-console.log(harmonicity(spectrum, 440, 1));
-
 c.width = 800;
-plot(
-  (x) => {
-    return harmonicity(spectrum, 60, x);
-  },
-  ctx,
-  [1, 2], // xrange
-  [0, 1.5]
-);
-
+let fn = x => roughness(1, x)
+plot(fn, ctx, [1, 3], [0, .2]);
+//            ^xrange ^yrange
+-->
+    </canvas-garden>
+    <p>
+      in the above graph, we're plotting the roughness from 2 frequencies where
+      one is static and the other rises.
+    </p>
+    <h3>dissonance curve</h3>
+    <p>
+      most pitches we hear are not simple sine waves, but rather a whole
+      "spectrum" of partials. as we've seen earlier in
+      <a href="/audio-dsp/fourier.html">the fourier series</a>, we can describe
+      a spectrum (or timbre) as a sum of sine waves. the spectral interference
+      theory describes the dissonance of 2 pitches as the sum of all roughness
+      values for of all possible pairs of partials:
+    </p>
+    <script>
+      let dissonance = (spectrum, base, ratio) => {
+        let sum = 0;
+        for (let i = 0; i < spectrum.length; i++) {
+          for (let j = 0; j < spectrum.length; j++) {
+            const f1 = spectrum[i] * base;
+            const f2 = spectrum[j] * base * ratio;
+            const dis = roughness(f1, f2, 0.1, 0.2);
+            sum += dis;
+          }
+        }
+        return sum;
+      };
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>
+      here's the dissonance curve of the first 6 partials of the harmonic
+      series:
+    </p>
+    <canvas-garden rows="6">
+      <!--
+c.width = 800;
+let spectrum = [1,2,3,4,5,6];
+let fn = (x) => dissonance(spectrum, 60, x)
+let xrange = [1, 2], yrange = [0, 1.5];
+plot(fn, ctx, xrange, yrange)
   -->
     </canvas-garden>
+    <p>we can see some clear peaks that seem to be particularly consonant!</p>
+    <h3>finding the minima</h3>
+    <p>
+      we can get list of these most consonant values by finding the local minima
+      of the dissonance curve:
+    </p>
+    <canvas-garden rows="16">
+      <!--
+c.width = 800;
+let spectrum = [1,2,3,4,5,6];
+let xrange = [.99,2.01], yrange = [0, 1.5];
+let fn = (x) => dissonance(spectrum, 60, x);
+plot(fn, ctx, xrange, yrange);
+
+let minima = localMinima(fn, xrange, ctx.canvas.width);
+console.log(minima.map(m => `${m.x.toFixed(2)}: ${m.y.toFixed(2)}`))
+
+ctx.strokeStyle = 'cyan'
+let [x0,x1] = xrange;
+let [y0,y1] = yrange;
+minima.forEach((min) => {
+  let px = remap(min.x, x0, x1, 0, c.width);
+  let py = remap(min.y, y0, y1, c.height, 0);
+  line(ctx, px, py, px, c.height)
+})
+  -->
+    </canvas-garden>
+    <details>
+      <summary>show localMinima source</summary>
+      <script>
+        let localMinima = (fn, xrange, samples) => {
+          let last,
+            diff = 0,
+            minima = [];
+          let dx = xrange[1] - xrange[0];
+          for (let i = 0; i < samples; i++) {
+            let x = remap(i, 0, samples, xrange[0], xrange[1]);
+            let y = fn(x);
+            if (last) {
+              let dir = Math.sign(diff);
+              if (dir < 0 && Math.sign(y - last.y) !== dir) {
+                minima.push(last);
+              }
+              diff = y - last.y;
+            }
+            last = { x, y };
+          }
+          return minima.sort((a, b) => a.y - b.y);
+        };
+        codeblock(document.currentScript, 6);
+      </script>
+    </details>
+    <p>this is the list:</p>
+    <ul>
+      <li>2:1: octave (8)</li>
+      <li>1:1: unison (1)</li>
+      <li>3:2: fifth (5)</li>
+      <li>5:3: sixth (6)</li>
+      <li>4:3: fourth (4)</li>
+      <li>5:4: major third (3)</li>
+      <li>6:5: minor third (b3)</li>
+    </ul>
     <script type="text/javascript" class="dsp-prelude">
       class HarmonicOsc {
         constructor(amplitudes, phase = 0) {
@@ -432,15 +577,6 @@ plot(
         return amps;
       };
     </script>
-    <dsp-repl rows="8"
-      ><!-- 
-// populate first 64 partial amplitudes for a sawtooth wave
-let saw = harmonics(64, n => -2/(n*PI))
-let osc1 = new HarmonicOsc(saw)
-let dsp = (t) => osc1.update(60.1, (sin(t*1)+1)/2*64 )/2
-//                                 ^ modulate maxPartials
---></dsp-repl
-    >
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
