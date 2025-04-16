@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🌱 dissonance</title>
+    <title>🌱 a theory of dissonance</title>
     <style>
       body {
         background-color: #222;
@@ -384,7 +384,7 @@ typeof draw !== 'undefined' && self.draw(draw);`;
     </script>
   </head>
   <body>
-    <h2>🌱 dissonance</h2>
+    <h2>🌱 a theory of dissonance</h2>
     <p>
       what is musical dissonance? whats makes a particular combination of notes
       sound better than another? there's an exciting theory called "spectral
@@ -471,14 +471,28 @@ plot(fn, ctx, xrange, yrange);
     </script>
 
     <p>
-      drag the slider to hear the ratio! we can describe the roughness of 2
-      frequencies f1 and f2 as:
+      drag the slider to hear the ratio! according to the paper, this roughness
+      curve can be calculated based on the 2 frequencies and their amplitudes:
     </p>
 
-    <script>
+    <!-- <script>
+      // simplistic version
       let roughness = (f1, f2, a = 3.5, b = 5.75) => {
         const df = Math.abs(f2 - f1) / Math.min(f1, f2);
         return Math.exp(-a * df) - Math.exp(-b * df);
+      };
+    </script> -->
+    <script>
+      let roughness = (f1, f2, v1 = 1, v2 = 1) => {
+        let v12 = Math.min(v1, v2),
+          dstar = 0.24,
+          s1 = 0.021,
+          s2 = 19,
+          a = 3.5,
+          b = 5.75,
+          s = dstar / (s1 * f1 + s2),
+          df = Math.abs(f2 - f1);
+        return v12 * (Math.exp(-a * s * df) - Math.exp(-b * s * df));
       };
       codeblock(document.currentScript, 6);
     </script>
@@ -492,13 +506,13 @@ plot(fn, ctx, xrange, yrange);
       values for of all possible pairs of partials:
     </p>
     <script>
-      let dissonance = (spectrum, base, ratio, a = 3.5, b = 5.75) => {
+      let dissonance = (spectrum, amps, base, ratio) => {
         let sum = 0;
         for (let i = 0; i < spectrum.length; i++) {
           for (let j = 0; j < spectrum.length; j++) {
             const f1 = spectrum[i] * base;
             const f2 = spectrum[j] * base * ratio;
-            const dis = roughness(f1, f2, a, b);
+            const dis = roughness(f1, f2, amps[i], amps[j]);
             sum += dis;
           }
         }
@@ -514,8 +528,9 @@ plot(fn, ctx, xrange, yrange);
       <!--
 c.width = 800;
 let spectrum = [1,2,3,4,5,6];
-let fn = (x) => dissonance(spectrum, 60, x, 10, 300)
-let xrange = [1, 2], yrange = [0, 6];
+let saw6 = harmonics(6, n => 1/n)
+let fn = (x) => dissonance(spectrum, saw6, 240, x)
+let xrange = [1, 2], yrange = [0, .5];
 plot(fn, ctx, xrange, yrange)
   -->
     </canvas-garden>
@@ -524,7 +539,7 @@ plot(fn, ctx, xrange, yrange)
     <dsp-repl rows="5" id="dissonance-repl"
       ><!-- 
 let base = 240, ratio = 1;
-let saw6 = harmonics(6, n => -2/(n*PI))
+let saw6 = harmonics(6, n => 1/n)
 let o1 = new HarmonicOsc(saw6), o2 = new HarmonicOsc(saw6)
 let dsp = (t) => ( o1.update(base) + o2.update(base*ratio) )/4
 onmessage = v => (ratio = v) // for slider further down
@@ -561,8 +576,9 @@ onmessage = v => (ratio = v) // for slider further down
       <!--
 c.width = 800;
 let spectrum = [1,2,3,4,5,6];
-let xrange = [.99,2.01], yrange = [0, 6];
-let fn = (x) => dissonance(spectrum, 60, x, 10, 300);
+let xrange = [.99,2.01], yrange = [0, .5];
+let saw6 = harmonics(6, n => 1/n)
+let fn = (x) => dissonance(spectrum, saw6, 240, x);
 plot(fn, ctx, xrange, yrange);
 
 let minima = localMinima(fn, xrange, ctx.canvas.width);
@@ -605,14 +621,23 @@ minima.forEach((min) => {
     </details>
     <p>this is the list:</p>
     <ul>
-      <li>2:1: octave (8)</li>
       <li>1:1: unison (1)</li>
+      <li>6:5: minor third (b3)</li>
+      <li>5:4: major third (3)</li>
+      <li>4:3: fourth (4)</li>
       <li>3:2: fifth (5)</li>
       <li>5:3: sixth (6)</li>
-      <li>4:3: fourth (4)</li>
-      <li>5:4: major third (3)</li>
-      <li>6:5: minor third (b3)</li>
+      <li>2:1: octave (8)</li>
     </ul>
+    <p>
+      these intervals are all in just intonation, using whole number ratios. at
+      these points, the spectrum overlaps in a way that minimizes roughness
+      between individual partials. this is not surprising, beacuse we are using
+      the harmonic spectrum, which also consists of whole number multiples. the
+      interesting bit about this theory is that we can change the spectrum to
+      get different minima. we can even leave the realm of the harmonic spectrum
+      and explore stranger worlds...
+    </p>
     <script type="text/javascript" class="dsp-prelude">
       class HarmonicOsc {
         constructor(amplitudes, phase = 0) {
