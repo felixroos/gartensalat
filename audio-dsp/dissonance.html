@@ -410,10 +410,10 @@ typeof draw !== 'undefined' && self.draw(draw);`;
     </p>
     <dsp-repl rows="5" id="roughness-repl"
       ><!-- 
-let base = 240, ratio = 1.0125;
+let f1 = 240, f2 = 243;
 let o1 = new SineOsc(), o2 = new SineOsc()
-let dsp = (t) => ( o1.update(base) + o2.update(base*ratio) )/4
-onmessage = v => (ratio = v) // for slider further down
+let dsp = (t) => ( o1.update(f1) + o2.update(f2) )/4
+onmessage = ratio => (f2 = f1*ratio) // for slider further down
 --></dsp-repl
     >
     <p>
@@ -432,9 +432,9 @@ onmessage = v => (ratio = v) // for slider further down
     <canvas-garden rows="4" height="200" id="roughness-curve">
       <!--
 c.width = 800;
-let fn = x => roughness(1, x)
-plot(fn, ctx, [1, 3], [0, .2]);
-//            ^xrange ^yrange
+let xrange = [1, 3], yrange = [0, .3];
+let fn = x => roughness(240, 240*x)
+plot(fn, ctx, xrange, yrange);
 -->
     </canvas-garden>
     <input type="range" id="roughness-slider" style="width: 100%" step="0.1" />
@@ -457,7 +457,7 @@ plot(fn, ctx, [1, 3], [0, .2]);
         const { canvas, ctx } = roughnessCurve;
         const value = Number(roughnessSlider.value) / 100;
         const x = lerp(value, 0, canvas.width);
-        const ratio = lerp(value, 1, 3);
+        const ratio = lerp(value, 1, 3); // <- make sure this matches with canvas-garden above
         roughnessCurve.update();
         roughnessRepl.send(ratio);
         line(ctx, x, 0, x, canvas.height);
@@ -477,8 +477,8 @@ plot(fn, ctx, [1, 3], [0, .2]);
 
     <script>
       let roughness = (f1, f2, a = 3.5, b = 5.75) => {
-        const deltaF = Math.abs(f2 - f1);
-        return Math.exp(-a * deltaF) - Math.exp(-b * deltaF);
+        const df = Math.abs(f2 - f1) / Math.min(f1, f2);
+        return Math.exp(-a * df) - Math.exp(-b * df);
       };
       codeblock(document.currentScript, 6);
     </script>
@@ -492,13 +492,13 @@ plot(fn, ctx, [1, 3], [0, .2]);
       values for of all possible pairs of partials:
     </p>
     <script>
-      let dissonance = (spectrum, base, ratio) => {
+      let dissonance = (spectrum, base, ratio, a = 3.5, b = 5.75) => {
         let sum = 0;
         for (let i = 0; i < spectrum.length; i++) {
           for (let j = 0; j < spectrum.length; j++) {
             const f1 = spectrum[i] * base;
             const f2 = spectrum[j] * base * ratio;
-            const dis = roughness(f1, f2, 0.1, 0.2);
+            const dis = roughness(f1, f2, a, b);
             sum += dis;
           }
         }
@@ -514,8 +514,8 @@ plot(fn, ctx, [1, 3], [0, .2]);
       <!--
 c.width = 800;
 let spectrum = [1,2,3,4,5,6];
-let fn = (x) => dissonance(spectrum, 60, x)
-let xrange = [1, 2], yrange = [0, 1.5];
+let fn = (x) => dissonance(spectrum, 60, x, 10, 300)
+let xrange = [1, 2], yrange = [0, 6];
 plot(fn, ctx, xrange, yrange)
   -->
     </canvas-garden>
@@ -561,8 +561,8 @@ onmessage = v => (ratio = v) // for slider further down
       <!--
 c.width = 800;
 let spectrum = [1,2,3,4,5,6];
-let xrange = [.99,2.01], yrange = [0, 1.5];
-let fn = (x) => dissonance(spectrum, 60, x);
+let xrange = [.99,2.01], yrange = [0, 6];
+let fn = (x) => dissonance(spectrum, 60, x, 10, 300);
 plot(fn, ctx, xrange, yrange);
 
 let minima = localMinima(fn, xrange, ctx.canvas.width);
