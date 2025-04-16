@@ -143,11 +143,13 @@
           this.worklet?.disconnect();
           this.worklet?.port.postMessage("stop");
         }
-
+        send(data) {
+          this.worklet?.port.postMessage(data);
+        }
         async runWorklet(ac, code) {
           const name = `worklet-${Date.now()}`;
           const math = Object.getOwnPropertyNames(Math).join(",");
-          let prelude = `const {${math}} = Math;\n`;
+          let prelude = `const {${math}} = Math;\nlet onmessage = () => {};\n`;
           const dspScripts = document
             .querySelectorAll("script.dsp-prelude")
             .forEach((script) => {
@@ -163,7 +165,7 @@
                 this.t = 0;
                 this.active = true;
                 this.framebuffer = new Float32Array(Math.floor(sampleRate/30));
-                this.port.onmessage = (e) => e.data === "stop" && (this.active = false)
+                this.port.onmessage = (e) => e.data === "stop" ? (this.active = false) : onmessage?.(e.data)
               }
               process(inputs, outputs, parameters) {
                 const output = outputs[0];
@@ -406,35 +408,28 @@ typeof draw !== 'undefined' && self.draw(draw);`;
       the core of the theory is built on the phenomenon of beating, which occurs
       when 2 sine waves with a similar frequency are played at the same time:
     </p>
-    <dsp-repl rows="3"
+    <dsp-repl rows="5" id="roughness-repl"
       ><!-- 
-let osc1 = new SineOsc()
-let osc2 = new SineOsc()
-let dsp = (t) => ( osc1.update(240) + osc2.update(244) )/4
+let base = 240, ratio = 1.0125;
+let o1 = new SineOsc(), o2 = new SineOsc()
+let dsp = (t) => ( o1.update(base) + o2.update(base*ratio) )/4
+onmessage = v => (ratio = v) // for slider further down
 --></dsp-repl
     >
-
     <p>
       instead of hearing 2 individual pitches, we can only hear a single pitch
       with a "beating" amplitude. the difference of the 2 frequencies controls
-      the frequency of this amplitude modulation, for example, 240 and 244 will
-      beat at 4Hz.
+      the frequency of this amplitude modulation, for example, 240 and 243 will
+      beat at 3Hz.
     </p>
     <p>
       the faster the beating, the "rougher" the sound will be, as very fast
       beating is more unpleasant. at some point, we can recognize the 2
       frequencies as 2 individual pitches, and the sound will gradually become
-      smoother again. we can describe the roughness of 2 frequencies f1 and f2
-      as:
+      smoother again. we can plot this roughness against the frequency ratio
+      like this:
     </p>
-    <script>
-      let roughness = (f1, f2, a = 3.5, b = 5.75) => {
-        const deltaF = Math.abs(f2 - f1);
-        return Math.exp(-a * deltaF) - Math.exp(-b * deltaF);
-      };
-      codeblock(document.currentScript, 6);
-    </script>
-    <canvas-garden rows="4" height="200">
+    <canvas-garden rows="4" height="200" id="roughness-curve">
       <!--
 c.width = 800;
 let fn = x => roughness(1, x)
@@ -442,10 +437,51 @@ plot(fn, ctx, [1, 3], [0, .2]);
 //            ^xrange ^yrange
 -->
     </canvas-garden>
+    <input type="range" id="roughness-slider" style="width: 100%" step="0.1" />
+    <script>
+      let slider = (el, onDragStart, onDragEnd, onInput) => {
+        let isDragging = false;
+        el.addEventListener("input", (e) => onInput());
+        el.addEventListener("mousedown", (e) => {
+          onDragStart();
+          isDragging = true;
+        });
+        document.addEventListener("mouseup", (e) => isDragging && onDragEnd());
+      };
+    </script>
+    <script>
+      const roughnessRepl = document.getElementById("roughness-repl");
+      const roughnessSlider = document.getElementById("roughness-slider");
+      const roughnessCurve = document.getElementById("roughness-curve");
+      let updateRoughness = () => {
+        const { canvas, ctx } = roughnessCurve;
+        const value = Number(roughnessSlider.value) / 100;
+        const x = lerp(value, 0, canvas.width);
+        const ratio = lerp(value, 1, 3);
+        roughnessCurve.update();
+        roughnessRepl.send(ratio);
+        line(ctx, x, 0, x, canvas.height);
+      };
+      slider(
+        roughnessSlider,
+        () => roughnessRepl.play(),
+        () => roughnessRepl.stop(),
+        updateRoughness
+      );
+    </script>
+
     <p>
-      in the above graph, we're plotting the roughness from 2 frequencies where
-      one is static and the other rises.
+      drag the slider to hear the ratio! we can describe the roughness of 2
+      frequencies f1 and f2 as:
     </p>
+
+    <script>
+      let roughness = (f1, f2, a = 3.5, b = 5.75) => {
+        const deltaF = Math.abs(f2 - f1);
+        return Math.exp(-a * deltaF) - Math.exp(-b * deltaF);
+      };
+      codeblock(document.currentScript, 6);
+    </script>
     <h3>dissonance curve</h3>
     <p>
       most pitches we hear are not simple sine waves, but rather a whole
@@ -474,7 +510,7 @@ plot(fn, ctx, [1, 3], [0, .2]);
       here's the dissonance curve of the first 6 partials of the harmonic
       series:
     </p>
-    <canvas-garden rows="6">
+    <canvas-garden rows="6" id="dissonance-curve">
       <!--
 c.width = 800;
 let spectrum = [1,2,3,4,5,6];
@@ -483,7 +519,39 @@ let xrange = [1, 2], yrange = [0, 1.5];
 plot(fn, ctx, xrange, yrange)
   -->
     </canvas-garden>
+    <input type="range" id="dissonance-slider" style="width: 100%" step="0.1" />
     <p>we can see some clear peaks that seem to be particularly consonant!</p>
+    <dsp-repl rows="5" id="dissonance-repl"
+      ><!-- 
+let base = 240, ratio = 1;
+let saw6 = harmonics(6, n => -2/(n*PI))
+let o1 = new HarmonicOsc(saw6), o2 = new HarmonicOsc(saw6)
+let dsp = (t) => ( o1.update(base) + o2.update(base*ratio) )/4
+onmessage = v => (ratio = v) // for slider further down
+--></dsp-repl
+    >
+    <script>
+      const dissonanceRepl = document.getElementById("dissonance-repl");
+      const dissonanceSlider = document.getElementById("dissonance-slider");
+      const dissonanceCurve = document.getElementById("dissonance-curve");
+
+      let updateDissonance = () => {
+        const { canvas, ctx } = dissonanceCurve;
+        const value = Number(dissonanceSlider.value) / 100;
+        const x = lerp(value, 0, canvas.width);
+        const ratio = lerp(value, 1, 2);
+        dissonanceCurve.update();
+        dissonanceRepl.send(ratio);
+        line(ctx, x, 0, x, canvas.height);
+      };
+      slider(
+        dissonanceSlider,
+        () => dissonanceRepl.play(),
+        () => dissonanceRepl.stop(),
+        updateDissonance
+      );
+    </script>
+
     <h3>finding the minima</h3>
     <p>
       we can get list of these most consonant values by finding the local minima
