@@ -247,6 +247,36 @@
           return Math.sin(this.phase * 2 * Math.PI);
         }
       }
+      class HarmonicOsc {
+        constructor(amplitudes, phase = 0) {
+          this.amplitudes = amplitudes;
+          this.phases = new Array(amplitudes.length).fill(phase);
+          this.nyquist = sampleRate / 2;
+        }
+        update(freq, maxPartials = this.amplitudes.length, a0 = 0) {
+          let max = Math.floor((this.nyquist / freq + 1) / 2);
+          let amps = this.amplitudes.length;
+          let partials = Math.min(max, amps);
+          let sum = a0;
+          for (let i = 0; i < partials; i++) {
+            let harmonic = i + 1;
+            let dt = (harmonic * freq) / sampleRate;
+            this.phases[i] = (this.phases[i] + dt) % 1;
+            if (i <= maxPartials) {
+              const phase = this.phases[i] * 2 * Math.PI;
+              sum += Math.sin(phase) * this.amplitudes[i];
+            }
+          }
+          return sum;
+        }
+      }
+      let harmonics = (n, fn) => {
+        let amps = new Array(n).fill(0);
+        for (let i = 0; i < n; i++) {
+          amps[i] = fn(i + 1);
+        }
+        return amps;
+      };
     </script>
     <!-- canvas-garden -->
     <script>
@@ -379,6 +409,13 @@ typeof draw !== 'undefined' && self.draw(draw);`;
         ctx.moveTo(x0, y0);
         ctx.lineTo(x1, y1);
         ctx.stroke();
+      };
+      let drawSpectrum = (ctx, spectrum, amps, xrange, yrange) => {
+        spectrum.forEach((ratio, i) => {
+          const x = remap(ratio, xrange[0], xrange[1], 0, ctx.canvas.width);
+          //line(ctx, x, yrange[0], x, yrange[1]);
+          line(ctx, x, yrange[0], x, lerp(amps[i], yrange[0], yrange[1]));
+        });
       };
       window.plot = plot;
     </script>
@@ -540,7 +577,12 @@ plot(fn, ctx, xrange, yrange)
   -->
     </canvas-garden>
     <input type="range" id="dissonance-slider" style="width: 100%" step="0.1" />
-    <p>we can see some clear peaks that seem to be particularly consonant!</p>
+    <p>
+      we can see some clear minima that indicate particular consonance! you can
+      use the slider above to slide through the graph. looking at the spectra at
+      the top, we can see that the minima happen in places where 1 or more
+      partials are in unison. for ratio 2 (octave), every partial is in unison!
+    </p>
     <dsp-repl rows="5" id="dissonance-repl"
       ><!-- 
 let base = 240, ratio = 1;
@@ -555,14 +597,26 @@ onmessage = v => (ratio = v) // for slider further down
       const dissonanceSlider = document.getElementById("dissonance-slider");
       const dissonanceCurve = document.getElementById("dissonance-curve");
 
+      let spectrum = [1, 2, 3, 4, 5, 6];
+      let saw6 = harmonics(6, (n) => 1 / n);
+
       let updateDissonance = () => {
         const { canvas, ctx } = dissonanceCurve;
         const value = Number(dissonanceSlider.value) / 100;
         const x = lerp(value, 0, canvas.width);
-        const ratio = lerp(value, 1, 2);
+        const xrange = [1, 2];
+        const ratio = lerp(value, xrange[0], xrange[1]);
         dissonanceCurve.update();
         dissonanceRepl.send(ratio);
         line(ctx, x, 0, x, canvas.height);
+        ctx.strokeStyle = "cyan";
+        ctx.lineWidth = 2;
+        const ch = canvas.height;
+        const specrange = [1, 7];
+        drawSpectrum(ctx, spectrum, saw6, specrange, [ch / 8, 0]);
+        const spectrum2 = spectrum.map((r) => r * ratio);
+        ctx.strokeStyle = "magenta";
+        drawSpectrum(ctx, spectrum2, saw6, specrange, [ch / 8, ch / 4]);
       };
       slider(
         dissonanceSlider,
@@ -643,38 +697,6 @@ minima.forEach((min) => {
       get different minima. we can even leave the realm of the harmonic spectrum
       and explore stranger worlds...
     </p>
-    <script type="text/javascript" class="dsp-prelude">
-      class HarmonicOsc {
-        constructor(amplitudes, phase = 0) {
-          this.amplitudes = amplitudes;
-          this.phases = new Array(amplitudes.length).fill(phase);
-          this.nyquist = sampleRate / 2;
-        }
-        update(freq, maxPartials = this.amplitudes.length, a0 = 0) {
-          let max = Math.floor((this.nyquist / freq + 1) / 2);
-          let amps = this.amplitudes.length;
-          let partials = Math.min(max, amps);
-          let sum = a0;
-          for (let i = 0; i < partials; i++) {
-            let harmonic = i + 1;
-            let dt = (harmonic * freq) / sampleRate;
-            this.phases[i] = (this.phases[i] + dt) % 1;
-            if (i <= maxPartials) {
-              const phase = this.phases[i] * 2 * Math.PI;
-              sum += Math.sin(phase) * this.amplitudes[i];
-            }
-          }
-          return sum;
-        }
-      }
-      let harmonics = (n, fn) => {
-        let amps = new Array(n).fill(0);
-        for (let i = 0; i < n; i++) {
-          amps[i] = fn(i + 1);
-        }
-        return amps;
-      };
-    </script>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
