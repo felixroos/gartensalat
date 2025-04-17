@@ -440,13 +440,18 @@ plot(fn, ctx, xrange, yrange);
     <input type="range" id="roughness-slider" style="width: 100%" step="0.1" />
     <script>
       let slider = (el, onDragStart, onDragEnd, onInput) => {
-        let isDragging = false;
-        el.addEventListener("input", (e) => onInput());
-        el.addEventListener("mousedown", (e) => {
-          onDragStart();
+        let dragStart = (e) => {
           isDragging = true;
-        });
-        document.addEventListener("mouseup", (e) => isDragging && onDragEnd());
+          onDragStart();
+        };
+        let dragEnd = (e) => isDragging && onDragEnd();
+        let isDragging = false;
+        el.value = 0;
+        el.addEventListener("input", onInput);
+        el.addEventListener("mousedown", dragStart);
+        document.addEventListener("mouseup", dragEnd);
+        el.addEventListener("touchstart", dragStart);
+        document.addEventListener("touchend", dragEnd);
       };
     </script>
     <script>
@@ -464,7 +469,7 @@ plot(fn, ctx, xrange, yrange);
       };
       slider(
         roughnessSlider,
-        () => roughnessRepl.play(),
+        () => roughnessRepl.play() && setTimeout(updateDissonance, 200),
         () => roughnessRepl.stop(),
         updateRoughness
       );
@@ -561,7 +566,7 @@ onmessage = v => (ratio = v) // for slider further down
       };
       slider(
         dissonanceSlider,
-        () => dissonanceRepl.play(),
+        () => dissonanceRepl.play() && setTimeout(updateDissonance, 200),
         () => dissonanceRepl.stop(),
         updateDissonance
       );
