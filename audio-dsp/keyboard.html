@@ -54,23 +54,6 @@
         background-color: #44444490;
       }
     </style>
-    <!-- codeblock -->
-    <script>
-      // render codeblock from script tag
-      let codeblock = (scriptElement, indent = 0) => {
-        const script = document.currentScript;
-        const pre = document.createElement("pre");
-        pre.textContent = getCode(scriptElement, indent);
-        script.after(pre);
-      };
-      function getCode(scriptElement, indent = 0) {
-        return scriptElement.innerText
-          .split("\n")
-          .map((line) => line.slice(indent))
-          .filter((x) => x && !x.startsWith("codeblock("))
-          .join("\n");
-      }
-    </script>
     <!-- dsp-repl -->
     <script>
       const ctx = new AudioContext();
