@@ -364,6 +364,8 @@ onmessage = steps => freqs.forEach((_, i) => {
     <input id="row2" type="text" autocomplete="off" spellcheck="false" />
     <input id="row1" type="text" autocomplete="off" spellcheck="false" />
     <input id="row0" type="text" autocomplete="off" spellcheck="false" />
+    <span>scale mapping:</span>
+    <input id="scale" type="text" autocomplete="off" spellcheck="false" />
     <script>
       const repl = document.getElementById("synth-repl");
       const input = document.getElementById("input");
@@ -375,6 +377,7 @@ onmessage = steps => freqs.forEach((_, i) => {
         document.getElementById("row2"),
         document.getElementById("row3"),
       ];
+      const scaleInput = document.getElementById("scale");
       rowInputs.forEach((rowInput, i) => {
         rowInput.value = rows[i];
         rowInput.addEventListener("input", (e) => {
@@ -392,6 +395,11 @@ onmessage = steps => freqs.forEach((_, i) => {
       };
 
       let scale = [0, 2, 3, 5, 7, 8, 10];
+      scaleInput.value = scale.join(",");
+      scaleInput.addEventListener("input", (e) => {
+        scale = scaleInput.value.split(",").map(Number);
+      });
+
       let step2midi = (step) => {
         if (!step) return 0;
         const oct = Math.floor(step / scale.length) * 12;
