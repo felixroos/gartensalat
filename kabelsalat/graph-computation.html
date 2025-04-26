@@ -130,12 +130,7 @@
         const res = new Function(`${input.value}`)();
         result.innerHTML = JSON.stringify(res, null, 2);
       };
-
-      input.addEventListener("keydown", (e) => {
-        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
-          update();
-        }
-      });
+      input.addEventListener("input", () => update());
       update();
     </script>
 
