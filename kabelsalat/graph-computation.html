@@ -146,11 +146,11 @@
     <button id="counter"></button>
     <script>
       let registerClass = (type, NodeClass) => {
-        let q = (...args) => new NodeClass(type, args);
+        let getNode = (...args) => new NodeClass(type, args);
         Node.prototype[type] = function (...args) {
-          return q(this, ...args);
+          return getNode(this, ...args);
         };
-        return q;
+        return getNode;
       };
       const counter = registerClass(
         "counter",
