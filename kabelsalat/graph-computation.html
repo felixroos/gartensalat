@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 a graph computer</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      textarea,
+      pre {
+        box-sizing: border-box;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      #lines {
+        height: 200px;
+      }
+    </style>
+    <!-- codeblock -->
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        const pre = document.createElement("pre");
+        pre.textContent = getCode(scriptElement, indent);
+        script.after(pre);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+  </head>
+  <body>
+    <h2>🌱 a graph computer</h2>
+    <p>
+      let's compute things with
+      <a href="/kabelsalat/graph-language.html">graphs</a> again! this time, i
+      don't want to <a href="./graph-compilation.html">compile graphs</a>, but
+      rather compute values directly, which should be simpler. i think this will
+      be handy to dynamically handle parts of
+      <a href="/kabelsalat/audio-graph.html">audio graphs</a>. here's the idea:
+    </p>
+    <script>
+      class Node {
+        constructor(type, ins, update) {
+          this.type = type;
+          this.ins = ins;
+          update && (this.update = update);
+        }
+        run() {
+          const args = this.ins.map((input) => {
+            if (input instanceof Node) {
+              return input.run();
+            }
+            return input;
+          });
+          return this.update(...args);
+        }
+      }
+      let registerFn = (type, update) => {
+        let getNode = (...args) => new Node(type, args, update);
+        Node.prototype[type] = function (...args) {
+          return getNode(this, ...args);
+        };
+        return getNode;
+      };
+
+      const add = registerFn("add", (a, b) => a + b);
+      const sub = registerFn("sub", (a, b) => a - b);
+      const mul = registerFn("mul", (a, b) => a * b);
+      const div = registerFn("div", (a, b) => a / b);
+
+      console.log(add(1, 2).mul(3).run()); // = 9
+      codeblock(document.currentScript, 6);
+    </script>
+
+    <p>
+      building on my simple
+      <a href="/kabelsalat/graph-language.html">graph language</a>, a Node now
+      has 2 new methods:
+    </p>
+    <ul>
+      <li>update: computes the node value based on its inputs</li>
+      <li>run: recursively calls update to compute the whole graph</li>
+    </ul>
+    <p>here's an interactive version:</p>
+    <textarea id="input" type="text" rows="2" spellcheck="false"></textarea>
+    <label
+      >result:
+      <pre id="result"></pre>
+    </label>
+    <script>
+      const input = document.querySelector("#input");
+      const result = document.querySelector("#result");
+      const graph = document.querySelector("#graph");
+      input.value = `return add(8,2).mul(add(3,5)).mul(add(2,3).mul(4)).run()`;
+
+      let update = () => {
+        const res = new Function(`${input.value}`)();
+        result.innerHTML = JSON.stringify(res, null, 2);
+      };
+
+      input.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+          update();
+        }
+      });
+      update();
+    </script>
+
+    <p>
+      the result above will contain whatever you return from the code above. you
+      can also inspect the node by removing .run() at the end.
+    </p>
+    <p>
+      now that's a pretty compact solution to computing things with graphs..
+      there's one problem: nodes cannot hold state. let's change that by
+      allowing to use custom node classes:
+    </p>
+    <button id="counter"></button>
+    <script>
+      let registerClass = (type, NodeClass) => {
+        let q = (...args) => new NodeClass(type, args);
+        Node.prototype[type] = function (...args) {
+          return q(this, ...args);
+        };
+        return q;
+      };
+      const counter = registerClass(
+        "counter",
+        class Counter extends Node {
+          count = 0;
+          update() {
+            return this.count++;
+          }
+        }
+      );
+      let counterNode = counter().mul(2); // 0, 2, 4 ...
+      const counterButton = document.getElementById("counter");
+      function count() {
+        counterButton.innerText = `count: ${counterNode.run()}`;
+      }
+      counterButton.addEventListener("click", count);
+      count();
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>
+      instead of passing a function, we can now pass a class that includes
+      state, like our Counter.
+    </p>
+    <p>
+      enough for now, next i want to find out if this approach can be combined
+      with graph compilation, to see if it's possible to "collapse" parts of a
+      graph into a single, compiled Node
+    </p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
