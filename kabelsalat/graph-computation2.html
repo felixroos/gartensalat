@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 a graph computer II</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      textarea,
+      pre {
+        box-sizing: border-box;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      #lines {
+        height: 200px;
+      }
+    </style>
+    <!-- codeblock -->
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        const pre = document.createElement("pre");
+        pre.textContent = getCode(scriptElement, indent);
+        script.after(pre);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <!-- Node -->
+    <script>
+      // https://garten.salat.dev/kabelsalat/graph-computation.html
+      class Node {
+        constructor(type, ins, update) {
+          this.type = type;
+          this.ins = ins;
+          update && (this.update = update);
+        }
+        run() {
+          const args = this.ins.map((input) => {
+            if (input instanceof Node) {
+              return input.run();
+            }
+            return input;
+          });
+          return this.update(...args);
+        }
+      }
+      let registerFn = (type, update) => {
+        let getNode = (...args) => new Node(type, args, update);
+        Node.prototype[type] = function (...args) {
+          return getNode(this, ...args);
+        };
+        return getNode;
+      };
+      let registerClass = (type, NodeClass) => {
+        let getNode = (...args) => new NodeClass(type, args);
+        Node.prototype[type] = function (...args) {
+          return getNode(this, ...args);
+        };
+        return getNode;
+      };
+      const counter = registerClass(
+        "counter",
+        class Counter extends Node {
+          count = 0;
+          update() {
+            return this.count++;
+          }
+        }
+      );
+      const add = registerFn("add", (a, b) => a + b);
+      const sub = registerFn("sub", (a, b) => a - b);
+      const mul = registerFn("mul", (a, b) => a * b);
+      const div = registerFn("div", (a, b) => a / b);
+    </script>
+    <!-- topoSort -->
+    <script>
+      // https://garten.salat.dev/kabelsalat/graph-compilation.html
+      // sort nodes by dependencies (using generator function to be able to step through)
+      function* topoSort(node, visited = new Set()) {
+        if (!(node instanceof Node) || visited.has(node)) {
+          return; // constant values or already visited nodes
+        }
+        visited.add(node);
+        for (let input of node.ins) {
+          yield* topoSort(input, visited);
+        }
+        yield node;
+      }
+    </script>
+    <!-- code-garden -->
+    <script>
+      class CodeGarden extends HTMLElement {
+        static observedAttributes = ["code", "rows"];
+        init() {
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "")
+              .replace("<!--", "")
+              .replace("-->", "")
+              .trim() ||
+            "";
+          this.innerHTML = "";
+          const rows = this.getAttribute("rows") ?? 6;
+
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div style="border:2px solid #222;padding:0;">
+        <textarea id="code" spellcheck="false" rows="${rows}" style="margin:0;border-bottom:2px solid #222;width:100%"></textarea>
+        <pre class="result"></pre>
+        </div>`
+          );
+          // repl logic
+          const input = this.querySelector("textarea");
+          this.result = this.querySelector(".result");
+          input.value = code;
+          this.input = input;
+          this.update();
+
+          input.addEventListener("keydown", (e) => {
+            if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+              this.update();
+            } else if ((e.ctrlKey || e.altKey) && e.key === ".") {
+              e.preventDefault();
+              this.stop();
+            }
+          });
+        }
+        setCode(code) {
+          this.code = code;
+          this.input.value = code;
+          this.update();
+        }
+        async update() {
+          const fn = new Function("self", this.input.value);
+          this.result.innerText = fn(this);
+        }
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          if (name === "code") {
+            this.setCode(newValue);
+          }
+        }
+      }
+      customElements.define("code-garden", CodeGarden);
+    </script>
+    <!-- plot -->
+  </head>
+  <body>
+    <h2>🌱 a graph computer II</h2>
+    <p>
+      after finding out how to evaluate graphs
+      <a href="/kabelsalat/graph-computation.html">recursively</a> and
+      <a href="./graph-compilation.html">in a compiled form</a>, i now want to
+      combine both approaches. let's add a compile method to our Node class,
+      this time returning a new Node of type `compiled`:
+    </p>
+    <script>
+      Node.prototype.compile = function () {
+        let nodes = Array.from(topoSort(this));
+        const getRef = (input) =>
+          typeof input !== "object" ? input : `v${nodes.indexOf(input)}`;
+        let lines = [];
+        for (let id in nodes) {
+          const node = nodes[id];
+          const args = node.ins.map(getRef);
+          const ref = getRef(node);
+          lines.push(`const ${ref} = n[${id}].update(${args.join(",")})`);
+        }
+        const last = getRef(nodes[nodes.length - 1]);
+        lines.push(`return ${last}`);
+        const code = lines.join("\n");
+        const update = new Function("n", code);
+        const node = new Node("compiled", [], () => update(nodes));
+        return node;
+      };
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>here's an interactive version:</p>
+    <textarea id="input" type="text" rows="4" spellcheck="false"></textarea>
+    <label
+      >result:
+      <pre id="result"></pre>
+    </label>
+    <script>
+      const input = document.querySelector("#input");
+      const result = document.querySelector("#result");
+      input.value = `return add(8,2).mul(add(3,5)).mul(add(2,3).mul(4))
+.compile() // get single node, where structure is now code
+.add(2) // we can still call node methods on it
+.run()`;
+
+      let update = () => {
+        const res = new Function(`${input.value}`)();
+        result.innerHTML = JSON.stringify(res, null, 2);
+      };
+      input.addEventListener("input", () => update());
+      update();
+    </script>
+    <p>
+      here, the `.compile()` call will condense a Node and all of its source
+      Nodes into a single `compiled` Node, on which we're calling another method
+      (add). you can comment out the second line to see that the result remains
+      unchanged.
+    </p>
+    <p>
+      "why even bother compiling?" you might ask. in theory, this should give us
+      a performance boost, as we can avoid the graph traversal for each update.
+      if this is really true remains to be seen
+    </p>
+    <h3>benchmark</h3>
+
+    <p>
+      let's test if this really is faster by doing a little benchmark. let's add
+      a hundred
+      <a href="/audio-dsp/oscillators.html">sine waves</a> and calculate 2s at
+      48khz:
+    </p>
+    <script>
+      const sampleRate = 48000;
+      // https://garten.salat.dev/audio-dsp/oscillators.html
+      class SineOsc extends Node {
+        phase = 0;
+        value = 0;
+        update(freq) {
+          this.value = Math.sin(this.phase * 2 * Math.PI);
+          this.phase = (this.phase + freq / sampleRate) % 1;
+          return this.value;
+        }
+        range(a, b) {
+          return ((this.value + 1) / 2) * (b - a) + a;
+        }
+      }
+      let sine = registerClass("sine", SineOsc);
+    </script>
+    <code-garden rows="16">
+      <!--
+let results = [];
+let waves = 100;
+let graph = sine(1);
+for (let i = 1; i < waves; i++) {
+  graph = graph.add(sine(i + 100));
+}
+let samples = 2 * 48000;
+// uncompiled
+let uncompiled = benchmark(graph, samples);
+results.push(`uncompiled took ${uncompiled.ms}ms`);
+// compiled
+let compiled = benchmark(graph.compile(), samples);
+results.push(`compiled took ${compiled.ms}ms`);
+let ratio = uncompiled.ms / compiled.ms;
+results.push(`compiled is ${ratio.toFixed(2)}x faster`);
+return results.join("\n");
+-->
+    </code-garden>
+    <p>
+      we can clearly see the compiled graph win here (4-7x on my machine). with
+      very few waves, the advantage is much smaller, as we don't need to
+      traverse that many nodes. for some reason, the advantage gets smaller
+      again with hundreds of waves (at least on my machine).
+    </p>
+    <p>
+      it's also interesting to note how many waves will break the 2000ms mark,
+      effectively breaking the real-time limit. on my machine i can get roughly
+      320 uncompiled and 500 compiled waves.
+    </p>
+    <details>
+      <summary>show benchmark source</summary>
+      <script>
+        function benchmark(graph, samples) {
+          let buffer = new Float32Array(samples);
+          let t = performance.now();
+          for (let i = 0; i < samples; i++) {
+            buffer[i] = graph.run();
+          }
+          const ms = performance.now() - t;
+          return { ms, buffer, graph };
+        }
+        codeblock(document.currentScript, 8);
+      </script>
+    </details>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
