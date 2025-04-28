@@ -279,11 +279,11 @@ for (let i = 1; i < waves; i++) {
 let samples = 2 * 48000;
 // uncompiled
 let uncompiled = benchmark(graph, samples);
-results.push(`uncompiled took ${uncompiled.ms}ms`);
+results.push(`uncompiled took ${uncompiled}ms`);
 // compiled
 let compiled = benchmark(graph.compile(), samples);
-results.push(`compiled took ${compiled.ms}ms`);
-let ratio = uncompiled.ms / compiled.ms;
+results.push(`compiled took ${compiled}ms`);
+let ratio = uncompiled / compiled;
 results.push(`compiled is ${ratio.toFixed(2)}x faster`);
 return results.join("\n");
 -->
@@ -292,13 +292,11 @@ return results.join("\n");
       <summary>show benchmark source</summary>
       <script>
         function benchmark(graph, samples) {
-          let buffer = new Float32Array(samples);
           let t = performance.now();
           for (let i = 0; i < samples; i++) {
-            buffer[i] = graph.run();
+            graph.run();
           }
-          const ms = performance.now() - t;
-          return { ms, buffer, graph };
+          return performance.now() - t;
         }
         codeblock(document.currentScript, 8);
       </script>
