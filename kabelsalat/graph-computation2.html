@@ -265,9 +265,6 @@
           this.phase = (this.phase + freq / sampleRate) % 1;
           return this.value;
         }
-        range(a, b) {
-          return ((this.value + 1) / 2) * (b - a) + a;
-        }
       }
       let sine = registerClass("sine", SineOsc);
     </script>
