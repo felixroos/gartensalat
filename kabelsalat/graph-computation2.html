@@ -291,17 +291,6 @@ results.push(`compiled is ${ratio.toFixed(2)}x faster`);
 return results.join("\n");
 -->
     </code-garden>
-    <p>
-      we can clearly see the compiled graph win here (4-7x on my machine). with
-      very few waves, the advantage is much smaller, as we don't need to
-      traverse that many nodes. for some reason, the advantage gets smaller
-      again with hundreds of waves (at least on my machine).
-    </p>
-    <p>
-      it's also interesting to note how many waves will break the 2000ms mark,
-      effectively breaking the real-time limit. on my machine i can get roughly
-      320 uncompiled and 500 compiled waves.
-    </p>
     <details>
       <summary>show benchmark source</summary>
       <script>
@@ -317,6 +306,18 @@ return results.join("\n");
         codeblock(document.currentScript, 8);
       </script>
     </details>
+    <p>
+      we can clearly see the compiled graph win here (4-7x on my machine). with
+      very few waves, the advantage is much smaller, as we don't need to
+      traverse that many nodes. for some reason, the advantage gets smaller
+      again with hundreds of waves (at least on my machine).
+    </p>
+    <p>
+      it's also interesting to note how many waves will break the 2000ms mark,
+      effectively breaking the real-time limit. on my machine i can get roughly
+      320 uncompiled and 500 compiled waves.
+    </p>
+
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
