@@ -314,7 +314,7 @@ void main() {
       let creation = await fetchCreation().catch(() => null);
       if (creation && creation.type === "real-shader") {
         input.value = creation.data;
-        shader.update(input.value);
+        updateShader(input.value);
       }
     </script>
   </body>
