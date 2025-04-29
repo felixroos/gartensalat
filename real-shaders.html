@@ -178,7 +178,7 @@ void main() {
 }`;
       // set up canvas
       const canvas = document.querySelector("#canvas");
-      const gl = canvas.getContext("webgl");
+      const gl = canvas.getContext("webgl", { preserveDrawingBuffer: true });
       const rect = canvas.getBoundingClientRect();
       canvas.width = rect.width; // * window.devicePixelRatio;
       canvas.height = rect.height; // * window.devicePixelRatio;
@@ -295,6 +295,26 @@ void main() {
           return null;
         }
         return program;
+      }
+    </script>
+    <!-- pondiverse button -->
+    <script type="module">
+      import {
+        addPondiverseButton,
+        fetchCreation,
+      } from "https://www.pondiverse.com/script/pondiverse.js";
+      addPondiverseButton();
+      window.getPondiverseCreation = () => {
+        return {
+          type: "real-shader",
+          data: input.value,
+          image: canvas?.toDataURL("image/png"),
+        };
+      };
+      let creation = await fetchCreation().catch(() => null);
+      if (creation && creation.type === "real-shader") {
+        input.value = creation.data;
+        shader.update(input.value);
       }
     </script>
   </body>
