@@ -226,14 +226,14 @@
       addPondiverseButton();
       window.getPondiverseCreation = () => {
         return {
-          type: "fake-shaders",
-          data: btoa(input.value),
+          type: "fake-shader",
+          data: input.value,
           image: canvas?.toDataURL("image/png"),
         };
       };
       let creation = await fetchCreation().catch(() => null);
-      if (creation && creation.type === "fake-shaders") {
-        input.value = atob(creation.data);
+      if (creation && creation.type === "fake-shader") {
+        input.value = creation.data;
         shader.update(input.value);
       }
     </script>
