@@ -218,5 +218,24 @@
       document.querySelector("#pre").textContent =
         document.querySelector("html").outerHTML;
     </script>
+    <script type="module">
+      import {
+        addPondiverseButton,
+        fetchCreation,
+      } from "https://www.pondiverse.com/script/pondiverse.js";
+      addPondiverseButton();
+      window.getPondiverseCreation = () => {
+        return {
+          type: "fake-shaders",
+          data: btoa(input.value),
+          image: canvas?.toDataURL("image/png"),
+        };
+      };
+      let creation = await fetchCreation().catch(() => null);
+      if (creation && creation.type === "fake-shaders") {
+        input.value = atob(creation.data);
+        shader.update(input.value);
+      }
+    </script>
   </body>
 </html>
