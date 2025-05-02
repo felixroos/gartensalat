@@ -221,17 +221,20 @@
     <script type="module">
       import {
         addPondiverseButton,
-        fetchCreation,
-      } from "https://www.pondiverse.com/script/pondiverse.js";
-      addPondiverseButton();
-      window.getPondiverseCreation = () => {
+        fetchPondiverseCreation,
+      } from "https://www.pondiverse.com/pondiverse.js";
+      addPondiverseButton(() => {
         return {
           type: "fake-shader",
           data: input.value,
           image: canvas?.toDataURL("image/png"),
         };
-      };
-      let creation = await fetchCreation().catch(() => null);
+      });
+      const creationID = new URL(window.location).searchParams.get("creation");
+      console.log("creationID", creationID);
+      let creation = await fetchPondiverseCreation(creationID).catch(
+        () => null
+      );
       if (creation && creation.type === "fake-shader") {
         input.value = creation.data;
         shader.update(input.value);
