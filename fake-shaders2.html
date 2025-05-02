@@ -228,7 +228,7 @@
         } = await import("https://www.pondiverse.com/pondiverse.js");
         addPondiverseButton(() => {
           return {
-            type: "fake-shader2",
+            type: "fake-shader",
             data: input.value,
             image: canvas?.toDataURL("image/png"),
           };
@@ -258,7 +258,7 @@
         );
         creationID &&
           fetchPondiverseCreation(creationID).then((creation) => {
-            if (creation && creation.type === "fake-shader2") {
+            if (creation && creation.type === "fake-shader") {
               input.value = creation.data;
               shader.update(input.value);
             }
