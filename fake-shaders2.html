@@ -116,6 +116,7 @@
         >
       </li>
     </ul>
+    <div id="pondiverse-creations"></div>
 
     <p>The main function takes 2 arguments:</p>
     <ol>
@@ -219,25 +220,51 @@
         document.querySelector("html").outerHTML;
     </script>
     <script type="module">
-      import {
-        addPondiverseButton,
-        fetchPondiverseCreation,
-      } from "https://www.pondiverse.com/pondiverse.js";
-      addPondiverseButton(() => {
-        return {
-          type: "fake-shader",
-          data: input.value,
-          image: canvas?.toDataURL("image/png"),
-        };
-      });
-      const creationID = new URL(window.location).searchParams.get("creation");
-      console.log("creationID", creationID);
-      let creation = await fetchPondiverseCreation(creationID).catch(
-        () => null
-      );
-      if (creation && creation.type === "fake-shader") {
-        input.value = creation.data;
-        shader.update(input.value);
+      try {
+        const {
+          addPondiverseButton,
+          fetchPondiverseCreation,
+          fetchPondiverseCreations,
+        } = await import("https://www.pondiverse.com/pondiverse.js");
+        addPondiverseButton(() => {
+          return {
+            type: "fake-shader2",
+            data: input.value,
+            image: canvas?.toDataURL("image/png"),
+          };
+        });
+        const pondiverseContainer = document.querySelector(
+          "#pondiverse-creations"
+        );
+        fetchPondiverseCreations().then((creations) => {
+          if (!creations.length) {
+            return;
+          }
+          pondiverseContainer.insertAdjacentHTML(
+            "beforeend",
+            `<p style="margin:0">fresh from the pondiverse:</p><ul>${creations
+              .filter((c) => c.type === "fake-shader")
+              .map(
+                (creation) =>
+                  `<li><a href="#${btoa(creation.data)}">${
+                    creation.title
+                  }</a></li>`
+              )
+              .join("")}</ul>`
+          );
+        });
+        const creationID = new URL(window.location).searchParams.get(
+          "creation"
+        );
+        creationID &&
+          fetchPondiverseCreation(creationID).then((creation) => {
+            if (creation && creation.type === "fake-shader2") {
+              input.value = creation.data;
+              shader.update(input.value);
+            }
+          });
+      } catch (err) {
+        console.warn("pondiverse fail", err);
       }
     </script>
   </body>
