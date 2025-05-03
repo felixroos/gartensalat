@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 audio worklets III</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      textarea,
+      pre {
+        box-sizing: border-box;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      #lines {
+        height: 200px;
+      }
+    </style>
+    <!-- codeblock -->
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        const pre = document.createElement("pre");
+        pre.textContent = getCode(scriptElement, indent);
+        script.after(pre);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <template class="dsp-worklet">
+      <script>
+        class DspProcessor extends AudioWorkletProcessor {
+          dsp = () => {};
+          l = 0;
+          r = 0;
+          constructor() {
+            super();
+            this.t = 0;
+            this.active = true;
+            this.framebuffer = new Float32Array(Math.floor(sampleRate / 30));
+            this.port.onmessage = (e) => {
+              const msg = e.data;
+              if (msg && msg.code) {
+                new Function("$", msg.code)(this);
+              } else if (msg === "stop") {
+                this.active = false;
+              }
+            };
+          }
+          process(inputs, outputs, parameters) {
+            const output = outputs[0];
+            for (let i = 0; i < output[0].length; i++) {
+              this.dsp(this.t / sampleRate);
+              output[0][i] = this.l;
+              output[1][i] = this.r;
+              this.t++;
+              this.framebuffer[this.t % this.framebuffer.length] = this.l;
+              if (this.t % this.framebuffer.length === 0 && this.t > 0) {
+                this.port.postMessage(this.framebuffer);
+              }
+            }
+            return this.active;
+          }
+        }
+      </script>
+    </template>
+    <!-- dsp-repl -->
+    <script>
+      const ctx = new AudioContext();
+      // init audio context
+      document.addEventListener("click", function firstClick() {
+        ctx.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+
+      const _lerp = (v, min, max) => v * (max - min) + min;
+      const invLerp = (v, min, max) => (v - min) / (max - min);
+      const remap = (v, vmin, vmax, omin, omax) =>
+        _lerp(invLerp(v, vmin, vmax), omin, omax);
+
+      class DSPRepl extends HTMLElement {
+        static observedAttributes = ["code", "rows"];
+        worklet;
+        init() {
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "").replace("<!--", "").replace("-->", "").trim();
+
+          const rows = this.getAttribute("rows") ?? 4;
+          if (!code) {
+            return;
+          }
+          this.innerHTML = "";
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div style="border:2px solid #222;padding:0;">
+            <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
+            <canvas height="60"></canvas>
+            <a class="play">play</a> | <a class="stop">stop</a>
+            </div>
+              `
+          );
+          // draw logic
+          this.canvas = this.querySelector("canvas");
+          this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+          this.canvas.height =
+            this.canvas.clientHeight * window.devicePixelRatio;
+          this.drawContext = this.canvas.getContext("2d");
+          this.drawSilence(this.drawContext);
+
+          // repl logic
+          const input = this.querySelector("textarea");
+          input.value = code;
+          input.style = "margin:0;border-bottom:2px solid #222";
+          this.input = input;
+
+          this.querySelector(".play").onclick = () => this.update(input.value);
+          this.querySelector(".stop").onclick = () => this.stop();
+          input.addEventListener("keydown", async (e) => {
+            if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+              const hash = btoa(input.value);
+              let urlCode = window.location.hash.slice(1);
+              this.update(input.value);
+            }
+            if ((e.ctrlKey || e.altKey) && e.code === "Period") {
+              e.preventDefault();
+              this.stop();
+            }
+          });
+        }
+        async initWorklet() {
+          if (this.worklet) {
+            return;
+          }
+          await ctx.resume();
+          this.worklet = await this.runWorklet(ctx, this.input.value);
+          this.worklet.port.onmessage = (e) =>
+            requestAnimationFrame(() => this.drawBuffer(e.data));
+        }
+
+        async update(code) {
+          await this.initWorklet();
+          this.worklet.port.postMessage({ code });
+        }
+        stop() {
+          this.worklet?.disconnect();
+          this.worklet?.port.postMessage("stop");
+          this.worklet = undefined;
+        }
+
+        async runWorklet(ac) {
+          const name = `worklet-${Date.now()}`;
+          const math = Object.getOwnPropertyNames(Math).join(",");
+          let prelude = `const {${math}} = Math;\n`;
+          // add dsp scripts
+          document
+            .querySelector("template.dsp-prelude")
+            .content.querySelectorAll("script")
+            .forEach((script) => {
+              prelude += script.textContent;
+            });
+
+          let workletCode = document
+            .querySelector("template.dsp-worklet")
+            .content.querySelector("script").textContent;
+
+          workletCode = `${prelude}\n${workletCode}\nregisterProcessor('${name}', DspProcessor);`;
+
+          await ac.resume();
+          const dataURL = `data:text/javascript;base64,${btoa(workletCode)}`;
+          await ac.audioWorklet.addModule(dataURL);
+          const node = new AudioWorkletNode(ac, name, {
+            outputChannelCount: [2],
+          });
+          console.log("node", node.channelCount);
+          node.connect(ac.destination);
+          return node;
+        }
+
+        drawBuffer(samples) {
+          const ctx = this.drawContext;
+          const canvas = ctx.canvas;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "white";
+          let x0 = 1;
+          let x1 = samples.length;
+          let y0 = -1;
+          let y1 = 1;
+          let px0 = 0;
+          let px1 = ctx.canvas.width;
+          let py0 = ctx.canvas.height - ctx.lineWidth;
+          let py1 = ctx.lineWidth;
+          ctx.beginPath();
+          for (let px = 0; px < ctx.canvas.width; px++) {
+            const x = remap(px, px0, px1, x0, x1);
+            const y = samples[Math.floor(x)];
+            const py = remap(y, y0, y1, py0, py1);
+            px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+
+        drawSilence(ctx, color = "white", lineWidth = 2) {
+          const canvas = ctx.canvas;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lineWidth;
+          ctx.beginPath();
+          ctx.moveTo(0, canvas.height / 2);
+          ctx.lineTo(canvas.width, canvas.height / 2);
+          ctx.stroke();
+        }
+
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          this.init();
+        }
+      }
+      customElements.define("dsp-repl", DSPRepl);
+    </script>
+    <template class="dsp-prelude">
+      <script>
+        // https://garten.salat.dev/kabelsalat/graph-computation.html
+        class Node {
+          constructor(type, ins, update) {
+            this.type = type;
+            this.ins = ins;
+            update && (this.update = update);
+          }
+          run() {
+            const args = this.ins.map((input) => {
+              if (input instanceof Node) {
+                return input.run();
+              }
+              return input;
+            });
+            return this.update(...args);
+          }
+        }
+        Node.prototype.compile = function () {
+          let nodes = Array.from(topoSort(this));
+          const getRef = (input) =>
+            typeof input !== "object" ? input : `v${nodes.indexOf(input)}`;
+          let lines = [];
+          for (let id in nodes) {
+            const node = nodes[id];
+            const args = node.ins.map(getRef);
+            const ref = getRef(node);
+            lines.push(`const ${ref} = n[${id}].update(${args.join(",")})`);
+          }
+          const last = getRef(nodes[nodes.length - 1]);
+          lines.push(`return ${last}`);
+          const code = lines.join("\n");
+          const update = new Function("n", code);
+          const node = new Node("compiled", [], () => update(nodes));
+          return node;
+        };
+        // https://garten.salat.dev/kabelsalat/graph-compilation.html
+        // sort nodes by dependencies (using generator function to be able to step through)
+        function* topoSort(node, visited = new Set()) {
+          if (!(node instanceof Node) || visited.has(node)) {
+            return; // constant values or already visited nodes
+          }
+          visited.add(node);
+          for (let input of node.ins) {
+            yield* topoSort(input, visited);
+          }
+          yield node;
+        }
+        let registerFn = (type, update) => {
+          let getNode = (...args) => new Node(type, args, update);
+          Node.prototype[type] = function (...args) {
+            return getNode(this, ...args);
+          };
+          return getNode;
+        };
+        let registerClass = (type, NodeClass) => {
+          let getNode = (...args) => new NodeClass(type, args);
+          Node.prototype[type] = function (...args) {
+            return getNode(this, ...args);
+          };
+          return getNode;
+        };
+        // dsp stuff
+        const sampleRate = 48000;
+        // https://garten.salat.dev/audio-dsp/oscillators.html
+        class SineOsc extends Node {
+          phase = 0;
+          value = 0;
+          update(freq) {
+            this.value = Math.sin(this.phase * 2 * Math.PI);
+            this.phase = (this.phase + freq / sampleRate) % 1;
+            return this.value;
+          }
+        }
+        let sine = registerClass("sine", SineOsc);
+        let midi2freq = (midi) => Math.pow(2, (midi - 69) / 12) * 440;
+        Object.assign(globalThis, { SineOsc, midi2freq });
+      </script>
+    </template>
+  </head>
+  <body>
+    <h2>🌱 audio worklets III</h2>
+
+    <p>
+      i need to update my <a href="/audio-dsp/worklets2.html">dsp repl</a>. so
+      far, every update would stop the current worklet and create a new one.
+      instead, i want to create a single worklet at the start and update only
+      the dsp function.. here's the updated worklet processor:
+    </p>
+    <script>
+      codeblock(
+        document
+          .querySelector("template.dsp-worklet")
+          .content.querySelector("script"),
+        8
+      );
+    </script>
+    <p>
+      additionally, the $ variable now points to the worklet, allowing us to
+      carry state across evaluations.
+    </p>
+    <dsp-repl rows="12"
+      ><!-- 
+$.o = $.o ?? new SineOsc() // init oscillator
+$.m = $.m ?? 1 // init m
+$.m = ($.m+5)%36; // increment n
+let f = midi2freq($.m+60) // frequency
+$.dsp = (t) => $.l=$.r=$.o.update(f)/8
+--></dsp-repl
+    >
+    <dsp-repl rows="12"
+      ><!-- 
+let o = new SineOsc();
+$.lfo = $.lfo ?? new SineOsc()
+$.m = $.m ?? 1 // init m
+$.m = ($.m+5)%36; // increment n
+let f = midi2freq($.m+60) // frequency
+$.voices = $.voices ?? []
+
+let voice = () => o.update(f)/8
+$.voices = $.voices.slice(-4).concat([voice])
+console.log($.voices.length)
+$.dsp=() => {
+let sum = 0;
+$.voices.forEach(voice => (sum+=voice()))
+$.l=$.r=sum*($.lfo.update(4)+1)
+}
+--></dsp-repl
+    >
+    <!--
+
+-->
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
