@@ -128,8 +128,8 @@
             "beforeend",
             `<div style="border:2px solid #222;padding:0;">
             <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
-            <canvas height="60"></canvas>
-            <a class="play">play</a> | <a class="stop">stop</a>
+            <a class="play">run</a> | <a class="stop">stop</a>
+            <canvas width="250" height="60"></canvas>
             </div>
               `
           );
@@ -205,7 +205,6 @@
           const node = new AudioWorkletNode(ac, name, {
             outputChannelCount: [2],
           });
-          console.log("node", node.channelCount);
           node.connect(ac.destination);
           return node;
         }
@@ -257,71 +256,8 @@
     </script>
     <template class="dsp-prelude">
       <script>
-        // https://garten.salat.dev/kabelsalat/graph-computation.html
-        class Node {
-          constructor(type, ins, update) {
-            this.type = type;
-            this.ins = ins;
-            update && (this.update = update);
-          }
-          run() {
-            const args = this.ins.map((input) => {
-              if (input instanceof Node) {
-                return input.run();
-              }
-              return input;
-            });
-            return this.update(...args);
-          }
-        }
-        Node.prototype.compile = function () {
-          let nodes = Array.from(topoSort(this));
-          const getRef = (input) =>
-            typeof input !== "object" ? input : `v${nodes.indexOf(input)}`;
-          let lines = [];
-          for (let id in nodes) {
-            const node = nodes[id];
-            const args = node.ins.map(getRef);
-            const ref = getRef(node);
-            lines.push(`const ${ref} = n[${id}].update(${args.join(",")})`);
-          }
-          const last = getRef(nodes[nodes.length - 1]);
-          lines.push(`return ${last}`);
-          const code = lines.join("\n");
-          const update = new Function("n", code);
-          const node = new Node("compiled", [], () => update(nodes));
-          return node;
-        };
-        // https://garten.salat.dev/kabelsalat/graph-compilation.html
-        // sort nodes by dependencies (using generator function to be able to step through)
-        function* topoSort(node, visited = new Set()) {
-          if (!(node instanceof Node) || visited.has(node)) {
-            return; // constant values or already visited nodes
-          }
-          visited.add(node);
-          for (let input of node.ins) {
-            yield* topoSort(input, visited);
-          }
-          yield node;
-        }
-        let registerFn = (type, update) => {
-          let getNode = (...args) => new Node(type, args, update);
-          Node.prototype[type] = function (...args) {
-            return getNode(this, ...args);
-          };
-          return getNode;
-        };
-        let registerClass = (type, NodeClass) => {
-          let getNode = (...args) => new NodeClass(type, args);
-          Node.prototype[type] = function (...args) {
-            return getNode(this, ...args);
-          };
-          return getNode;
-        };
-        // dsp stuff
-        const sampleRate = 48000;
         // https://garten.salat.dev/audio-dsp/oscillators.html
-        class SineOsc extends Node {
+        class SineOsc {
           phase = 0;
           value = 0;
           update(freq) {
@@ -330,7 +266,6 @@
             return this.value;
           }
         }
-        let sine = registerClass("sine", SineOsc);
         let midi2freq = (midi) => Math.pow(2, (midi - 69) / 12) * 440;
         Object.assign(globalThis, { SineOsc, midi2freq });
       </script>
@@ -340,7 +275,7 @@
     <h2>🌱 audio worklets III</h2>
 
     <p>
-      i need to update my <a href="/audio-dsp/worklets2.html">dsp repl</a>. so
+      i want to improve my <a href="/audio-dsp/worklets2.html">dsp repl</a>. so
       far, every update would stop the current worklet and create a new one.
       instead, i want to create a single worklet at the start and update only
       the dsp function.. here's the updated worklet processor:
@@ -354,40 +289,46 @@
       );
     </script>
     <p>
-      additionally, the $ variable now points to the worklet, allowing us to
-      carry state across evaluations.
+      additionally, the $ variable now points to the worklet instance, allowing
+      us to carry state across evaluations:
     </p>
     <dsp-repl rows="12"
       ><!-- 
-$.o = $.o ?? new SineOsc() // init oscillator
+$.o1 = $.o1 ?? new SineOsc() // init oscillator
 $.m = $.m ?? 1 // init m
 $.m = ($.m+5)%36; // increment n
 let f = midi2freq($.m+60) // frequency
-$.dsp = (t) => $.l=$.r=$.o.update(f)/8
+$.dsp = (t) => $.l = $.r =  $.o1.update(f)/8
 --></dsp-repl
     >
-    <dsp-repl rows="12"
+    <p>
+      instead of returning a single number, we can now set $.r and $.l to get
+      stereo sound. we can also use the $ to store multiple voices:
+    </p>
+    <dsp-repl rows="16"
       ><!-- 
 let o = new SineOsc();
-$.lfo = $.lfo ?? new SineOsc()
-$.m = $.m ?? 1 // init m
-$.m = ($.m+5)%36; // increment n
-let f = midi2freq($.m+60) // frequency
-$.voices = $.voices ?? []
+$.lfo = $.lfo ?? new SineOsc();
+$.m = $.m ?? 1; // init m
+$.m = ($.m + 5) % 36; // increment n
+let f = midi2freq($.m + 60); // frequency
+$.voices = $.voices ?? [];
 
-let voice = () => o.update(f)/8
-$.voices = $.voices.slice(-4).concat([voice])
-console.log($.voices.length)
-$.dsp=() => {
-let sum = 0;
-$.voices.forEach(voice => (sum+=voice()))
-$.l=$.r=sum*($.lfo.update(4)+1)
+let voice = () => o.update(f) / 8;
+$.voices = $.voices.slice(-4).concat([voice]);
+// ^ add voice and make sure we keep only latest 4 ^
+$.dsp = () => {
+  let sum = 0;
+  $.voices.forEach((voice) => (sum += voice()));
+  $.l = $.r = (sum * ($.lfo.update(4) + 1)) / 2;
 }
 --></dsp-repl
     >
-    <!--
-
--->
+    <p>
+      note that we're storing the oscillator locally here (using let), as we
+      need one dedicated oscillator per voice. the sum of all voices is
+      modulated with a global lfo, so that its phase won't reset on update.
+    </p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
