@@ -294,8 +294,8 @@
     </p>
     <dsp-repl rows="12"
       ><!-- 
-$.o1 = $.o1 ?? new SineOsc() // init oscillator
-$.m = $.m ?? 1 // init m
+$.o1 ??= new SineOsc() // init oscillator
+$.m ??= 1 // init m
 $.m = ($.m+5)%36; // increment n
 let f = midi2freq($.m+60) // frequency
 $.dsp = (t) => $.l = $.r =  $.o1.update(f)/8
@@ -309,11 +309,11 @@ $.dsp = (t) => $.l = $.r =  $.o1.update(f)/8
     <dsp-repl rows="16"
       ><!-- 
 let o = new SineOsc();
-$.lfo = $.lfo ?? new SineOsc();
-$.m = $.m ?? 1; // init m
+$.lfo ??= new SineOsc();
+$.m ??= 1; // init m
 $.m = ($.m + 5) % 36; // increment n
 let f = midi2freq($.m + 60); // frequency
-$.voices = $.voices ?? [];
+$.voices ??= [];
 
 let voice = () => o.update(f) / 8;
 $.voices = $.voices.slice(-4).concat([voice]);
