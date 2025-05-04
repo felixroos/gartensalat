@@ -302,6 +302,7 @@ $.dsp = (t) => $.l = $.r =  $.o1.update(f)/8
 --></dsp-repl
     >
     <p>
+      press run (or hit ctrl+enter) multiple times to update the frequency.
       instead of returning a single number, we can now set $.r and $.l to get
       stereo sound. we can also use the $ to store multiple voices:
     </p>
@@ -325,9 +326,10 @@ $.dsp = () => {
 --></dsp-repl
     >
     <p>
-      note that we're storing the oscillator locally here (using let), as we
-      need one dedicated oscillator per voice. the sum of all voices is
-      modulated with a global lfo, so that its phase won't reset on update.
+      again, run it multiple times to spawn voices.. note that we're storing the
+      oscillator locally here (using let), as we need one dedicated oscillator
+      per voice. the sum of all voices is modulated with a global lfo, so that
+      its phase won't reset on update.
     </p>
     <details>
       <summary id="loc">show page source</summary>
