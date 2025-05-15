@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <title>iclc 2025: kabelsalat</title>
+    <link
+      rel="icon"
+      type="image/png"
+      href="https://kabel.salat.dev/favicon.png"
+    />
     <style>
       * {
         box-sizing: border-box;
@@ -25,6 +31,7 @@
         }
       }
       node-garden,
+      dsp-repl,
       details {
         width: 100%;
         max-width: 800px;
@@ -506,6 +513,390 @@
         }
       };
     </script>
+
+    <template class="dsp-worklet">
+      <script>
+        class DspProcessor extends AudioWorkletProcessor {
+          dsp = () => {};
+          l = 0;
+          r = 0;
+          SR = sampleRate;
+          constructor() {
+            super();
+            this.t = 0;
+            this.active = true;
+            this.framebuffer = new Float32Array(Math.floor(sampleRate / 30));
+            globalThis.$ = this;
+            this.port.onmessage = (e) => {
+              const msg = e.data;
+              if (msg && msg.code) {
+                //new Function("$", msg.code)(this);
+                new Function(msg.code)();
+              } else if (msg === "stop") {
+                this.active = false;
+              }
+            };
+          }
+          process(inputs, outputs, parameters) {
+            const output = outputs[0];
+            for (let i = 0; i < output[0].length; i++) {
+              this.dsp(this.t / sampleRate);
+              output[0][i] = this.l;
+              output[1][i] = this.r;
+              this.t++;
+              this.framebuffer[this.t % this.framebuffer.length] = this.l;
+              if (this.t % this.framebuffer.length === 0 && this.t > 0) {
+                this.port.postMessage(this.framebuffer);
+              }
+            }
+            return this.active;
+          }
+        }
+      </script>
+    </template>
+    <!-- dsp-repl -->
+    <script>
+      const ctx = new AudioContext();
+      // init audio context
+      document.addEventListener("click", function firstClick() {
+        ctx.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+
+      const _lerp = (v, min, max) => v * (max - min) + min;
+      const invLerp = (v, min, max) => (v - min) / (max - min);
+      const remap = (v, vmin, vmax, omin, omax) =>
+        _lerp(invLerp(v, vmin, vmax), omin, omax);
+
+      class DSPRepl extends HTMLElement {
+        static observedAttributes = ["code", "rows"];
+        worklet;
+        init() {
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "").replace("<!--", "").replace("-->", "").trim();
+
+          const rows = this.getAttribute("rows") ?? 4;
+          if (!code) {
+            return;
+          }
+          this.innerHTML = "";
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div style="border:2px solid #222;padding:0;">
+            <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
+            <div style="user-select:none;cursor:pointer">
+            <a class="play">run</a> | <a class="stop">stop</a>
+            </div>
+            <canvas width="400" height="80"></canvas>
+            </div>
+              `
+          );
+          // draw logic
+          this.canvas = this.querySelector("canvas");
+          this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+          this.canvas.height =
+            this.canvas.clientHeight * window.devicePixelRatio;
+          this.drawContext = this.canvas.getContext("2d");
+          this.drawSilence(this.drawContext);
+
+          // repl logic
+          const input = this.querySelector("textarea");
+          input.value = code;
+          input.style = "margin:0;border-bottom:2px solid #222";
+          this.input = input;
+
+          this.querySelector(".play").onclick = () => this.update(input.value);
+          this.querySelector(".stop").onclick = () => this.stop();
+          input.addEventListener("keydown", async (e) => {
+            if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+              const hash = btoa(input.value);
+              let urlCode = window.location.hash.slice(1);
+              this.update(input.value);
+            }
+            if ((e.ctrlKey || e.altKey) && e.code === "Period") {
+              e.preventDefault();
+              this.stop();
+            }
+          });
+        }
+        async initWorklet() {
+          if (this.worklet) {
+            return;
+          }
+          await ctx.resume();
+          this.worklet = await this.runWorklet(ctx, this.input.value);
+          this.worklet.port.onmessage = (e) =>
+            requestAnimationFrame(() => this.drawBuffer(e.data));
+        }
+
+        async update(code) {
+          await this.initWorklet();
+          this.worklet.port.postMessage({ code });
+        }
+        stop() {
+          this.worklet?.disconnect();
+          this.worklet?.port.postMessage("stop");
+          this.worklet = undefined;
+        }
+
+        async runWorklet(ac) {
+          const name = `worklet-${Date.now()}`;
+          const math = Object.getOwnPropertyNames(Math).join(",");
+          let prelude = `const {${math}} = Math;\nObject.assign(globalThis,{${math}})\n`;
+          // add dsp scripts
+          document
+            .querySelector("template.dsp-prelude")
+            .content.querySelectorAll("script")
+            .forEach((script) => {
+              prelude += script.textContent;
+            });
+
+          let workletCode = document
+            .querySelector("template.dsp-worklet")
+            .content.querySelector("script").textContent;
+
+          workletCode = `${prelude}\n${workletCode}\nregisterProcessor('${name}', DspProcessor);`;
+
+          await ac.resume();
+          const dataURL = `data:text/javascript;base64,${btoa(workletCode)}`;
+          await ac.audioWorklet.addModule(dataURL);
+          const node = new AudioWorkletNode(ac, name, {
+            outputChannelCount: [2],
+          });
+          node.connect(ac.destination);
+          return node;
+        }
+
+        drawBuffer(samples) {
+          const ctx = this.drawContext;
+          const canvas = ctx.canvas;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "white";
+          let x0 = 1;
+          let x1 = samples.length;
+          let y0 = -1;
+          let y1 = 1;
+          let px0 = 0;
+          let px1 = ctx.canvas.width;
+          let py0 = ctx.canvas.height - ctx.lineWidth;
+          let py1 = ctx.lineWidth;
+          ctx.beginPath();
+          for (let px = 0; px < ctx.canvas.width; px++) {
+            const x = remap(px, px0, px1, x0, x1);
+            const y = samples[Math.floor(x)];
+            const py = remap(y, y0, y1, py0, py1);
+            px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+
+        drawSilence(ctx, color = "white", lineWidth = 2) {
+          const canvas = ctx.canvas;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lineWidth;
+          ctx.beginPath();
+          ctx.moveTo(0, canvas.height / 2);
+          ctx.lineTo(canvas.width, canvas.height / 2);
+          ctx.stroke();
+        }
+
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          this.init();
+        }
+      }
+      customElements.define("dsp-repl", DSPRepl);
+    </script>
+    <template class="dsp-prelude">
+      <!-- Node -->
+      <script>
+        // https://garten.salat.dev/kabelsalat/graph-computation.html
+        class DspNode {
+          constructor(type, ins, update, compileSelf) {
+            this.type = type;
+            this.ins = ins;
+            update && (this.update = update);
+            compileSelf && (this.compileSelf = compileSelf);
+          }
+          run() {
+            const args = this.ins.map((input) => {
+              if (input instanceof Node) {
+                return input.run();
+              }
+              return input;
+            });
+            return this.update(...args);
+          }
+        }
+        globalThis.Node = DspNode;
+        Node.prototype.compile = function () {
+          let nodes = Array.from(topoSort(this));
+          const getRef = (input) =>
+            typeof input !== "object" ? input : `v${nodes.indexOf(input)}`;
+          let lines = [];
+          for (let id in nodes) {
+            const node = nodes[id];
+            const args = node.ins.map(getRef);
+            const ref = getRef(node);
+            if (!node.compileSelf) {
+              lines.push(`const ${ref} = n[${id}].update(${args.join(",")})`);
+            } else {
+              lines.push(`const ${ref} = ${node.compileSelf(args, node, id)}`);
+            }
+          }
+          const last = getRef(nodes[nodes.length - 1]);
+          lines.push(`return ${last}`);
+          const code = lines.join("\n");
+          console.log("code", code);
+          const update = new Function("n", code);
+          const node = new Node("compiled", [], () => update(nodes));
+          return node;
+        };
+        let registerNode = (type, getNode) => {
+          Node.prototype[type] = function (...args) {
+            return getNode(this, ...args);
+          };
+          return getNode;
+        };
+        globalThis.registerFn = (type, update) =>
+          registerNode(type, (...args) => new Node(type, args, update));
+
+        globalThis.registerClass = (type, NodeClass) =>
+          registerNode(type, (...args) => new NodeClass(type, args));
+
+        globalThis.registerRaw = (type, compileSelf) =>
+          registerNode(type, (...args) => {
+            const argNames = Array.from(
+              { length: args.length },
+              (_, i) => `a${i}`
+            );
+            const body = `return ${compileSelf(argNames)}`;
+            const update = new Function(...argNames, body);
+            return new Node("raw", args, update, compileSelf);
+          });
+      </script>
+      <!-- topoSort -->
+      <script>
+        // https://garten.salat.dev/kabelsalat/graph-compilation.html
+        // sort nodes by dependencies (using generator function to be able to step through)
+        function* topoSort(node, visited = new Set()) {
+          if (!(node instanceof Node) || visited.has(node)) {
+            return; // constant values or already visited nodes
+          }
+          visited.add(node);
+          for (let input of node.ins) {
+            yield* topoSort(input, visited);
+          }
+          yield node;
+        }
+      </script>
+      <script id="play-method">
+        Node.prototype.play = function () {
+          let compiled = this.compile();
+          $.dsp = () => ($.l = $.r = compiled.run());
+          return compiled;
+        };
+      </script>
+      <script id="collect-method">
+        Node.prototype.collect = function (max = 1) {
+          $.nodes ??= [];
+          $.nodes.push(this);
+          $.nodes = $.nodes.slice(-max);
+          return add(...$.nodes);
+        };
+      </script>
+      <script id="spawn-method">
+        Node.prototype.spawn = function (max = 1, fadeIn = 0, fadeOut = 0.1) {
+          $.nodes ??= [];
+          const node = fadeIn ? this.fadein(fadeIn * $.SR) : this;
+          $.nodes.push(node);
+          $.nodes.forEach((node, i) => {
+            if (node.type !== "fadeout" && $.nodes.length - i > max) {
+              $.nodes[i] = fadeout(node, fadeOut * $.SR); // fade out
+            } else if (node.type === "fadeout" && node.done) {
+              $.nodes.splice(i, 1); // fadeout done -> remove
+            } else if (node.type === "fadein" && node.done) {
+              $.nodes[i] = node.ins[0]; // fadein done -> unwrap
+            }
+          });
+          return add(...$.nodes);
+        };
+      </script>
+      <script id="fade">
+        // maybe these could be combined into a single Node
+        class FadeIn extends Node {
+          start = $.t;
+          done = false;
+          update(input, fadeTime = 1000) {
+            const progress = ($.t - this.start) / fadeTime;
+            if (progress >= 1) {
+              this.done = true;
+              return input;
+            }
+            const gain = Math.min(1, progress);
+            return input * gain;
+          }
+        }
+        let fadein = registerClass("fadein", FadeIn);
+        class FadeOut extends Node {
+          start = $.t;
+          done = false;
+          update(input, fadeTime = 1000) {
+            this.init = true;
+            const progress = ($.t - this.start) / fadeTime;
+            if (progress >= 1) {
+              this.done = true;
+              return 0;
+            }
+            const gain = 1 - Math.min(1, progress);
+            return input * gain;
+          }
+        }
+        let fadeout = registerClass("fadeout", FadeOut);
+      </script>
+      <script>
+        // https://garten.salat.dev/audio-dsp/oscillators.html
+        class SineOsc extends Node {
+          phase = 0;
+          update(freq) {
+            const value = Math.sin(this.phase * 2 * Math.PI);
+            this.phase = (this.phase + freq / sampleRate) % 1;
+            return value;
+          }
+        }
+        globalThis.SineOsc = SineOsc;
+        globalThis.midi2freq = (midi) => Math.pow(2, (midi - 69) / 12) * 440;
+        globalThis.sine = registerClass("sine", SineOsc);
+        globalThis.range = registerRaw(
+          "range",
+          ([bip, a, b]) => `((${bip} + 1) / 2) * (${b} - ${a}) + ${a}`
+        );
+
+        globalThis.add = registerRaw("add", (args) => args.join("+"));
+        globalThis.sub = registerRaw("sub", (args) => args.join("-"));
+        globalThis.mul = registerRaw("mul", (args) => args.join("*"));
+        globalThis.div = registerRaw("div", (args) => args.join("/"));
+
+        // sine(240).raw(([n]) => `${n}/16`)
+        let raw = registerNode("raw", (...args) => {
+          const compileSelf = args[args.length - 1];
+          return new Node("raw", args.slice(0, -1), null, compileSelf);
+        });
+        /* let raw = (type, compileSelf) =>
+          registerNode((...args) => new Node(type, args, null, compileSelf));
+        let raw = registerRaw('raw', ()) */
+        // sine(100).raw((arg) => `${arg}/2`)
+        Object.assign(globalThis, {
+          Node,
+        });
+      </script>
+    </template>
     <script>
       let registerWith = (type, getNode) => {
         // register method for chaining
@@ -792,15 +1183,6 @@ return add(8,2).mul( add(3,5) )
       <p>multichannel expansion:</p>
       <node-garden rows="3">
         <!--
-return poly(2, 3).add(1).mul(4)
-      -->
-      </node-garden>
-    </section>
-    <section>
-      <h2>2. language</h2>
-      <p>multichannel expansion:</p>
-      <node-garden rows="3">
-        <!--
 return add([2, 3], 1).mul(4)
       -->
       </node-garden>
@@ -833,12 +1215,12 @@ return node.out()
 return add(1, o=>o).out()
       -->
       </node-garden>
-      <details>
+      <!-- <details>
         <summary>show implementation</summary>
         <script>
           codeblock(document.querySelector("#node-feedback"), 6);
         </script>
-      </details>
+      </details> -->
     </section>
     <section>
       <h2>2. language</h2>
@@ -849,12 +1231,35 @@ return add([2, 3], o=>o)
       -->
       </node-garden>
     </section>
-    <section>
+    <!-- <section>
       <h2>2. for</h2>
       <pre></pre>
+    </section> -->
+    <section>
+      <h2>3. audio</h2>
+      <p>without kabelsalat:</p>
+      <dsp-repl rows="6"
+        ><!-- 
+$.dsp = (t) => {
+  $.l = $.r = sin(240*t*2*PI)/4
+}
+--></dsp-repl
+      >
     </section>
-    <!-- <section>
-      <h2>2. language</h2>
+    <section>
+      <h2>3. audio</h2>
+      <p>with kabelsalat:</p>
+      <dsp-repl rows="6"
+        ><!--
+let node = sine(240).div(4)//.compile()
+$.dsp = (t) => {
+  $.l = $.r = node.run()
+}
+--></dsp-repl
+      >
+    </section>
+    <section>
+      <h2>3. audio</h2>
       <p><img src="./img/nathan_ho_kick.png" alt="nathan ho kick" /></p>
       <pre>
 sine(60)
@@ -863,7 +1268,28 @@ sine(60)
 .pan(sine(.4))
 .out()</pre
       >
-    </section> -->
+      <dsp-repl rows="6"
+        ><!-- 
+sine(61)
+.range(200,400)
+.sine()
+.div(4)
+.play()
+--></dsp-repl
+      >
+
+      <dsp-repl rows="8"
+        ><!-- 
+$.m ??= 0
+$.m = ($.m+5)%24
+let f = midi2freq($.m+60)
+sine(f)
+.div(4)
+.mul(sine(2).range(.5,1))
+.spawn(3, .01, .5).play()
+-->
+      </dsp-repl>
+    </section>
     <section>
       <ul>
         <li>
