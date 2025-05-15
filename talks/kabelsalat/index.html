@@ -521,11 +521,15 @@
           l = 0;
           r = 0;
           SR = sampleRate;
+          ISR = 1 / sampleRate;
           constructor() {
             super();
             this.t = 0;
             this.active = true;
             this.framebuffer = new Float32Array(Math.floor(sampleRate / 30));
+            this.msg = {
+              framebuffer: this.framebuffer,
+            };
             globalThis.$ = this;
             this.port.onmessage = (e) => {
               const msg = e.data;
@@ -546,7 +550,7 @@
               this.t++;
               this.framebuffer[this.t % this.framebuffer.length] = this.l;
               if (this.t % this.framebuffer.length === 0 && this.t > 0) {
-                this.port.postMessage(this.framebuffer);
+                this.port.postMessage(this.msg);
               }
             }
             return this.active;
@@ -584,15 +588,18 @@
           this.insertAdjacentHTML(
             "beforeend",
             `<div style="border:2px solid #222;padding:0;">
+            
             <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
             <div style="user-select:none;cursor:pointer">
-            <a class="play">run</a> | <a class="stop">stop</a>
+            <button class="play">run</button> <button class="stop">stop</button>
             </div>
             <canvas width="400" height="80"></canvas>
+            <div class="viz" style="display:none;justify-content:center;padding:10px;height:300px"></div>
             </div>
               `
           );
           // draw logic
+          this.vizContainer = this.querySelector(".viz");
           this.canvas = this.querySelector("canvas");
           this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
           this.canvas.height =
@@ -626,8 +633,15 @@
           }
           await ctx.resume();
           this.worklet = await this.runWorklet(ctx, this.input.value);
-          this.worklet.port.onmessage = (e) =>
-            requestAnimationFrame(() => this.drawBuffer(e.data));
+          this.worklet.port.onmessage = (e) => {
+            if (e.data.framebuffer) {
+              requestAnimationFrame(() => this.drawBuffer(e.data.framebuffer));
+            } else if (e.data.viz) {
+              const node = JSON.parse(e.data.viz);
+              renderNode(node, this.vizContainer);
+              this.vizContainer.style.display = "block";
+            }
+          };
         }
 
         async update(code) {
@@ -720,9 +734,10 @@
         class DspNode {
           constructor(type, ins, update, compileSelf) {
             this.type = type;
-            this.ins = ins;
+            // this.ins = ins;
             update && (this.update = update);
             compileSelf && (this.compileSelf = compileSelf);
+            this.ins = ins.map((input) => this.parseInput(input));
           }
           run() {
             const args = this.ins.map((input) => {
@@ -735,28 +750,41 @@
           }
         }
         globalThis.Node = DspNode;
-        Node.prototype.compile = function () {
+        Node.prototype.parseInput = function (input) {
+          if (typeof input === "function") {
+            return input(this);
+          }
+          return input;
+        };
+        Node.prototype.compile = function (memory) {
           let nodes = Array.from(topoSort(this));
+          // console.log(memory.join("\n"));
+          let r = memory ? memory : Array(nodes.length).fill(0);
           const getRef = (input) =>
-            typeof input !== "object" ? input : `v${nodes.indexOf(input)}`;
+            typeof input !== "object" ? input : `r[${nodes.indexOf(input)}]`;
           let lines = [];
           for (let id in nodes) {
             const node = nodes[id];
             const args = node.ins.map(getRef);
             const ref = getRef(node);
             if (!node.compileSelf) {
-              lines.push(`const ${ref} = n[${id}].update(${args.join(",")})`);
+              lines.push(`${ref} = n[${id}].update(${args.join(",")})`);
             } else {
-              lines.push(`const ${ref} = ${node.compileSelf(args, node, id)}`);
+              lines.push(`${ref} = ${node.compileSelf(args, node, id)}`);
             }
           }
           const last = getRef(nodes[nodes.length - 1]);
           lines.push(`return ${last}`);
           const code = lines.join("\n");
-          console.log("code", code);
-          const update = new Function("n", code);
-          const node = new Node("compiled", [], () => update(nodes));
+          console.log("-------compiled--------");
+          console.log(code);
+          const update = new Function("n", "r", code);
+          const node = new Node("compiled", [], () => update(nodes, r));
           return node;
+        };
+        Node.prototype.viz = function () {
+          $.port.postMessage({ viz: JSON.stringify(this) });
+          return this;
         };
         let registerNode = (type, getNode) => {
           Node.prototype[type] = function (...args) {
@@ -778,7 +806,7 @@
             );
             const body = `return ${compileSelf(argNames)}`;
             const update = new Function(...argNames, body);
-            return new Node("raw", args, update, compileSelf);
+            return new Node(type, args, update, compileSelf);
           });
       </script>
       <!-- topoSort -->
@@ -798,6 +826,7 @@
       </script>
       <script id="play-method">
         Node.prototype.play = function () {
+          this.viz();
           let compiled = this.compile();
           $.dsp = () => ($.l = $.r = compiled.run());
           return compiled;
@@ -811,20 +840,25 @@
           return add(...$.nodes);
         };
       </script>
-      <script id="spawn-method">
-        Node.prototype.spawn = function (max = 1, fadeIn = 0, fadeOut = 0.1) {
+      <script id="group-method">
+        Node.prototype.group = function (max = 1, fadeIn = 0, fadeOut = 0.1) {
           $.nodes ??= [];
+          let len = $.nodes.length;
+          // fade out / retire old nodes
+          $.nodes = $.nodes.reduce((acc, node, i) => {
+            if (node.type !== "fadeout" && len - i >= max) {
+              // start fade out
+              acc.push(fadeout(node, fadeOut * $.SR));
+            } else if (node.type === "fadeout" && node.done) {
+              return acc; // fadeout done -> remove
+            } else if (node.type === "fadein" && node.done) {
+              acc.push(node.ins[0]); // unwrap fadein
+            }
+            return acc;
+          }, []);
+          // fade in new node
           const node = fadeIn ? this.fadein(fadeIn * $.SR) : this;
           $.nodes.push(node);
-          $.nodes.forEach((node, i) => {
-            if (node.type !== "fadeout" && $.nodes.length - i > max) {
-              $.nodes[i] = fadeout(node, fadeOut * $.SR); // fade out
-            } else if (node.type === "fadeout" && node.done) {
-              $.nodes.splice(i, 1); // fadeout done -> remove
-            } else if (node.type === "fadein" && node.done) {
-              $.nodes[i] = node.ins[0]; // fadein done -> unwrap
-            }
-          });
           return add(...$.nodes);
         };
       </script>
@@ -871,8 +905,42 @@
           }
         }
         globalThis.SineOsc = SineOsc;
-        globalThis.midi2freq = (midi) => Math.pow(2, (midi - 69) / 12) * 440;
         globalThis.sine = registerClass("sine", SineOsc);
+        globalThis.lpf = registerClass(
+          "lpf",
+          class extends Node {
+            s0 = 0;
+            s1 = 0;
+            update(s, cutoff, resonance = 0) {
+              // Out of bound values can produce NaNs
+              cutoff = Math.min(cutoff, 1);
+              resonance = Math.max(resonance, 0);
+              var c = Math.pow(0.5, (1 - cutoff) / 0.125);
+              var r = Math.pow(0.5, (resonance + 0.125) / 0.125);
+              var mrc = 1 - r * c;
+              var v0 = this.s0;
+              var v1 = this.s1;
+              // Apply the filter to the sample
+              v0 = mrc * v0 - c * v1 + c * s;
+              v1 = mrc * v1 + c * v0;
+              s = v1;
+              this.s0 = v0;
+              this.s1 = v1;
+              return s;
+            }
+          }
+        );
+        globalThis.saw = registerClass(
+          "saw",
+          class extends Node {
+            phase = 0;
+            update(freq) {
+              this.phase += $.ISR * freq;
+              return (this.phase % 1) * 2 - 1;
+            }
+          }
+        );
+        globalThis.midi2freq = (midi) => Math.pow(2, (midi - 69) / 12) * 440;
         globalThis.range = registerRaw(
           "range",
           ([bip, a, b]) => `((${bip} + 1) / 2) * (${b} - ${a}) + ${a}`
@@ -882,12 +950,14 @@
         globalThis.sub = registerRaw("sub", (args) => args.join("-"));
         globalThis.mul = registerRaw("mul", (args) => args.join("*"));
         globalThis.div = registerRaw("div", (args) => args.join("/"));
+        globalThis.mod = registerRaw("mod", (args) => args.join("%"));
+        globalThis.n = registerRaw("n", (x) => x);
 
         // sine(240).raw(([n]) => `${n}/16`)
-        let raw = registerNode("raw", (...args) => {
+        /* let raw = registerNode("raw", (...args) => {
           const compileSelf = args[args.length - 1];
           return new Node("raw", args.slice(0, -1), null, compileSelf);
-        });
+        }); */
         /* let raw = (type, compileSelf) =>
           registerNode((...args) => new Node(type, args, null, compileSelf));
         let raw = registerRaw('raw', ()) */
@@ -1237,11 +1307,29 @@ return add([2, 3], o=>o)
     </section> -->
     <section>
       <h2>3. audio</h2>
-      <p>without kabelsalat:</p>
+      <p>dsp-repl, without kabelsalat:</p>
       <dsp-repl rows="6"
         ><!-- 
 $.dsp = (t) => {
-  $.l = $.r = sin(240*t*2*PI)/4
+  $.l = $.r = sin(241*t*2*PI)/4
+}
+--></dsp-repl
+      >
+      <ul>
+        <li>the $.dsp function runs for every sample = 48kHz</li>
+        <li>$.l and $.r hold the speaker position between -1 and 1</li>
+      </ul>
+    </section>
+    <section>
+      <h2>3. audio</h2>
+      <p>bytebeat example:</p>
+      <dsp-repl rows="7"
+        ><!-- 
+$.dsp = () => {
+  let t = $.t
+  $.l = $.r = ((( // ryg 2011-10-10
+((t*("36364689"[t>>13&7]&15))/12&128)+(((((t>>12)^(t>>12)-2)%11*t)/4|t>>13)&127)
+) & 255) / 127.5 - 1)/4
 }
 --></dsp-repl
       >
@@ -1251,10 +1339,63 @@ $.dsp = (t) => {
       <p>with kabelsalat:</p>
       <dsp-repl rows="6"
         ><!--
-let node = sine(240).div(4)//.compile()
+let node = sine(241).div(4).viz()
+
 $.dsp = (t) => {
   $.l = $.r = node.run()
 }
+--></dsp-repl
+      >
+    </section>
+    <section>
+      <h2>3. audio</h2>
+      <p>play function:</p>
+      <dsp-repl rows="6"
+        ><!--
+Node.prototype.play = function() {
+  this.viz()
+  $.dsp = (t) => ($.l = $.r = this.run())
+}
+sine(241).div(4).play()
+--></dsp-repl
+      >
+    </section>
+    <section>
+      <h2>3. audio</h2>
+      <p>play function:</p>
+      <dsp-repl rows="6"
+        ><!--
+sine(241).div(4).play()
+--></dsp-repl
+      >
+    </section>
+    <section>
+      <h2>3. audio</h2>
+      <p>with kabelsalat:</p>
+      <dsp-repl rows="6"
+        ><!--
+saw(120)
+.lpf(sine(2).range(.2,.8))
+.div(2)
+.group(1, 1, 1)
+.play()
+--></dsp-repl
+      >
+      <p>
+        todo: find out why group(1) sometimes plays 2 things. repro: eval 3
+        times (wait between evals)
+      </p>
+    </section>
+    <section>
+      <h2>3. audio</h2>
+      <p>with kabelsalat:</p>
+      <dsp-repl rows="6"
+        ><!--
+saw(120)
+.lpf(sine(2).range(.2,.8))
+.div(2)
+.group(1, .5)
+.play()
 --></dsp-repl
       >
     </section>
@@ -1286,7 +1427,21 @@ let f = midi2freq($.m+60)
 sine(f)
 .div(4)
 .mul(sine(2).range(.5,1))
-.spawn(3, .01, .5).play()
+.group(3, .01, .5).play()
+-->
+      </dsp-repl>
+    </section>
+
+    <section>
+      <dsp-repl rows="8"
+        ><!-- 
+$.mem ??= new Float32Array(8)
+let node = add(1,o=>o).mul(121/$.SR)
+.mod(1).sub(0.5)
+.compile($.mem)
+$.dsp = (t) => {
+  $.l = $.r = node.run()
+}
 -->
       </dsp-repl>
     </section>
@@ -1303,8 +1458,6 @@ sine(f)
         <li>talk about mondo?</li>
       </ul>
     </section>
-
-    <section>empty</section>
     <script>
       const slides = Array.from(document.querySelectorAll("section"));
       let slideIndex = Number(window.location.hash.slice(1)) || 0;
