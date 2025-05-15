@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+      }
+      details {
+        width: 100%;
+        max-width: 800px;
+      }
+      body {
+        background-color: #1d1918;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        padding: 20px 8px;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      section {
+        * {
+          flex-shrink: 0;
+          max-width: 800px;
+        }
+        position: absolute;
+        top: 0;
+        left: 0;
+        transition: all 0.5s ease-in-out;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 80px 20px;
+        width: 100%;
+        font-size: 1.5em;
+        img {
+          max-width: 100%;
+        }
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        padding-bottom: 500px;
+        overflow: auto;
+        h1,
+        h2,
+        h3 {
+          position: sticky;
+          top: 0px;
+          padding: 8px;
+          background: #1d1918;
+          margin-bottom: 20px;
+        }
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("./FontWithASyntaxHighlighter-Regular.woff2") format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      textarea,
+      pre {
+        box-sizing: border-box;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 0.85em;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+        max-width: 800px;
+      }
+    </style>
+    <!-- codeblock -->
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        const pre = document.createElement("pre");
+        pre.textContent = getCode(scriptElement, indent);
+        script.after(pre);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+  </head>
+  <body>
+    <section>
+      <h1>slideshow</h1>
+      <p>this is a slideshow in a single html file</p>
+      <p>press opt+right to go to the next slide</p>
+    </section>
+    <section>
+      <h2>this is the next slide</h2>
+      <p>
+        the current slide will be persisted to the url, so you can refresh
+        anytime without loosing it
+      </p>
+      <p>press opt-left to go to the previous slide</p>
+    </section>
+    <script>
+      const slides = Array.from(document.querySelectorAll("section"));
+      let slideIndex = Number(window.location.hash.slice(1)) || 0;
+      let setSlideIndex = (index) => {
+        slideIndex = index % slides.length;
+        console.log("slideIndex", slideIndex);
+        slides.forEach((slide, i) => {
+          //slide.style.display = "none";
+          if (i < slideIndex) {
+            /* slide.style.transform = "translate(-100vw)"; */
+            slide.style.opacity = "0";
+            slide.style.pointerEvents = "none";
+          } else if (i === slideIndex) {
+            /* slide.style.transform = "translate(0px,0px)"; */
+            slide.style.opacity = "1";
+            //slide.style.display = "flex";
+            slide.style.pointerEvents = "inherit";
+          } else if (i > slideIndex) {
+            /* slide.style.transform = "translate(100vw)"; */
+            slide.style.opacity = "0";
+            slide.style.pointerEvents = "none";
+          }
+          // slide.style.display = "none";
+        });
+        const slide = slides[slideIndex];
+        // slide.style.display = "flex";
+        window.location.hash = slideIndex;
+      };
+      setSlideIndex(slideIndex);
+      let nextSlide = () => setSlideIndex((slideIndex + 1) % slides.length);
+      let prevSlide = () =>
+        setSlideIndex((slideIndex - 1 + slides.length) % slides.length);
+      window.nextSlide = nextSlide;
+      window.prevSlide = prevSlide;
+      document.onkeydown = (e) => {
+        if (e.altKey) {
+          if (e.key === "ArrowLeft") {
+            prevSlide();
+          } else if (e.key === "ArrowRight") {
+            nextSlide();
+          }
+        }
+      };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+      }
+      button {
+        background: #222;
+        border: 2px solid #555;
+        color: white;
+        font-size: 1em;
+        padding: 2px 4px 4px 4px;
+        cursor: pointer;
+        &:hover {
+          background: #333;
+        }
+        &:active {
+          background: #666;
+        }
+      }
+      node-garden,
+      details {
+        width: 100%;
+        max-width: 800px;
+      }
+      body {
+        background-color: #1d1918;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        padding: 20px 8px;
+        padding: 0;
+      }
+      section {
+        * {
+          flex-shrink: 0;
+        }
+        position: absolute;
+        top: 0;
+        left: 0;
+        transition: all 0.5s ease-in-out;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 80px 20px;
+        width: 100%;
+        font-size: 1.5em;
+        img {
+          max-width: 100%;
+        }
+        padding-bottom: 500px;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        /* padding-bottom: 500px; */
+        overflow: auto;
+        h1,
+        h2,
+        h3 {
+          position: sticky;
+          top: 0px;
+          padding: 8px;
+          background: #1d1918;
+          margin-bottom: 20px;
+        }
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("./FontWithASyntaxHighlighter-Regular.woff2") format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      textarea,
+      pre {
+        box-sizing: border-box;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 0.85em;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        margin: 8px 0;
+        box-sizing: border-box;
+        max-width: 800px;
+      }
+      #lines {
+        height: 200px;
+      }
+      .logo {
+        display: flex;
+        top: 0;
+        position: absolute;
+        align-items: flex-end;
+        img {
+          height: 50px;
+        }
+      }
+    </style>
+    <!-- codeblock -->
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        const pre = document.createElement("pre");
+        pre.textContent = getCode(scriptElement, indent);
+        script.after(pre);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <!-- node-garden -->
+    <script>
+      class NodeGarden extends HTMLElement {
+        static observedAttributes = ["code", "rows"];
+        init() {
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "")
+              .replace("<!--", "")
+              .replace("-->", "")
+              .trim() ||
+            "";
+          this.innerHTML = "";
+          const rows = this.getAttribute("rows") ?? 6;
+
+          this.insertAdjacentHTML(
+            "beforeend",
+            `
+      <div style="padding:0;width:100%">
+        <div class="viz" style="display:flex;justify-content:center;padding:10px;height:300px"></div>
+        <textarea id="code" spellcheck="false" rows="${rows}" style="margin:0;border-bottom:2px solid #222;width:100%;font-size:.8em"></textarea>
+        <div style="position:relative">
+          <pre class="result">
+          </pre>
+          <div style="display:flex;position:absolute;right:0;top:0">
+            <button style="margin-right:8px" class="run">run</button>
+            <button style="margin-right:8px" class="reset">reset</button>
+            <button class="step">step</button>
+            <button class="contract">-</button>
+            <button class="expand">+</button>
+          </div>
+        </div>
+        <details>
+          <summary>show steps</summary>
+          <pre class="steps"></pre>
+        </details>
+
+      </div>`
+          );
+          // repl logic
+          const input = this.querySelector("textarea");
+          this.result = this.querySelector(".result");
+          this.steps = this.querySelector(".steps");
+          this.vizContainer = this.querySelector(".viz");
+          this.runButton = this.querySelector(".run");
+          this.stepButton = this.querySelector(".step");
+          this.resetButton = this.querySelector(".reset");
+          this.contractButton = this.querySelector(".contract");
+          this.expandButton = this.querySelector(".expand");
+          input.value = code;
+          this.input = input;
+          this.reset();
+
+          this.stepButton.addEventListener("click", () => this.step());
+          this.runButton.addEventListener("click", () => this.update());
+          this.resetButton.addEventListener("click", () => this.reset());
+          this.contractButton.addEventListener("click", () => this.contract());
+          this.expandButton.addEventListener("click", () => this.expand());
+
+          input.addEventListener("keydown", (e) => {
+            if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+              this.update();
+            } else if ((e.ctrlKey || e.altKey) && e.key === ".") {
+              e.preventDefault();
+              this.stop();
+            }
+          });
+        }
+        setCode(code) {
+          this.code = code;
+          this.input.value = code;
+          this.update();
+        }
+        reset() {
+          this.results = [];
+          this.update();
+          this.results = []; // maybe this is not needed..
+          this.currentNode = null;
+          this.visited = [];
+          delete this.stepper;
+          this.steps.innerText = "// click step to start walking";
+          // this.render();
+        }
+        render() {
+          renderNode(this.node, this.vizContainer);
+        }
+        nodeColor(node) {
+          const cid = this.currentNode?.id;
+          if (node.id === cid) {
+            return "magenta";
+          }
+          if (this.results[node.id] !== undefined) {
+            return "cyan";
+          }
+          if (this.visited.find((v) => v.id === node.id)) {
+            return "yellow";
+          }
+          return "white";
+        }
+        renderStepped() {
+          // renderNode(this.node, this.vizContainer);
+          const cid = this.currentNode?.id;
+          renderNode(
+            this.node,
+            this.vizContainer,
+            (node) => {
+              node.color = this.nodeColor(node);
+
+              //node.label = `${n.id}: ${n.type} ${n.ins
+              const n = this.nodes[node.id];
+              /* node.label = `${n.type} ${n.ins
+                .map((input, i) =>
+                  input instanceof Node
+                    ? (cid < n.id ? "_" : n.args?.[i]) ?? "_"
+                    : input
+                )
+                .join(" ")}`; */
+
+              return node;
+            },
+            (edge) => {
+              const source = this.nodes[edge.source];
+              const target = this.nodes[edge.target];
+              const argIndex = target.ins.findIndex(
+                (input) => input.id === edge.source
+              );
+              const sourceColor = this.nodeColor(source);
+              const targetColor = this.nodeColor(target);
+
+              if (
+                edge.target === cid /* ||
+                (edge.source === cid && this.results[edge.source] !== undefined) */
+              ) {
+                edge.color = "magenta";
+                //} else if ([targetColor, sourceColor].includes("cyan")) {
+                //} else if (this.results[edge.source] !== undefined) {
+                //} else if (targetColor === "cyan") {
+              } else if (sourceColor === "cyan") {
+                edge.color = "cyan";
+              } else if (this.visited.find((v) => v.id === edge.target)) {
+                edge.color = "yellow";
+              }
+
+              const hasResult = this.results[edge.source] !== undefined;
+              if (!hasResult && ["magenta"].includes(edge.color)) {
+                edge.label = "?";
+              } else if (["yellow"].includes(edge.color)) {
+                edge.label = "?";
+              } else if (edge.target <= cid || cid === undefined) {
+                edge.label = target.args?.[argIndex] ?? "";
+              } else {
+                edge.label = this.results[edge.source] ?? "";
+              }
+              /* edge.label =
+                target.args?.[argIndex] ?? this.results[edge.source] ?? ""; */
+              return edge;
+            }
+          );
+        }
+        evaluate() {
+          const fn = new Function("self", this.input.value);
+          this.node = fn(this);
+          this.nodes = Array.from(topoSort(this.node));
+          this.nodes.forEach((node, i) => {
+            node.id = i;
+          });
+        }
+        async update() {
+          // this.results = []; // clear state
+          expansions = 0;
+          this.evaluate();
+          this.render();
+          this.result.innerText = `= ${this.node.run([], this.results)}`;
+        }
+        step() {
+          if (!this.stepper) {
+            this.visited = [];
+            //this.results = []; // uncomment to disable feedback
+            /* this.evaluate(); */
+            this.stepper = this.node.step(this.visited, this.results);
+            this.result.innerText = "= ?";
+          }
+          const next = this.stepper.next();
+          this.currentNode = next.value;
+          const cid = this.currentNode?.id;
+
+          this.renderStepped();
+          const calculations =
+            this.results
+              .map((result, i) => {
+                const n = this.nodes[i];
+                if (!this.visited.includes(n) || n.id >= cid) {
+                  return "";
+                }
+                //const output = result
+                const output = cid < i ? "?" : result ?? "??";
+                return `r[${i}] = ${n.type}(${n.ins
+                  .map((input, i) =>
+                    input instanceof Node ? `r[${input.id}]` : input
+                  )
+                  .join(", ")}) = ${output}`;
+              })
+              .filter(Boolean)
+              .join("\n") || `// searching computable nodes`;
+          this.steps.innerText = calculations;
+          if (!this.currentNode) {
+            this.result.innerText = `= ${
+              this.results[this.results.length - 1]
+            }`;
+            delete this.stepper;
+            return;
+          }
+        }
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          if (name === "code") {
+            this.setCode(newValue);
+          }
+        }
+        contract() {
+          this.renderExpansion(expansion - 1);
+        }
+        expand() {
+          this.renderExpansion(expansion + 1);
+        }
+        renderExpansion(_expansion = 0) {
+          expansion = Math.max(_expansion, 0);
+          expansion = Math.min(expansion, nextExpansion);
+          expansions = 0;
+          this.evaluate();
+          let nodes = Array.from(topoSort(this.node));
+          renderNode(this.node, this.vizContainer, (gvnode) => {
+            const node = nodes[gvnode.id];
+            if (node.type === "poly") {
+              gvnode.color = "orchid";
+            } else if (node.ins.find((input) => input?.type === "poly")) {
+              gvnode.color = "cyan";
+            }
+            return gvnode;
+          });
+
+          if (!nodes.slice(0, -1).find((node) => node.type === "poly")) {
+            nextExpansion = expansion; // cannot step more
+            console.log("done expanding");
+          } else {
+            nextExpansion = expansion + 1; // at least one more...
+          }
+        }
+      }
+      customElements.define("node-garden", NodeGarden);
+    </script>
+    <!-- graphviz -->
+    <script>
+      function gvjson2dot(json) {
+        const { nodes, edges } = json;
+        let renderProps = (props) =>
+          `[${Object.entries(props)
+            .map(([key, value]) => `${key}="${value}"`)
+            .join(",")}]`;
+        return `digraph {
+            bgcolor="transparent";
+            rankdir="LR";
+            node [penwidth=4];
+            edge [penwidth=2];
+            ${nodes
+              .map((node) => `  "${node.id}" ${renderProps(node)}`)
+              .join("\n")}
+            ${edges
+              .map(
+                (edge) =>
+                  `  ${edge.source} -> ${edge.target} ${renderProps(edge)}`
+              )
+              .join("\n")}
+            }`;
+      }
+      function node2gvjson(graph, editNode, editEdge) {
+        let dfs = (node, fn, visited = []) => {
+          if (typeof node !== "object") {
+            return node;
+          }
+          visited.push(node);
+          node.ins = node.ins.map((input) => {
+            if (visited.includes(input)) {
+              return input;
+            }
+            return dfs(input, fn, visited);
+          });
+          node = fn(node, visited);
+          return node;
+        };
+        const nodes = [],
+          edges = [];
+        let style = {
+          color: "white",
+          fontcolor: "white",
+          fontsize: "10",
+          fontname: "monospace",
+        };
+        dfs(graph, (node) => {
+          node.id = nodes.length;
+          let gvnode = {
+            id: node.id,
+            label: `${node.type} ${node.ins
+              .map((input) => (typeof input === "object" ? "_" : input))
+              .join(" ")}`,
+            ordering: "in",
+            width: "0.5",
+            height: "0.4",
+            ...style,
+          };
+          if (editNode) {
+            gvnode = editNode(gvnode);
+          }
+          nodes.push(gvnode);
+          for (let i in node.ins) {
+            if (typeof node.ins[i] !== "object") {
+              continue;
+            }
+            if (node.ins[i].id === undefined) {
+              console.log("undefined source id", node.ins[i]);
+            }
+            let gvedge = {
+              label: "",
+              id: edges.length,
+              source: node.ins[i].id ?? "whuuuat",
+              target: node.id,
+              directed: "true",
+              ...style,
+            };
+            if (editEdge) {
+              gvedge = editEdge(gvedge);
+            }
+            edges.push(gvedge);
+          }
+          return node;
+        });
+        return { nodes, edges };
+      }
+      function node2dot(node, editNode, editEdge) {
+        const flat = node2gvjson(node, editNode, editEdge);
+        const dot = gvjson2dot(flat);
+        return dot;
+      }
+      async function renderDot(dot, container) {
+        // this breaks my rule of self-contained html :/
+        // but graphviz is just so good..
+        // i don't want to segway into graph layouting rn...
+        // download the file here: https://unpkg.com/@hpcc-js/wasm@2.18.0/dist/graphviz.js
+        // sorry if you're living in 2051 and npm has collapsed already..
+        const { Graphviz } = await import("./graphviz.js");
+        const graphvizLoaded = Graphviz.load();
+        const graphviz = await graphvizLoaded;
+        const svg = await graphviz.layout(dot, "svg", "dot", {});
+        const base64 = btoa(unescape(encodeURIComponent(svg)));
+        const dataUrl = `data:image/svg+xml;base64,${base64}`;
+        const img = document.createElement("img");
+        img.src = dataUrl;
+        img.style.maxHeight = "200px";
+        img.style.width = "600px";
+        container.innerText = "";
+        container.appendChild(img);
+      }
+      function renderNode(node, container, editNode, editEdge) {
+        const dot = node2dot(node, editNode, editEdge);
+        return renderDot(dot, container);
+      }
+    </script>
+    <!-- Node -->
+    <script id="node-class">
+      let Node = class {
+        constructor(type, ins, update) {
+          this.type = type;
+          this.ins = ins;
+          this.update = update;
+        }
+      };
+    </script>
+    <script>
+      let registerWith = (type, getNode) => {
+        // register method for chaining
+        Node.prototype[type] = function (...args) {
+          return getNode(type, [this, ...args]);
+        };
+        // return function for unchained calls
+        return (...args) => getNode(type, args);
+      };
+      let registerFn = (type, update) =>
+        registerWith(type, (type, args) => new Node(type, args, update));
+    </script>
+    <script id="node-feedback">
+      Node = class {
+        constructor(type, ins, update) {
+          this.type = type;
+          this.ins = this.ins.map((input) => this.parseInput(input));
+          this.update = update;
+        }
+      };
+      Node.prototype.parseInput = function (input) {
+        if (typeof input === "function") {
+          return input(this);
+        }
+        return input;
+      };
+    </script>
+    <script id="node-expansion">
+      let poly = registerFn("poly", (...args) => args);
+
+      // these variables are for the stepwise viz (very dirty hack)
+      let expansions = 0;
+      let expansion = -1;
+      let nextExpansion = 1;
+
+      Node = class {
+        constructor(type, ins, update) {
+          this.type = type;
+          this.update = update;
+          let maxExpansions = 0;
+          this.ins = ins.map((input) => {
+            input = this.parseInput(input);
+            if (input.type === "poly") {
+              maxExpansions = Math.max(maxExpansions, input.ins.length);
+            }
+            return input;
+          });
+          if (expansion !== -1 && expansions >= expansion) {
+            return; // dirty hack for viz (not needed otherwise)
+          }
+          if (maxExpansions > 0) {
+            expansions++; // dirty hack for viz (not needed otherwise)
+            // multichannel expansion
+            this.type = "poly";
+            this.update = (...args) => args;
+            this.ins = Array(maxExpansions)
+              .fill(0)
+              .map((_, i) => {
+                const clone = new this.constructor(type, [], update);
+                clone.ins = ins.map((input) => {
+                  input = clone.parseInput(input);
+                  if (input.type === "poly") {
+                    return input.ins[i % input.ins.length];
+                  }
+                  return input;
+                });
+                return clone;
+              });
+          }
+        }
+      };
+      Node.prototype.parseInput = function (input) {
+        if (typeof input === "function") {
+          input = input(this); // lambda feedback
+        }
+        if (Array.isArray(input)) {
+          input = poly(...input);
+        }
+        return input;
+      };
+    </script>
+    <!-- Node.run -->
+    <script id="node-run">
+      Node.prototype.run = function (visited = [], results = []) {
+        if (visited.includes(this)) {
+          return results[this.id] ?? 0;
+        }
+        // run children (depth first)
+        const args = this.ins.map((input) => {
+          if (input instanceof Node) {
+            return input.run([...visited, this], results);
+          }
+          return input;
+        });
+        // pass children results to update
+        const result = this.update(...args);
+        results[this.id] = result;
+        return result;
+      };
+      codeblock(document.currentScript, 8);
+    </script>
+    <!-- Node.step -->
+    <script>
+      Node.prototype.step = function* (visited = [], results = []) {
+        if (visited.includes(this)) {
+          return results[this.id] ?? 0;
+        }
+        yield this;
+        let args = [];
+        let isLeaf = true;
+        visited.push(this);
+        for (let input of this.ins) {
+          if (input instanceof Node) {
+            isLeaf = false;
+            yield* input.step(visited, results);
+            const arg = input.run(visited, results);
+            args.push(arg);
+          } else {
+            args.push(input);
+          }
+        }
+        this.args = args;
+        const result = this.update(...args);
+        results[this.id] = result;
+        if (!isLeaf) {
+          yield this;
+        }
+        //results[this.id] = result;
+      };
+      //codeblock(document.currentScript, 8);
+    </script>
+    <script id="math-nodes">
+      // register some nodes
+      let add = registerFn("add", (a, b) => a + b);
+      let sub = registerFn("sub", (a, b) => a - b);
+      let mul = registerFn("mul", (a, b) => a * b);
+      let div = registerFn("div", (a, b) => a / b);
+      let mod = registerFn("mod", (a, b) => a % b);
+      let out = registerFn("out", (a) => a);
+      let n = registerFn("n", (a) => a);
+    </script>
+    <!-- topoSort -->
+    <script>
+      // sort nodes by dependencies (using generator function to be able to step through)
+      function* topoSort(node, visited = new Set()) {
+        if (!(node instanceof Node) || visited.has(node)) {
+          return; // constant values or already visited nodes
+        }
+        visited.add(node);
+        for (let input of node.ins) {
+          yield* topoSort(input, visited);
+        }
+        yield node;
+      }
+    </script>
+  </head>
+  <body>
+    <div class="logo">
+      <img src="./img/kabelsalat_logo_scrot.png" />
+    </div>
+    <section>
+      <h1>kabelsalat</h1>
+      <p>graph based language for live coding on the web and beyond</p>
+      <p>a project started on june 7, 2024 -> almost 1 year in the making</p>
+      <p>paper by felix roos and raphael forment</p>
+    </section>
+    <section>
+      <h2>kabelsalat is a..</h2>
+      <ul>
+        <li>1. graph based</li>
+        <li>2. language</li>
+        <li>3. for</li>
+        <li>4. audio</li>
+        <li>5. visual</li>
+        <li>6. livecoding</li>
+        <li>7. on the web</li>
+        <li>8. and beyond</li>
+      </ul>
+    </section>
+    <section>
+      <h2>1. graph based</h2>
+      <!-- ![graph](./img/pd_graph.png) -->
+      <p><img src="./img/nc_graph2.png" alt="graph" /></p>
+      <!-- ![graph](./img/ks_graph.png) -->
+      <ul>
+        <li>
+          you&#39;ve seen patch based interfaces Pure Data, Max, cables.gl,
+          noisecraft.. or modular synths
+        </li>
+        <li>modules + cables = graph</li>
+        <li>each module has inputs and one or more outputs</li>
+      </ul>
+      <pre>Saw 55 -> Filter 0.5 -> AudioOut</pre>
+    </section>
+    <section>
+      <h2>2. language</h2>
+      <img
+        src="./img/hydra_chaining.jpg"
+        alt="hydra chaining"
+        style="margin-top: -140px; width: 800px"
+      />
+    </section>
+    <section>
+      <h2>2. language</h2>
+      <!-- <p>module = function, cable = data flow</p> -->
+      <p>
+        <img src="./img/lang_graphviz.svg" alt="lang graph" width="500px" />
+      </p>
+      <p>
+        <img src="./img/lang_unnested.png" alt="lang unnested" width="500px" />
+      </p>
+      <p><img src="./img/lang_nested.png" alt="lang nested" width="500px" /></p>
+      <p>
+        <img src="./img/lang_imperative.png" alt="lang nested" width="500px" />
+      </p>
+      <!-- <pre>out(lpf(saw(55), 200))</pre>
+      <pre>saw(55).lpf(200).out()</pre>
+      <pre>
+r[0] = saw(55)
+r[1] = lpf(r[0], 200)
+out(r[1])</pre
+      > -->
+    </section>
+    <!-- <section>
+      <h2>2. language</h2>
+      <h3>Node class</h3>
+      <script>
+        codeblock(document.querySelector("#node-class"), 8);
+      </script>
+    </section>
+    <section>
+      <h2>2. language</h2>
+      <h3>run method</h3>
+      <script>
+        codeblock(document.querySelector("#node-run"), 8);
+      </script>
+    </section> -->
+    <!-- <section>
+      <h2>2. language</h2>
+      <script>
+        codeblock(document.querySelector("#math-nodes"), 6);
+      </script>
+      <details>
+        <summary>show implementation</summary>
+        <script>
+          codeblock(document.querySelector("#node-class"), 6);
+        </script>
+      </details>
+    </section> -->
+    <section>
+      <h2>2. language</h2>
+      <p>a simple chain:</p>
+      <node-garden rows="3">return add(4, 2).mul(3).div(2).out()</node-garden>
+    </section>
+    <section>
+      <h2>2. language</h2>
+      <p>without method chaining:</p>
+      <node-garden rows="3">return out(div(mul(add(4, 2), 3), 2))</node-garden>
+      <!-- <p>we can mix and match method chaining and regular functions:</p>
+      <pre>a.b(c) === b(a, c)</pre> -->
+    </section>
+    <section>
+      <h2>2. language</h2>
+      <p>we can reuse nodes using variables:</p>
+      <node-garden rows="3">
+        <!--
+let a = add(1, 2)
+return a.mul(3).add(a).out()
+          -->
+      </node-garden>
+    </section>
+    <section>
+      <h2>2. language</h2>
+      <p>tree walking:</p>
+      <node-garden rows="3">
+        <!--
+return add(8,2).mul( add(3,5) )
+.mul( add(2,3).mul(4) ).out()
+-->
+      </node-garden>
+    </section>
+    <section>
+      <h2>2. language</h2>
+      <p>multichannel expansion:</p>
+      <node-garden rows="3">
+        <!--
+return poly(2, 3).add(1).mul(4)
+      -->
+      </node-garden>
+    </section>
+    <section>
+      <h2>2. language</h2>
+      <p>multichannel expansion:</p>
+      <node-garden rows="3">
+        <!--
+return add([2, 3], 1).mul(4)
+      -->
+      </node-garden>
+    </section>
+    <section>
+      <h2>2. language</h2>
+      <p>channel matching:</p>
+      <node-garden rows="3">
+        <!--
+return add([2, 3], 1).mul([4, 5])
+      -->
+      </node-garden>
+    </section>
+    <section>
+      <h2>2. language</h2>
+      <p>feedback:</p>
+      <node-garden rows="3">
+        <!--
+const node = add(1)
+node.ins.push(node)
+return node.out()
+      -->
+      </node-garden>
+    </section>
+    <section>
+      <h2>2. language</h2>
+      <p>feedback with lambdas:</p>
+      <node-garden rows="3">
+        <!--
+return add(1, o=>o).out()
+      -->
+      </node-garden>
+      <details>
+        <summary>show implementation</summary>
+        <script>
+          codeblock(document.querySelector("#node-feedback"), 6);
+        </script>
+      </details>
+    </section>
+    <section>
+      <h2>2. language</h2>
+      <p>multichannel expansion + feedback:</p>
+      <node-garden rows="3">
+        <!--
+return add([2, 3], o=>o)
+      -->
+      </node-garden>
+    </section>
+    <section>
+      <h2>2. for</h2>
+      <pre></pre>
+    </section>
+    <!-- <section>
+      <h2>2. language</h2>
+      <p><img src="./img/nathan_ho_kick.png" alt="nathan ho kick" /></p>
+      <pre>
+sine(60)
+.perc(.001, .3)
+.mul(.4)
+.pan(sine(.4))
+.out()</pre
+      >
+    </section> -->
+    <section>
+      <ul>
+        <li>
+          <p>
+            <a href="https://garten.salat.dev/kabelsalat/graph-language.html"
+              >a graph language</a
+            >
+          </p>
+        </li>
+        <li><p>show Node data structure</p></li>
+        <li>talk about mondo?</li>
+      </ul>
+    </section>
+
+    <section>empty</section>
+    <script>
+      const slides = Array.from(document.querySelectorAll("section"));
+      let slideIndex = Number(window.location.hash.slice(1)) || 0;
+      let setSlideIndex = (index) => {
+        slideIndex = index % slides.length;
+        console.log("slideIndex", slideIndex);
+        slides.forEach((slide, i) => {
+          //slide.style.display = "none";
+          if (i < slideIndex) {
+            /* slide.style.transform = "translate(-100vw)"; */
+            slide.style.opacity = "0";
+            slide.style.pointerEvents = "none";
+          } else if (i === slideIndex) {
+            /* slide.style.transform = "translate(0px,0px)"; */
+            slide.style.opacity = "1";
+            //slide.style.display = "flex";
+            slide.style.pointerEvents = "inherit";
+          } else if (i > slideIndex) {
+            /* slide.style.transform = "translate(100vw)"; */
+            slide.style.opacity = "0";
+            slide.style.pointerEvents = "none";
+          }
+          // slide.style.display = "none";
+        });
+        const slide = slides[slideIndex];
+        // slide.style.display = "flex";
+        window.location.hash = slideIndex;
+      };
+      setSlideIndex(slideIndex);
+      let nextSlide = () => setSlideIndex((slideIndex + 1) % slides.length);
+      let prevSlide = () =>
+        setSlideIndex((slideIndex - 1 + slides.length) % slides.length);
+      window.nextSlide = nextSlide;
+      window.prevSlide = prevSlide;
+      document.onkeydown = (e) => {
+        if (e.ctrlKey) {
+          if (e.key === "ArrowLeft") {
+            prevSlide();
+          } else if (e.key === "ArrowRight") {
+            nextSlide();
+          }
+        }
+      };
+    </script>
+  </body>
+</html>
