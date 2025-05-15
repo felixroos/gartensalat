@@ -1,0 +1,73 @@
+<html>
+  <head>
+    <style>
+      @font-face {
+        font-family: "Special Elite";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url(./specialelite.woff2) format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+          U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+          U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      body {
+        background-color: white;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+      h1,
+      h3 {
+        font-family: "Special Elite", Sans-Serif;
+        font-weight: 400;
+        font-size: 40px;
+        line-height: 1.5;
+        color: #a52163;
+        margin: 0;
+      }
+      h1 {
+        font-size: 8em;
+      }
+      h3 {
+        color: black;
+        font-size: 4em;
+      }
+    </style>
+  </head>
+  <body>
+    <h3 id="label"></h3>
+    <h1 id="countdown"></h1>
+    <img src="./lapumsfi-graphic.png" />
+    <script>
+      let start = 1747407600; // Friday, May 16, 2025 17:00:00 GMT+02:00
+      let end = 1747580400; // Friday, May 18, 2025 17:00:00 GMT+02:00
+      function formatSecondsToHHMMSS(totalSeconds) {
+        totalSeconds = Math.ceil(totalSeconds);
+        const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+        const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(
+          2,
+          "0"
+        );
+        const seconds = String(totalSeconds % 60).padStart(2, "0");
+
+        return `${hours}:${minutes}:${seconds}`;
+      }
+      let frame = requestAnimationFrame(function draw() {
+        let now = Date.now() / 1000; // + 3600 * 30 + 60 * 10;
+        let seconds;
+        if (now < start) {
+          label.innerText = "es geht los in..";
+          seconds = start - now;
+        } else {
+          label.innerText = "countdown:";
+          seconds = end - now;
+        }
+        countdown.innerText = formatSecondsToHHMMSS(seconds);
+        frame = requestAnimationFrame(draw);
+      });
+    </script>
+  </body>
+</html>
