@@ -56,16 +56,20 @@
         return `${hours}:${minutes}:${seconds}`;
       }
       let frame = requestAnimationFrame(function draw() {
-        let now = Date.now() / 1000; // + 3600 * 30 + 60 * 10;
+        let now = Date.now() / 1000; // + 3600 * (30 + 48) + 60 * 8;
         let seconds;
         if (now < start) {
           label.innerText = "es geht los in..";
           seconds = start - now;
-        } else {
+          countdown.innerText = formatSecondsToHHMMSS(seconds);
+        } else if (now < end) {
           label.innerText = "countdown:";
           seconds = end - now;
+          countdown.innerText = formatSecondsToHHMMSS(seconds);
+        } else {
+          label.innerText = "das wars!";
+          countdown.innerText = formatSecondsToHHMMSS(0);
         }
-        countdown.innerText = formatSecondsToHHMMSS(seconds);
         frame = requestAnimationFrame(draw);
       });
     </script>
