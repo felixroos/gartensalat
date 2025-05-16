@@ -749,9 +749,10 @@
             if (maxExpansions > 0) {
               this.type = "poly";
               this.update = (...args) => args;
-              //this.compileSelf = (args) => `[${args.join(",")}]`;
               this.compileSelf = (args) =>
-                `${args.join("+")};\n$.l=${args[0]};$.r=${args[1]};`;
+                `${args.join("+")};\n$.l=${args[0]};$.r=${args[1] || args[0]};`;
+              // make mono if only one channel
+
               this.ins = Array(maxExpansions)
                 .fill(0)
                 .map((_, i) => {
@@ -818,8 +819,8 @@
           const last = getRef(nodes[nodes.length - 1]);
           lines.push(`return ${last}`);
           const code = lines.join("\n");
-          /* console.log("-------compiled--------");
-          console.log(code); */
+          console.log("-------compiled--------");
+          console.log(code);
           const update = new Function("n", "r", code);
           const node = new Node("compiled", [], () => update(nodes, r));
           return node;
@@ -869,10 +870,10 @@
       </script>
       <script id="play-method">
         Node.prototype.play = function () {
-          const out = this.type === "poly" ? this : n([this, this]);
-          //out.viz();
+          // the last node must be poly to assign to $.l when compiled
+          const out = this.type === "poly" ? this : n([this]);
+          out.viz();
           let compiled = out.compile();
-          //$.dsp = () => ($.l = $.r = compiled.run());
           $.dsp = () => compiled.run();
           return compiled;
         };
@@ -886,32 +887,6 @@
         };
       </script>
       <script id="group-method">
-        // this doesn't work well if nodes are poly:
-        // .type checks dont work because fadeout / fadein calls return a poly node
-        /* Node.prototype.group = function (max = 1, fadeIn = 0, fadeOut = 0.1) {
-          $.nodes ??= [];
-          let len = $.nodes.length;
-          // fade out / retire old nodes
-          $.nodes = $.nodes.reduce((acc, node, i) => {
-            if (node.type !== "fadeout" && len - i >= max) {
-              // start fade out
-              acc.push(fadeout(node, fadeOut * $.SR));
-            } else if (node.type === "fadeout" && node.done) {
-              return acc; // fadeout done -> remove
-            } else if (node.type === "fadein" && node.done) {
-              acc.push(node.ins[0]); // unwrap fadein
-            }
-            // what if we still fade in, so it's not done?
-            return acc;
-          }, []);
-          // fade in new node
-          const node = fadeIn ? this.fadein(fadeIn * $.SR) : this;
-          $.nodes.push(node);
-          return add(...$.nodes);
-        }; */
-        // what if we make all grouped nodes poly by default?
-
-        // new approach:
         Node.prototype.group = function (max = 1, fadeIn = 0, fadeOut = 0.1) {
           $.nodes ??= [];
           let len = $.nodes.length;
@@ -921,27 +896,16 @@
             // assumes nodes is poly node with at least 1 channel
             const in0 = node.ins[0];
             //console.log("in0", in0);
-            if (in0.type !== "fadeout" && len - i >= max) {
-              console.log("fadeout::", i);
-              // start fade out
-              acc.push(fadeout(node, fadeOut * $.SR));
-            } else if (in0.type === "fadeout" && in0.done) {
-              console.log("remove::", i);
-              return acc; // fadeout done -> remove
-            } else if (in0.type === "fadein") {
-              // could unwrap if done..
-              //console.log("keep fadein");
-              /* if (in0.done) {
-                console.log("unwrap fadein");
-                // this seems to break things
-                node.ins = node.ins.map((input) => input.ins[0]);
-              } else {
-                console.log("still fading in");
-              } */
-              acc.push(node);
-            } else {
-              console.log("no match. :(");
+            if (in0.type === "fadeout" && in0.done) {
+              return acc; // omit already silent node
             }
+            if (in0.type === "fadein" && in0.done) {
+              node.ins = node.ins.map((input) => input.ins[0]);
+            }
+            if (in0.type !== "fadeout" && len - i >= max) {
+              node = fadeout(node, fadeOut * $.SR);
+            }
+            acc.push(node);
             return acc;
           }, []);
 
@@ -951,9 +915,7 @@
           if (node.type !== "poly") {
             node = poly(node);
           }
-          // console.log("fadein::", node);
           $.nodes.push(node);
-          console.log($.nodes.length, "sine waves");
           return add(...$.nodes);
         };
       </script>
@@ -1473,6 +1435,18 @@ saw([120,121])
 .lpf(sine(2).range(.2,.8))
 .div(2)
 .group(1, 1, 1)
+.play()
+--></dsp-repl
+      >
+    </section>
+    <section>
+      <h2>3. audio</h2>
+      <p>group:</p>
+      <dsp-repl rows="6"
+        ><!--
+sine(60)
+.div(4)
+.group(4, 1, 1)
 .play()
 --></dsp-repl
       >
