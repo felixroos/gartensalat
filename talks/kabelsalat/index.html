@@ -232,24 +232,13 @@
           return "white";
         }
         renderStepped() {
-          // renderNode(this.node, this.vizContainer);
           const cid = this.currentNode?.id;
           renderNode(
             this.node,
             this.vizContainer,
             (node) => {
               node.color = this.nodeColor(node);
-
-              //node.label = `${n.id}: ${n.type} ${n.ins
               const n = this.nodes[node.id];
-              /* node.label = `${n.type} ${n.ins
-                .map((input, i) =>
-                  input instanceof Node
-                    ? (cid < n.id ? "_" : n.args?.[i]) ?? "_"
-                    : input
-                )
-                .join(" ")}`; */
-
               return node;
             },
             (edge) => {
@@ -261,20 +250,13 @@
               const sourceColor = this.nodeColor(source);
               const targetColor = this.nodeColor(target);
 
-              if (
-                edge.target === cid /* ||
-                (edge.source === cid && this.results[edge.source] !== undefined) */
-              ) {
+              if (edge.target === cid) {
                 edge.color = "magenta";
-                //} else if ([targetColor, sourceColor].includes("cyan")) {
-                //} else if (this.results[edge.source] !== undefined) {
-                //} else if (targetColor === "cyan") {
               } else if (sourceColor === "cyan") {
                 edge.color = "cyan";
               } else if (this.visited.find((v) => v.id === edge.target)) {
                 edge.color = "yellow";
               }
-
               const hasResult = this.results[edge.source] !== undefined;
               if (!hasResult && ["magenta"].includes(edge.color)) {
                 edge.label = "?";
@@ -285,8 +267,6 @@
               } else {
                 edge.label = this.results[edge.source] ?? "";
               }
-              /* edge.label =
-                target.args?.[argIndex] ?? this.results[edge.source] ?? ""; */
               return edge;
             }
           );
@@ -310,7 +290,6 @@
           if (!this.stepper) {
             this.visited = [];
             //this.results = []; // uncomment to disable feedback
-            /* this.evaluate(); */
             this.stepper = this.node.step(this.visited, this.results);
             this.result.innerText = "= ?";
           }
@@ -436,11 +415,16 @@
         };
         dfs(graph, (node) => {
           node.id = nodes.length;
+          const label = `${node.type} ${node.ins
+            .map((input) =>
+              typeof input === "object"
+                ? "_"
+                : Math.round(input * 10000) / 10000
+            )
+            .join(" ")}`;
           let gvnode = {
             id: node.id,
-            label: `${node.type} ${node.ins
-              .map((input) => (typeof input === "object" ? "_" : input))
-              .join(" ")}`,
+            label,
             ordering: "in",
             width: "0.5",
             height: "0.4",
@@ -525,6 +509,7 @@
           constructor() {
             super();
             this.t = 0;
+            this.S = 0;
             this.active = true;
             this.framebuffer = new Float32Array(Math.floor(sampleRate / 30));
             this.msg = {
@@ -548,6 +533,7 @@
               output[0][i] = this.l;
               output[1][i] = this.r;
               this.t++;
+              this.S = this.t * this.ISR;
               this.framebuffer[this.t % this.framebuffer.length] = this.l;
               if (this.t % this.framebuffer.length === 0 && this.t > 0) {
                 this.port.postMessage(this.msg);
@@ -749,8 +735,8 @@
             if (maxExpansions > 0) {
               this.type = "poly";
               this.update = (...args) => args;
-              this.compileSelf = (args) =>
-                `${args.join("+")};\n$.l=${args[0]};$.r=${args[1] || args[0]};`;
+              this.compileSelf = (r, args) =>
+                `$.l=${args[0]}*0.3;$.r=${args[1] || args[0]}*0.3;`;
               // make mono if only one channel
 
               this.ins = Array(maxExpansions)
@@ -812,12 +798,12 @@
             if (!node.compileSelf) {
               lines.push(`${ref} = n[${id}].update(${args.join(",")})`);
             } else {
-              lines.push(`${ref} = ${node.compileSelf(args, node, id)}`);
+              lines.push(node.compileSelf(ref, args, node, id));
             }
             lines[lines.length - 1] += ` // ${node.type}`;
           }
           const last = getRef(nodes[nodes.length - 1]);
-          lines.push(`return ${last}`);
+          // lines.push(`return ${last}`);
           const code = lines.join("\n");
           console.log("-------compiled--------");
           console.log(code);
@@ -826,28 +812,32 @@
           return node;
         };
         Node.prototype.viz = function () {
-          $.port.postMessage({ viz: JSON.stringify(this) });
+          try {
+            $.port.postMessage({ viz: JSON.stringify(this) });
+          } catch (err) {
+            console.warn("non serializable node. probably because of feedback");
+          }
           return this;
         };
-        let registerNode = (type, getNode) => {
+        globalThis.register = (type, getNode) => {
           Node.prototype[type] = function (...args) {
             return getNode(this, ...args);
           };
           return getNode;
         };
         globalThis.registerFn = (type, update) =>
-          registerNode(type, (...args) => new Node(type, args, update));
+          register(type, (...args) => new Node(type, args, update));
 
         globalThis.registerClass = (type, NodeClass) =>
-          registerNode(type, (...args) => new NodeClass(type, args));
+          register(type, (...args) => new NodeClass(type, args));
 
         globalThis.registerRaw = (type, compileSelf) =>
-          registerNode(type, (...args) => {
+          register(type, (...args) => {
             const argNames = Array.from(
               { length: args.length },
               (_, i) => `a${i}`
             );
-            const body = `return ${compileSelf(argNames)}`;
+            const body = `${compileSelf("let v", argNames)}; return v;`;
             const update = new Function(...argNames, body);
             return new Node(type, args, update, compileSelf);
           });
@@ -872,11 +862,15 @@
         Node.prototype.play = function () {
           // the last node must be poly to assign to $.l when compiled
           const out = this.type === "poly" ? this : n([this]);
+          if (out.ins.length > 2) {
+            console.warn("more than 2 channels! only using first 2");
+          }
           out.viz();
           let compiled = out.compile();
           $.dsp = () => compiled.run();
           return compiled;
         };
+        Node.prototype.out = Node.prototype.play;
       </script>
       <script id="collect-method">
         Node.prototype.collect = function (max = 1) {
@@ -903,6 +897,9 @@
               node.ins = node.ins.map((input) => input.ins[0]);
             }
             if (in0.type !== "fadeout" && len - i >= max) {
+              if (!fadeOut) {
+                return acc;
+              }
               node = fadeout(node, fadeOut * $.SR);
             }
             acc.push(node);
@@ -917,6 +914,9 @@
           }
           $.nodes.push(node);
           return add(...$.nodes);
+        };
+        Node.prototype.spawn = function (max, fadeIn, fadeOut) {
+          return this.group(max, fadeIn, fadeOut).play();
         };
       </script>
       <script id="fade">
@@ -952,6 +952,7 @@
         let fadeout = registerClass("fadeout", FadeOut);
       </script>
       <script>
+        const ISR = 1 / sampleRate;
         // https://garten.salat.dev/audio-dsp/oscillators.html
         class SineOsc extends Node {
           phase = 0;
@@ -963,60 +964,396 @@
         }
         globalThis.SineOsc = SineOsc;
         globalThis.sine = registerClass("sine", SineOsc);
-        globalThis.lpf = registerClass(
-          "lpf",
-          class extends Node {
-            s0 = 0;
-            s1 = 0;
-            update(s, cutoff, resonance = 0) {
-              // Out of bound values can produce NaNs
-              cutoff = Math.min(cutoff, 1);
-              resonance = Math.max(resonance, 0);
-              var c = Math.pow(0.5, (1 - cutoff) / 0.125);
-              var r = Math.pow(0.5, (resonance + 0.125) / 0.125);
-              var mrc = 1 - r * c;
-              var v0 = this.s0;
-              var v1 = this.s1;
-              // Apply the filter to the sample
-              v0 = mrc * v0 - c * v1 + c * s;
-              v1 = mrc * v1 + c * v0;
-              s = v1;
-              this.s0 = v0;
-              this.s1 = v1;
-              return s;
-            }
+
+        class ZawOsc extends Node {
+          phase = 0;
+          update(freq) {
+            this.phase += ISR * freq;
+            return (this.phase % 1) * 2 - 1;
           }
-        );
-        globalThis.saw = registerClass(
-          "saw",
-          class extends Node {
-            phase = 0;
-            update(freq) {
-              this.phase += $.ISR * freq;
-              return (this.phase % 1) * 2 - 1;
-            }
+        }
+        globalThis.ZawOsc = ZawOsc;
+        globalThis.zaw = registerClass("zaw", ZawOsc);
+
+        function polyBlep(t, dt) {
+          // 0 <= t < 1
+          if (t < dt) {
+            t /= dt;
+            // 2 * (t - t^2/2 - 0.5)
+            return t + t - t * t - 1;
           }
+          // -1 < t < 0
+          if (t > 1 - dt) {
+            t = (t - 1) / dt;
+            // 2 * (t^2/2 + t + 0.5)
+            return t * t + t + t + 1;
+          }
+          // 0 otherwise
+          return 0;
+        }
+        class SawOsc extends Node {
+          //phase = Math.random();
+          phase = 0;
+          update(freq) {
+            const dt = freq / sampleRate;
+            let p = polyBlep(this.phase, dt);
+            let s = 2 * this.phase - 1 - p;
+            this.phase += dt;
+            if (this.phase > 1) {
+              this.phase -= 1;
+            }
+            return s;
+          }
+        }
+        globalThis.SawOsc = SawOsc;
+        globalThis.saw = registerClass("saw", SawOsc);
+
+        globalThis.mix = register("mix", (input, channels = 1) => {
+          if (![1, 2].includes(channels)) {
+            channels = 2;
+            console.warn(
+              "mix only supports 1 or 2 channels atm.. falling back to 2"
+            );
+          }
+          if (input.type !== "poly") {
+            return input;
+          }
+          if (channels === 2) {
+            const panned = input.ins.map((channel, i, ins) => {
+              // we can do this at eval time: channels are fixed!
+              const pos = (i / (ins.length - 1)) * 2 - 1;
+              const deg = ((pos + 1) * Math.PI) / 4;
+              const stereo = channel.mul([Math.cos(deg), Math.sin(deg)]);
+              return stereo;
+            });
+            return add(...panned);
+          }
+          return add(...input.ins);
+        });
+
+        class Lpf extends Node {
+          s0 = 0;
+          s1 = 0;
+          update(s, cutoff, resonance = 0) {
+            // Out of bound values can produce NaNs
+            cutoff = Math.min(cutoff, 1);
+            resonance = Math.max(resonance, 0);
+            var c = Math.pow(0.5, (1 - cutoff) / 0.125);
+            var r = Math.pow(0.5, (resonance + 0.125) / 0.125);
+            var mrc = 1 - r * c;
+            var v0 = this.s0;
+            var v1 = this.s1;
+            // Apply the filter to the sample
+            v0 = mrc * v0 - c * v1 + c * s;
+            v1 = mrc * v1 + c * v0;
+            s = v1;
+            this.s0 = v0;
+            this.s1 = v1;
+            return s;
+          }
+        }
+        globalThis.Lpf = Lpf;
+        globalThis.lpf = registerClass("lpf", Lpf);
+
+        class PulseOsc extends Node {
+          phase = 0;
+          update(freq, duty = 0.5) {
+            this.phase += ISR * freq;
+            let cyclePos = this.phase % 1;
+            return cyclePos < duty ? 1 : -1;
+          }
+        }
+        globalThis.PulseOsc = PulseOsc;
+        globalThis.pulse = registerClass("pulse", PulseOsc);
+
+        class Dust extends Node {
+          update = (density) =>
+            Math.random() < density * ISR ? Math.random() : 0;
+        }
+        globalThis.Dust = Dust;
+        globalThis.dust = registerClass("dust", Dust);
+
+        class Impulse extends Node {
+          phase = 1;
+          update(freq) {
+            this.phase += ISR * freq;
+            let v = this.phase >= 1 ? 1 : 0;
+            this.phase = this.phase % 1;
+            return v;
+          }
+        }
+        // globalThis.Impulse = Impulse;
+        globalThis.impulse = registerClass("impulse", Impulse);
+
+        globalThis.noise = registerRaw(
+          "noise",
+          (r) => `${r} = Math.random() * 2 - 1`
         );
+
+        class Hold extends Node {
+          value = 0;
+          trigSgn = false;
+          update(input, trig) {
+            if (!this.trigSgn && trig > 0) this.value = input;
+            this.trigSgn = trig > 0;
+            return this.value;
+          }
+        }
+        globalThis.Hold = Hold;
+        globalThis.hold = registerClass("hold", Hold);
+
+        function lerp(x, y0, y1) {
+          if (x >= 1) return y1;
+
+          return y0 + x * (y1 - y0);
+        }
+
+        class ADSR extends Node {
+          state = "off";
+          startTime = 0;
+          startVal = 0;
+
+          update(gate, attack, decay, susVal, release) {
+            let curTime = $.S; // $.S = time in seconds
+            switch (this.state) {
+              case "off": {
+                if (gate > 0) {
+                  this.state = "attack";
+                  this.startTime = curTime;
+                  this.startVal = 0;
+                }
+                return 0;
+              }
+              case "attack": {
+                let time = curTime - this.startTime;
+                if (time > attack) {
+                  this.state = "decay";
+                  this.startTime = curTime;
+                  return 1;
+                }
+                return lerp(time / attack, this.startVal, 1);
+              }
+              case "decay": {
+                let time = curTime - this.startTime;
+                let curVal = lerp(time / decay, 1, susVal);
+                if (gate <= 0) {
+                  this.state = "release";
+                  this.startTime = curTime;
+                  this.startVal = curVal;
+                  return curVal;
+                }
+                if (time > decay) {
+                  this.state = "sustain";
+                  this.startTime = curTime;
+                  return susVal;
+                }
+                return curVal;
+              }
+              case "sustain": {
+                if (gate <= 0) {
+                  this.state = "release";
+                  this.startTime = curTime;
+                  this.startVal = susVal;
+                }
+                return susVal;
+              }
+              case "release": {
+                let time = curTime - this.startTime;
+                if (time > release) {
+                  this.state = "off";
+                  return 0;
+                }
+                let curVal = lerp(time / release, this.startVal, 0);
+                if (gate > 0) {
+                  this.state = "attack";
+                  this.startTime = curTime;
+                  this.startVal = curVal;
+                }
+                return curVal;
+              }
+            }
+            throw "invalid envelope state";
+          }
+        }
+        globalThis.ADSR = ADSR;
+        globalThis.adsr = registerClass("adsr", ADSR);
+
+        globalThis.ad = register("ad", (gate = 0, attack = 0.02, decay = 0.1) =>
+          adsr(gate, attack, decay, 0, decay)
+        );
+        /*
+        impulse(1).ad(.1).mul(sine(200))
+.add(x=>x.delay(.1).mul(.8))
+.play()*/
+        class Delay extends Node {
+          writeIdx = 0;
+          readIdx = 0;
+          constructor(type, ins) {
+            super(type, ins);
+            const MAX_DELAY_TIME = 10;
+            this.buffer = new Float32Array(MAX_DELAY_TIME * sampleRate);
+            this.buffer.fill(0);
+          }
+          write(s, delayTime) {
+            this.writeIdx = (this.writeIdx + 1) % this.buffer.length;
+            this.buffer[this.writeIdx] = s;
+            // Calculate how far in the past to read
+            let numSamples = Math.min(
+              Math.floor(sampleRate * delayTime),
+              this.buffer.length - 1
+            );
+            this.readIdx = this.writeIdx - numSamples;
+            // If past the start of the buffer, wrap around
+            if (this.readIdx < 0) this.readIdx += this.buffer.length;
+          }
+          update(input, delayTime) {
+            this.write(input, delayTime);
+            return this.buffer[this.readIdx];
+          }
+        }
+        globalThis.Delay = Delay;
+        globalThis.delay = registerClass("delay", Delay);
+
+        class Fold extends Node {
+          update(input = 0, rate = 0) {
+            if (rate < 0) rate = 0;
+            rate = rate + 1;
+            input = input * rate;
+            return (
+              4 *
+              (Math.abs(0.25 * input + 0.25 - Math.round(0.25 * input + 0.25)) -
+                0.25)
+            );
+          }
+        }
+        globalThis.Fold = Fold;
+        globalThis.fold = registerClass("fold", Fold);
+
+        let perc = register("perc", (gate, decay) => gate.adsr(0, 0, 1, decay));
+
+        class Lag extends Node {
+          lagUnit = 4410;
+          s = 0;
+          update(input, rate) {
+            // Remap so the useful range is around [0, 1]
+            rate = rate * this.lagUnit;
+            if (rate < 1) rate = 1;
+            this.s += (1 / rate) * (input - this.s);
+            return this.s;
+          }
+        }
+        globalThis.Lag = Lag;
+        globalThis.lag = registerClass("lag", Lag);
+
+        class Slew extends Node {
+          last = 0;
+          update(input, up, dn) {
+            const upStep = up * ISR;
+            const downStep = dn * ISR;
+            let delta = input - this.last;
+            if (delta > upStep) {
+              delta = upStep;
+            } else if (delta < -downStep) {
+              delta = -downStep;
+            }
+            this.last += delta;
+            return this.last;
+          }
+        }
+        globalThis.Lag = Slew;
+        globalThis.slew = registerClass("slew", Slew);
+
+        globalThis.applyDistortion = (x, amount) => {
+          amount = Math.min(Math.max(amount, 0), 1);
+          amount -= 0.01;
+          var k = (2 * amount) / (1 - amount);
+          var y = ((1 + k) * x) / (1 + k * Math.abs(x));
+          return y;
+        };
+        globalThis.distort = registerRaw(
+          "distort",
+          (r, a) => `${r} = applyDistortion(${a.join(",")})`
+        );
+        globalThis.hpf = register("hpf", (input, cutoff, resonance = 0) =>
+          input.sub(input.lpf(cutoff, resonance))
+        );
+
+        class Sequence extends Node {
+          clockSgn = true;
+          step = 0;
+          first = true;
+          update(clock, ...ins) {
+            if (!this.clockSgn && clock > 0) {
+              this.step = (this.step + 1) % ins.length;
+              this.clockSgn = clock > 0;
+              return 0; // set first sample to zero to retrigger gates on step change...
+            }
+            this.clockSgn = clock > 0;
+            return ins[this.step];
+          }
+        }
+        globalThis.Sequence = Sequence;
+        globalThis.seq = registerClass("seq", Sequence);
+        globalThis.midinote = registerRaw(
+          "midinote",
+          (r, [note]) => `${r} = (2 ** ((${note} - 69) / 12) * 440)`
+        );
+
         globalThis.midi2freq = (midi) => Math.pow(2, (midi - 69) / 12) * 440;
+
         globalThis.range = registerRaw(
           "range",
-          ([bip, a, b]) => `((${bip} + 1) / 2) * (${b} - ${a}) + ${a}`
+          (r, [bip, a, b]) => `${r} = ((${bip} + 1) / 2) * (${b} - ${a}) + ${a}`
+        );
+        /* let log = registerNode("log", (r, a) => `${r} = Math.log(${a})`);
+        let exp = registerNode("exp", (r, a) => `${r} = Math.exp(${a})`);
+        let sin = registerNode("sin", (r, a) => `${r} = Math.sin(${a})`);
+        let cos = registerNode("cos", (r, a) => `${r} = Math.cos(${a})`); */
+
+        globalThis.unipolar = registerRaw(
+          "unipolar",
+          (r, [bip]) => `${r} = (${bip}+1)/2;`
+        );
+        globalThis.bipolar = registerRaw(
+          "bipolar",
+          (r, [uni]) => `${r} = ${uni}*2-1;`
         );
 
-        globalThis.add = registerRaw("add", (args) => args.join("+"));
-        globalThis.sub = registerRaw("sub", (args) => args.join("-"));
-        globalThis.mul = registerRaw("mul", (args) => args.join("*"));
-        globalThis.div = registerRaw("div", (args) => args.join("/"));
-        globalThis.mod = registerRaw("mod", (args) => args.join("%"));
-        globalThis.n = registerRaw("n", (x) => x);
+        globalThis._rangex = (sig, min, max) => {
+          let logmin = Math.log(min);
+          let range = Math.log(max) - logmin;
+          const unipolar = (sig + 1) / 2;
+          return Math.exp(unipolar * range + logmin);
+        };
+        globalThis.rangex = registerRaw(
+          "rangex",
+          (r, args) => `${r} = _rangex(${args.join(",")})`
+        );
 
+        globalThis.pan = register("pan", (input, pos) => {
+          // (pos+1)/2 * PI/2 = (pos+1) * PI * 0.25
+          return input;
+          /* pos = add(pos, 1).mul(Math.PI, 0.25);
+          return input.mul([Math.cos(pos), Math.sin(pos)]); */
+        });
+
+        globalThis.add = registerRaw("add", (r, a) => `${r} = ${a.join("+")}`);
+        globalThis.sub = registerRaw("sub", (r, a) => `${r} = ${a.join("-")}`);
+        globalThis.mul = registerRaw("mul", (r, a) => `${r} = ${a.join("*")}`);
+        globalThis.div = registerRaw("div", (r, a) => `${r} = ${a.join("/")}`);
+        globalThis.mod = registerRaw("mod", (r, a) => `${r} = ${a.join("%")}`);
+        globalThis.n = registerRaw("n", (r, x) => `${r} = ${x}`);
+
+        Node.prototype.apply = function (x) {
+          return x(this);
+        };
         // sine(240).raw(([n]) => `${n}/16`)
-        /* let raw = registerNode("raw", (...args) => {
+        /* let raw = register("raw", (...args) => {
           const compileSelf = args[args.length - 1];
           return new Node("raw", args.slice(0, -1), null, compileSelf);
         }); */
         /* let raw = (type, compileSelf) =>
-          registerNode((...args) => new Node(type, args, null, compileSelf));
+          register((...args) => new Node(type, args, null, compileSelf));
         let raw = registerRaw('raw', ()) */
         // sine(100).raw((arg) => `${arg}/2`)
         Object.assign(globalThis, {
@@ -1025,7 +1362,7 @@
       </script>
     </template>
     <script>
-      let registerWith = (type, getNode) => {
+      let register = (type, getNode) => {
         // register method for chaining
         Node.prototype[type] = function (...args) {
           return getNode(type, [this, ...args]);
@@ -1034,7 +1371,7 @@
         return (...args) => getNode(type, args);
       };
       let registerFn = (type, update) =>
-        registerWith(type, (type, args) => new Node(type, args, update));
+        register(type, (type, args) => new Node(type, args, update));
     </script>
     <script id="node-feedback">
       Node = class {
@@ -1180,7 +1517,7 @@
       }
     </script>
   </head>
-  <body>
+  <>
     <div class="logo">
       <img src="./img/kabelsalat_logo_scrot.png" />
     </div>
@@ -1465,14 +1802,59 @@ sine(random()*800+100)
     </section>
     <section>
       <h2>3. audio</h2>
-      <p>with kabelsalat:</p>
-      <dsp-repl rows="6"
+      <p>distorted guitar:</p>
+      <dsp-repl rows="12"
         ><!--
-saw(120)
-.lpf(sine(2).range(.2,.8))
-.div(2)
-.group(1, .5)
+zaw([55,110,220,330]).lpf(
+ sine(.25).range(.3,.7) )
+.mix(2)
+.mul(impulse(4).ad(0,.1)
+.lag(.05)
+)
+.add(x=>x.delay(saw(.01).range(.005,.02)).mul(.9))
+.add(x=>x.delay(.3).mul(.7))
+.fold()
+.mul(.6)
 .play()
+--></dsp-repl
+      >
+    </section>
+    <section>
+      <h2>3. audio</h2>
+      <p>stardust:</p>
+      <dsp-repl rows="12"
+        ><!--
+// stardust
+// by pulu : https://pulusound.fi
+let mel = n(sine(0.1).rangex(1, 5)).dust().apply(g => 
+  g.ad(0.001,sine(11.23).rangex(0.07, 0.2)).mul(
+    g.seq(52,57,60,59,45,52,59,45,57).add(g.seq(12,12,24,12,12,12)).midinote()
+      .mul(g.ad(0.001,0.03).bipolar().rangex(1,noise().hold(g).rangex(0.5,2)))
+      .sine()
+      .mul(noise().hold(g).lag(0.001).range(0.2,1))
+      .pan(noise().hold(g).lag(0.003).mul(0.8))
+  )
+)
+  .add(x => x.delay(sine(0.121).rangex(0.333, 0.347)).mul(sine(0.54).rangex(0.3, 0.7)))
+  .add(x => x.delay(sine(0.131).rangex(0.543, 0.557)).mul(sine(0.64).rangex(0.3, 0.7)))
+  .mul(1.05);
+let wind = noise()
+  .mul(dust(18).ad(0.003,0.05).bipolar().rangex(0.6,1))
+  .add(noise().hold(dust(500)))
+  .mul(n(0.7).apply(r => noise().hold(impulse(r)).slew(r).rangex(0.4,1)))
+  .distort(0.5)
+  .lpf(n(0.2).apply(r => noise().hold(impulse(r)).slew(r).rangex(0.5,0.9)),0.2)
+  .hpf(n(0.33).apply(r => noise().hold(impulse(r)).slew(r).rangex(0.3,0.4)))
+  .pan(sine(0.12).mul(0.7))
+  .add(x => x.delay(0.65).mul(0.72))
+  .mul(0.2);
+let drone = add(...[0,7,10,12].map((x,i) =>
+  n(x+45).midinote().sine()
+    .mul(n(x/25).sine(0, i/2*Math.PI).unipolar())
+    .pan(sine(1, 0, i/2*Math.PI).mul(0.6))
+))
+  .mul(0.8);
+add(mel, wind, drone).spawn(1,4,4)
 --></dsp-repl
       >
     </section>
