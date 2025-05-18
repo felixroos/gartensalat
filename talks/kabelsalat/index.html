@@ -39,7 +39,7 @@
       body {
         background-color: #1d1918;
         margin: auto;
-        font-family: serif;
+        font-family: monospace;
         font-size: 1.2em;
         color: #edd;
         padding: 20px 8px;
@@ -1544,11 +1544,12 @@
         $.n ??= [];
         const getRef = (input) =>
           typeof input !== "object" ? input : `r[${nodes.indexOf(input)}]`;
-        let move = [
+        let init = [
           `$.n ??= []; // init nodes array (if undefined)`,
           `const n = $.n; // only to save some chars`,
           `const r = new Float32Array(${nodes.length});`,
         ];
+        let move = [];
         let create = [];
         let dsp = [`$.dsp = () => {`];
         for (let id in nodes) {
@@ -1577,10 +1578,12 @@
         const last = getRef(nodes[nodes.length - 1]);
         // lines.push(`return ${last}`);
         dsp.push(`}`);
-        const code =
-          move.join("\n") + "\n" + create.join("\n") + "\n\n" + dsp.join("\n");
-        /* console.log("-------compiled--------"); */
-        // console.log(code);
+        // TODO: move code can still lead to errors
+        // it can happen that a variable is written before it is read
+        // -> find way to sort move to not let that happen
+        const code = [init, move, create, dsp].flat().join("\n");
+        console.log("-------compiled--------");
+        console.log(code);
         $.n = nodes;
         return code;
       };
@@ -1822,18 +1825,18 @@
     <section>
       <h2>kabelsalat is a..</h2>
       <ul>
-        <li>1. graph based</li>
-        <li>2. language</li>
-        <li>3. for</li>
-        <li>4. audio</li>
-        <li>5. visual</li>
-        <li>6. livecoding</li>
-        <li>7. on the web</li>
-        <li>8. and beyond</li>
+        <li>1.graph based</li>
+        <li>2.language</li>
+        <li>3.for</li>
+        <li>4.audio</li>
+        <li>5.visual</li>
+        <li>6.livecoding</li>
+        <li>7.on the web</li>
+        <li>8.and beyond</li>
       </ul>
     </section>
     <section>
-      <h2>1. graph based</h2>
+      <h2>1.graph based</h2>
       <!-- ![graph](./img/pd_graph.png) -->
       <p><img src="./img/nc_graph2.png" alt="graph" /></p>
       <!-- ![graph](./img/ks_graph.png) -->
@@ -1848,7 +1851,7 @@
       <pre>Saw 55 -> Filter 0.5 -> AudioOut</pre>
     </section>
     <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <img
         src="./img/hydra_chaining.jpg"
         alt="hydra chaining"
@@ -1856,7 +1859,7 @@
       />
     </section>
     <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <!-- <p>module = function, cable = data flow</p> -->
       <p>
         <img src="./img/lang_graphviz.svg" alt="lang graph" width="500px" />
@@ -1877,21 +1880,21 @@ out(r[1])</pre
       > -->
     </section>
     <!-- <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <h3>Node class</h3>
       <script>
         codeblock(document.querySelector("#node-class"), 8);
       </script>
     </section>
     <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <h3>run method</h3>
       <script>
         codeblock(document.querySelector("#node-run"), 8);
       </script>
     </section> -->
     <!-- <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <script>
         codeblock(document.querySelector("#math-nodes"), 6);
       </script>
@@ -1903,19 +1906,19 @@ out(r[1])</pre
       </details>
     </section> -->
     <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <p>a simple chain:</p>
       <node-garden rows="3">return add(4, 2).mul(3).div(2).out()</node-garden>
     </section>
     <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <p>without method chaining:</p>
       <node-garden rows="3">return out(div(mul(add(4, 2), 3), 2))</node-garden>
       <!-- <p>we can mix and match method chaining and regular functions:</p>
       <pre>a.b(c) === b(a, c)</pre> -->
     </section>
     <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <p>we can reuse nodes using variables:</p>
       <node-garden rows="3">
         <!--
@@ -1925,7 +1928,7 @@ return a.mul(3).add(a).out()
       </node-garden>
     </section>
     <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <p>tree walking:</p>
       <node-garden rows="3">
         <!--
@@ -1935,7 +1938,7 @@ return add(8,2).mul( add(3,5) )
       </node-garden>
     </section>
     <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <p>multichannel expansion:</p>
       <node-garden rows="3">
         <!--
@@ -1944,7 +1947,7 @@ return add([2, 3], 1).mul(4)
       </node-garden>
     </section>
     <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <p>channel matching:</p>
       <node-garden rows="3">
         <!--
@@ -1953,7 +1956,7 @@ return add([2, 3], 1).mul([4, 5])
       </node-garden>
     </section>
     <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <p>feedback:</p>
       <node-garden rows="3">
         <!--
@@ -1964,7 +1967,7 @@ return node.out()
       </node-garden>
     </section>
     <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <p>feedback with lambdas:</p>
       <node-garden rows="3">
         <!--
@@ -1979,7 +1982,7 @@ return add(1, o=>o).out()
       </details> -->
     </section>
     <section>
-      <h2>2. language</h2>
+      <h2>2.language</h2>
       <p>multichannel expansion + feedback:</p>
       <node-garden rows="3">
         <!--
@@ -2077,7 +2080,7 @@ $.m ??= 0
 $.m = ($.m+5)%24
 let f = midi2freq($.m+50)
 
-sine(f).div(4)
+saw(f).lpf(sine(2).range(.4,.5)).div(4)
 .spawn(2, 0, 1)
 --></dsp-repl
       >
