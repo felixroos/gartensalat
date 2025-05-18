@@ -1695,7 +1695,7 @@
           // how about mix(2) in this case?
           console.warn("more than 2 channels! only using first 2");
         }
-        //out.viz();
+        out.viz();
         let code = out.compile();
         $.worklet.port.postMessage({ code });
       };
