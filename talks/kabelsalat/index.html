@@ -151,7 +151,7 @@
             "beforeend",
             `
       <div style="padding:0;width:100%">
-        <div class="viz" style="display:flex;justify-content:center;padding:10px;height:300px"></div>
+        <div class="viz" style="display:flex;justify-content:center;padding:10px;height:500px"></div>
         <textarea id="code" spellcheck="false" rows="${rows}" style="margin:0;border-bottom:2px solid #222;width:100%;font-size:.8em"></textarea>
         <div style="position:relative">
           <pre class="result">
@@ -1545,21 +1545,36 @@
         const getRef = (input) =>
           typeof input !== "object" ? input : `r[${nodes.indexOf(input)}]`;
         let init = [
-          `$.n ??= []; // init nodes array (if undefined)`,
+          `$.n ??= []; // init nodes array`,
           `const n = $.n; // only to save some chars`,
           `const r = new Float32Array(${nodes.length});`,
         ];
         let move = [];
         let create = [];
         let dsp = [`$.dsp = () => {`];
+
+        let deps = [];
+        let rootDep = dep();
+        rootDep.value = -1;
         for (let id in nodes) {
           const node = nodes[id];
           if (node.compileSetup) {
-            const oldIndex = $.n.findIndex((n) => n === node);
-            if (oldIndex === -1) {
+            const oldId = $.n.findIndex((n) => n === node);
+            if (oldId === -1) {
               create.push(`${node.compileSetup(`n[${id}]`)} // ${node.type}`);
-            } else if (oldIndex !== Number(id)) {
-              move.push(`n[${id}] = n[${oldIndex}] // ${node.type}`);
+            } else if (oldId !== Number(id)) {
+              // dependency graph for variable assignments
+              if (!deps[id]) {
+                deps[id] = dep();
+                deps[id].value = id;
+              }
+              if (!deps[oldId]) {
+                deps[oldId] = dep();
+                deps[oldId].value = oldId;
+              }
+              deps[oldId].ins.push(deps[id]);
+              rootDep.ins.push(deps[oldId]);
+              /* move.push(`n[${id}] = n[${oldId}] // ${node.type}`); */
             } else {
               // id hasn't changed -> no setup needed!
             }
@@ -1575,13 +1590,25 @@
           line = `  ${line} // ${node.type}`;
           dsp.push(line);
         }
+        dsp.push(`}`);
+
+        // generate topo sorted variable assignments
+        const assignments = Array.from(topoSort(rootDep))
+          .slice(0, -1)
+          .filter((dep) => dep.ins.length)
+          .map((dep) =>
+            dep.ins.map(
+              (input) =>
+                `n[${input.value}] = n[${dep.value}] // ${
+                  nodes[input.value].type
+                }`
+            )
+          );
+
         const last = getRef(nodes[nodes.length - 1]);
         // lines.push(`return ${last}`);
-        dsp.push(`}`);
-        // TODO: move code can still lead to errors
-        // it can happen that a variable is written before it is read
-        // -> find way to sort move to not let that happen
-        const code = [init, move, create, dsp].flat().join("\n");
+
+        const code = [init, assignments, create, dsp].flat().join("\n");
         console.log("-------compiled--------");
         console.log(code);
         $.n = nodes;
@@ -1704,34 +1731,38 @@
       };
       Node.prototype.group = function (max = 1, fadeIn = 0, fadeOut = 0.1) {
         $.nodes ??= [];
-        let len = $.nodes.length;
+        let len = $.nodes.length; // save len before messing with array (you never know)
         // fade out / retire old nodes
-
         $.nodes = $.nodes.reduce((acc, node, i) => {
           // assumes nodes is poly node with at least 1 channel
           const in0 = node.ins[0];
-          if (in0.type === "fadeout" && ctx.currentTime > node.deadline) {
+          if (in0.type === "fadeout" && ctx.currentTime > node.doneTime) {
             return acc; // omit already silent node
           }
-          /* if (in0.type === "fadein" && in0.done) {
+          if (in0.type === "fadein" && ctx.currentTime > node.doneTime) {
+            // unwrap node that's done fading in
             node.ins = node.ins.map((input) => input.ins[0]);
-          } */
+          }
           if (in0.type !== "fadeout" && len - i >= max) {
             if (!fadeOut) {
               return acc;
             }
             node = fadeout(node, fadeOut);
-            node.deadline = ctx.currentTime + fadeOut + 1;
+            node.doneTime = ctx.currentTime + fadeOut + 0.1;
           }
           acc.push(node);
           return acc;
         }, []);
 
         // fade in new node
-        let node = fadeIn ? this.fadein(fadeIn) : this;
+        let node = this;
         // make sure node is always poly (simplifies checks in reducer above)
         if (node.type !== "poly") {
           node = poly(node);
+        }
+        if (fadeIn) {
+          node = fadein(node, fadeIn); // remember: node is poly
+          node.doneTime = ctx.currentTime + fadeIn + 0.1;
         }
         $.nodes.push(node);
         return add(...$.nodes);
@@ -1787,6 +1818,7 @@
       let div = registerFn("div", (a, b) => a / b);
       let mod = registerFn("mod", (a, b) => a % b);
       let n = registerFn("n", (a) => a); */
+      let dep = registerFn("dep", (a) => a);
 
       let out = registerFn("out", (a) => a);
       let add = registerRaw("add", (r, a) => `${r} = ${a.join("+")}`);
@@ -2077,11 +2109,9 @@ saw([120,121])
       <dsp-repl rows="6" next="1"
         ><!--
 $.m ??= 0
-$.m = ($.m+5)%24
-let f = midi2freq($.m+50)
+$.m = ($.m+5)%24+50
 
-saw(f).lpf(sine(2).range(.4,.5)).div(4)
-.spawn(2, 0, 1)
+midinote($.m).sine().spawn(2, 1, 1)
 --></dsp-repl
       >
     </section>
