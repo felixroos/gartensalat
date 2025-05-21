@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>iclc 2025: kabelsalat</title>
     <link
       rel="icon"
@@ -15,6 +17,57 @@
       body {
         height: 100%;
         overflow: hidden;
+      }
+      body {
+        background-color: #1d1918;
+        margin: auto;
+        font-family: monospace;
+        font-size: 1.2em;
+        color: #edd;
+        padding: 20px 8px;
+        padding: 0;
+      }
+      .logo {
+        background: #1d1918;
+        z-index: 2000;
+        display: flex;
+        top: 0;
+        left: 20px;
+        width: 100%;
+        position: absolute;
+        align-items: flex-end;
+        img {
+          height: 50px;
+        }
+      }
+      .chapters {
+        img {
+          width: 200px;
+        }
+        font-size: 0.8em;
+        h1 {
+          margin: 0;
+          opacity: 0.4;
+          &.active {
+            opacity: 1;
+            /* text-decoration: underline; */
+          }
+        }
+        &:not(.centered) {
+          position: fixed;
+          top: 80px;
+          left: 20px;
+        }
+        .centered {
+          img {
+            display: none;
+          }
+        }
+      }
+      .hero {
+        margin-top: -160px;
+        width: 800px;
+        max-width: 100%;
       }
       button {
         background: #222;
@@ -36,18 +89,10 @@
         width: 100%;
         max-width: 800px;
       }
-      body {
-        background-color: #1d1918;
-        margin: auto;
-        font-family: monospace;
-        font-size: 1.2em;
-        color: #edd;
-        padding: 20px 8px;
-        padding: 0;
-      }
       section {
         * {
           flex-shrink: 0;
+          max-width: 800px;
         }
         position: absolute;
         top: 0;
@@ -63,6 +108,7 @@
           max-width: 100%;
         }
         padding-bottom: 500px;
+        padding-left: 240px;
         opacity: 0;
         width: 100%;
         height: 100%;
@@ -71,11 +117,20 @@
         h1,
         h2,
         h3 {
-          position: sticky;
+          /* position: sticky; */
           top: 0px;
           padding: 8px;
+          z-index: 1000;
           background: #1d1918;
           margin-bottom: 20px;
+        }
+      }
+      @media screen and (max-width: 1000px) {
+        .chapters {
+          display: none;
+        }
+        section {
+          padding: 90px 20px;
         }
       }
       @font-face {
@@ -87,11 +142,11 @@
         font-size: 1em;
       }
       textarea,
-      pre {
+      pre:not(.pristine) {
         box-sizing: border-box;
         font-family: "FontWithASyntaxHighlighter", monospace;
         padding: 8px;
-        font-size: 0.5em;
+        font-size: 0.8em;
         border: 0;
         outline: none;
         overflow: auto;
@@ -102,17 +157,13 @@
         box-sizing: border-box;
         max-width: 800px;
       }
+      pre.pristine {
+        margin: 16px;
+        font-family: monospace;
+        font-size: 1.5em;
+      }
       #lines {
         height: 200px;
-      }
-      .logo {
-        display: flex;
-        top: 0;
-        position: absolute;
-        align-items: flex-end;
-        img {
-          height: 50px;
-        }
       }
     </style>
     <!-- codeblock -->
@@ -134,6 +185,51 @@
     </script>
     <!-- node-garden -->
     <script>
+      class CloneTemplate extends HTMLElement {
+        static observedAttributes = ["tid"];
+        init() {
+          const template = document.getElementById(this.getAttribute("tid"));
+          const clone = template.content.cloneNode(true);
+          const container = document.createElement("div");
+          container.appendChild(clone);
+          this.appendChild(container);
+        }
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+      }
+      customElements.define("clone-template", CloneTemplate);
+
+      class NodeViz extends HTMLElement {
+        static observedAttributes = ["code", "dir", "height"];
+        init() {
+          const container = document.createElement("div");
+          container.style.height = this.getAttribute("height");
+          this.code = this.getAttribute("code");
+          const dir = this.getAttribute("dir") ?? "LR";
+          const node = new Function(this.code)();
+          renderNode(
+            node,
+            container,
+            (gvnode, node) => {
+              gvnode.color = node.color || "white";
+              return gvnode;
+            },
+            (edge) => edge,
+            dir
+          );
+          this.appendChild(container);
+        }
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+      }
+      customElements.define("node-viz", NodeViz);
+
       class NodeGarden extends HTMLElement {
         static observedAttributes = ["code", "rows"];
         init() {
@@ -151,11 +247,11 @@
             "beforeend",
             `
       <div style="padding:0;width:100%">
-        <div class="viz" style="display:flex;justify-content:center;padding:10px;height:500px"></div>
+        <div class="viz" style="display:flex;justify-content:center;padding:10px;height:220px;margin:10px"></div>
         <textarea id="code" spellcheck="false" rows="${rows}" style="margin:0;border-bottom:2px solid #222;width:100%;font-size:.8em"></textarea>
         <div style="position:relative">
-          <pre class="result">
-          </pre>
+          <pre class="result"></pre>
+          
           <div style="display:flex;position:absolute;right:0;top:0">
             <button style="margin-right:8px" class="run">run</button>
             <button style="margin-right:8px" class="reset">reset</button>
@@ -164,6 +260,10 @@
             <button class="expand">+</button>
           </div>
         </div>
+        <details>
+          <summary>show json</summary>
+          <pre class="json" ></pre>
+        </details>
         <details>
           <summary>show steps</summary>
           <pre class="steps"></pre>
@@ -278,6 +378,13 @@
           this.nodes.forEach((node, i) => {
             node.id = i;
           });
+          try {
+            this.querySelector(".json").innerText = JSON.stringify(
+              this.node,
+              null,
+              2
+            );
+          } catch (err) {}
         }
         async update() {
           // this.results = []; // clear state
@@ -368,7 +475,7 @@
     </script>
     <!-- graphviz -->
     <script>
-      function gvjson2dot(json) {
+      function gvjson2dot(json, dir = "LR") {
         const { nodes, edges } = json;
         let renderProps = (props) =>
           `[${Object.entries(props)
@@ -376,7 +483,7 @@
             .join(",")}]`;
         return `digraph {
             bgcolor="transparent";
-            rankdir="LR";
+            rankdir="${dir}";
             node [penwidth=4];
             edge [penwidth=2];
             ${nodes
@@ -391,30 +498,21 @@
             }`;
       }
       function node2gvjson(graph, editNode, editEdge) {
-        let dfs = (node, fn, visited = []) => {
-          if (typeof node !== "object") {
-            return node;
-          }
-          visited.push(node);
-          node.ins = node.ins.map((input) => {
-            if (visited.includes(input)) {
-              return input;
-            }
-            return dfs(input, fn, visited);
-          });
-          node = fn(node, visited);
-          return node;
-        };
         const nodes = [],
           edges = [];
+
         let style = {
           color: "white",
           fontcolor: "white",
           fontsize: "10",
           fontname: "monospace",
         };
-        dfs(graph, (node) => {
-          node.id = nodes.length;
+        const sorted = Array.from(topoSort(graph)).map((node, i) => {
+          node.id = i;
+          return node;
+        });
+        sorted.forEach((node, i) => {
+          node.id = i;
           const label = `${node.type} ${node.ins
             .map((input) =>
               typeof input === "object"
@@ -431,7 +529,7 @@
             ...style,
           };
           if (editNode) {
-            gvnode = editNode(gvnode);
+            gvnode = editNode(gvnode, node, i);
           }
           nodes.push(gvnode);
           for (let i in node.ins) {
@@ -439,7 +537,7 @@
               continue;
             }
             if (node.ins[i].id === undefined) {
-              console.log("undefined source id", node.ins[i]);
+              console.log("undefined source id", node.ins[i], "for node", node);
             }
             let gvedge = {
               label: "",
@@ -450,7 +548,7 @@
               ...style,
             };
             if (editEdge) {
-              gvedge = editEdge(gvedge);
+              gvedge = editEdge(gvedge, node, i);
             }
             edges.push(gvedge);
           }
@@ -458,9 +556,9 @@
         });
         return { nodes, edges };
       }
-      function node2dot(node, editNode, editEdge) {
+      function node2dot(node, editNode, editEdge, dir) {
         const flat = node2gvjson(node, editNode, editEdge);
-        const dot = gvjson2dot(flat);
+        const dot = gvjson2dot(flat, dir);
         return dot;
       }
       async function renderDot(dot, container) {
@@ -482,22 +580,82 @@
         container.innerText = "";
         container.appendChild(img);
       }
-      function renderNode(node, container, editNode, editEdge) {
-        const dot = node2dot(node, editNode, editEdge);
+      function nodes2gvjson(nodes, editNode, editEdge) {
+        const gvnodes = [],
+          gvedges = [];
+
+        let style = {
+          color: "white",
+          fontcolor: "white",
+          fontsize: "10",
+          fontname: "monospace",
+        };
+        let getInput = (input) => {
+          if (typeof input === "string") {
+            return nodes[Number(input)];
+          }
+          return input;
+        };
+        nodes.forEach((node, i) => {
+          const ins = node.ins.map(getInput);
+          const label = `${node.type} ${ins
+            .map((input) =>
+              typeof input === "object"
+                ? "_"
+                : Math.round(input * 10000) / 10000
+            )
+            .join(" ")}`;
+          let gvnode = {
+            id: node.id,
+            label,
+            ordering: "in",
+            width: "0.5",
+            height: "0.4",
+            ...style,
+          };
+          if (editNode) {
+            gvnode = editNode(gvnode);
+          }
+          gvnodes.push(gvnode);
+          for (let i in ins) {
+            if (typeof ins[i] !== "object") {
+              continue;
+            }
+            if (ins[i].id === undefined) {
+              console.log("undefined source id", ins[i], "for node", node);
+            }
+            let gvedge = {
+              label: "",
+              id: gvedges.length,
+              source: ins[i].id ?? "whuuuat",
+              target: node.id,
+              directed: "true",
+              ...style,
+            };
+            if (editEdge) {
+              gvedge = editEdge(gvedge);
+            }
+            gvedges.push(gvedge);
+          }
+          return node;
+        });
+        return { nodes: gvnodes, edges: gvedges };
+      }
+      function renderNode(node, container, editNode, editEdge, dir) {
+        const dot = node2dot(node, editNode, editEdge, dir);
+        return renderDot(dot, container);
+      }
+      function nodes2dot(nodes, editNode, editEdge) {
+        const flat = nodes2gvjson(nodes, editNode, editEdge);
+        const dot = gvjson2dot(flat);
+        return dot;
+      }
+      function renderNodes(nodes, container, editNode, editEdge) {
+        const dot = nodes2dot(nodes, editNode, editEdge);
         return renderDot(dot, container);
       }
     </script>
-    <!-- Node -->
-    <script id="node-class">
-      let Node = class {
-        constructor(type, ins, update) {
-          this.type = type;
-          this.ins = ins;
-          this.update = update;
-        }
-      };
-    </script>
-
+    <!-- dsp-worklet -->
     <template class="dsp-worklet">
       <script>
         class DspProcessor extends AudioWorkletProcessor {
@@ -559,7 +717,7 @@
         _lerp(invLerp(v, vmin, vmax), omin, omax);
 
       class DSPRepl extends HTMLElement {
-        static observedAttributes = ["code", "rows", "next"];
+        static observedAttributes = ["code", "rows", "next", "viz"];
         worklet;
         init() {
           const code =
@@ -573,16 +731,23 @@
           this.innerHTML = "";
           this.insertAdjacentHTML(
             "beforeend",
-            `<div style="border:2px solid #222;padding:0;">
-            
+            `<div style="border:0px solid #222;padding:0;">
+
             <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
             <div style="user-select:none;cursor:pointer">
             <button class="play">run</button> <button class="stop">stop</button>
             </div>
             <canvas width="400" height="80"></canvas>
-            <div class="viz" style="display:flex;justify-content:center;padding:10px;height:300px"></div>
-            </div>
-              `
+            ${
+              !!this.getAttribute("viz")
+                ? `
+              <div
+                class="viz"
+                style="display:flex;justify-content:center;padding:10px;height:300px"
+              ></div>`
+                : ""
+            }
+          </div>`
           );
           // draw logic
           this.vizContainer = this.querySelector(".viz");
@@ -623,9 +788,8 @@
             if (e.data.framebuffer) {
               requestAnimationFrame(() => this.drawBuffer(e.data.framebuffer));
             } else if (e.data.viz) {
-              const node = JSON.parse(e.data.viz);
-              renderNode(node, this.vizContainer);
-              // this.vizContainer.style.display = "block";
+              const nodes = JSON.parse(e.data.viz);
+              this.vizContainer && renderNodes(nodes, this.vizContainer);
             }
           };
         }
@@ -643,8 +807,10 @@
         stop() {
           this.worklet?.disconnect();
           this.worklet?.port.postMessage("stop");
-          delete $.n;
-          delete $.nodes;
+          if (typeof $ !== "undefined") {
+            delete $.n;
+            delete $.nodes;
+          }
           this.worklet = undefined;
         }
 
@@ -743,8 +909,7 @@
             if (maxExpansions > 0) {
               this.type = "poly";
               this.update = (...args) => args;
-              this.compileSelf = (r, args) =>
-                `$.l=${args[0]}*0.3;$.r=${args[1] || args[0]}*0.3;`;
+              this.compileSelf = compilePoly;
               // make mono if only one channel
 
               this.ins = Array(maxExpansions)
@@ -779,6 +944,9 @@
         }
 
         globalThis.Node = DspNode;
+        function compilePoly(r, args) {
+          return `$.l=${args[0]}*0.3;$.r=${args[1] || args[0]}*0.3;`;
+        }
         Node.prototype.parseInput = function (input) {
           if (typeof input === "function") {
             input = input(this); // lambda feedback
@@ -818,7 +986,15 @@
         };
         Node.prototype.viz = function () {
           try {
-            $.port.postMessage({ viz: JSON.stringify(this) });
+            const nodes = Array.from(topoSort(this));
+            let flat = nodes.map((node, id) => ({
+              id,
+              type: node.type,
+              ins: node.ins.map((input) =>
+                input instanceof Node ? String(nodes.indexOf(input)) : input
+              ),
+            }));
+            $.port.postMessage({ viz: JSON.stringify(flat) });
           } catch (err) {
             console.warn("non serializable node. probably because of feedback");
           }
@@ -846,7 +1022,10 @@
             const update = new Function(...argNames, body);
             return new Node(type, args, update, compileSelf);
           });
-        globalThis.poly = registerFn("poly", (...args) => args);
+        globalThis.poly = register(
+          "poly",
+          (...args) => new Node("poly", args, null, compilePoly)
+        );
       </script>
       <!-- topoSort -->
       <script>
@@ -866,10 +1045,12 @@
       <script id="play-method">
         Node.prototype.play = function () {
           // the last node must be poly to assign to $.l when compiled
-          const out = this.type === "poly" ? this : n([this]);
+          const out = this.type === "poly" ? this : poly(this);
+
           if (out.ins.length > 2) {
             console.warn("more than 2 channels! only using first 2");
           }
+          // out.type = "out";
           out.viz();
           let compiled = out.compile();
           console.log("compiled", compiled);
@@ -922,12 +1103,12 @@
           return add(...$.nodes);
         };
         Node.prototype.spawn = function (max = 1, fadeIn = 1, fadeOut = 1) {
-          return this.group(max, fadeIn, fadeOut).play();
+          return this.group(max, fadeIn, fadeOut).out();
         };
       </script>
       <script id="fade">
         // maybe these could be combined into a single Node
-        class FadeIn /* extends Node  */ {
+        class FadeIn extends Node {
           start = $.S;
           done = false;
           update(input, fadeTime = 1) {
@@ -940,9 +1121,10 @@
             return input * gain;
           }
         }
+
         globalThis.FadeIn = FadeIn;
         globalThis.fadein = registerClass("fadein", FadeIn);
-        class FadeOut /* extends Node  */ {
+        class FadeOut extends Node {
           start = $.S;
           done = false;
           update(input, fadeTime = 1) {
@@ -962,7 +1144,7 @@
       <script>
         const ISR = 1 / sampleRate;
         // https://garten.salat.dev/audio-dsp/oscillators.html
-        class SineOsc /* extends Node */ {
+        class SineOsc extends Node {
           phase = 0;
           update(freq) {
             const value = Math.sin(this.phase * 2 * Math.PI);
@@ -973,7 +1155,7 @@
         globalThis.SineOsc = SineOsc;
         globalThis.sine = registerClass("sine", SineOsc);
 
-        class ZawOsc /* extends Node  */ {
+        class ZawOsc extends Node {
           phase = 0;
           update(freq) {
             this.phase += ISR * freq;
@@ -999,7 +1181,7 @@
           // 0 otherwise
           return 0;
         }
-        class SawOsc /* extends Node  */ {
+        class SawOsc extends Node {
           //phase = Math.random();
           phase = 0;
           update(freq) {
@@ -1039,7 +1221,7 @@
           return add(...input.ins);
         });
 
-        class Lpf /* extends Node  */ {
+        class Lpf extends Node {
           s0 = 0;
           s1 = 0;
           update(s, cutoff, resonance = 0) {
@@ -1063,7 +1245,7 @@
         globalThis.Lpf = Lpf;
         globalThis.lpf = registerClass("lpf", Lpf);
 
-        class PulseOsc /* extends Node  */ {
+        class PulseOsc extends Node {
           phase = 0;
           update(freq, duty = 0.5) {
             this.phase += ISR * freq;
@@ -1074,14 +1256,14 @@
         globalThis.PulseOsc = PulseOsc;
         globalThis.pulse = registerClass("pulse", PulseOsc);
 
-        class Dust /* extends Node  */ {
+        class Dust extends Node {
           update = (density) =>
             Math.random() < density * ISR ? Math.random() : 0;
         }
         globalThis.Dust = Dust;
         globalThis.dust = registerClass("dust", Dust);
 
-        class Impulse /* extends Node  */ {
+        class Impulse extends Node {
           phase = 1;
           update(freq) {
             this.phase += ISR * freq;
@@ -1098,7 +1280,7 @@
           (r) => `${r} = Math.random() * 2 - 1`
         );
 
-        class Hold /* extends Node  */ {
+        class Hold extends Node {
           value = 0;
           trigSgn = false;
           update(input, trig) {
@@ -1116,7 +1298,7 @@
           return y0 + x * (y1 - y0);
         }
 
-        class ADSR /* extends Node  */ {
+        class ADSR extends Node {
           state = "off";
           startTime = 0;
           startVal = 0;
@@ -1192,9 +1374,9 @@
         /*
         impulse(1).ad(.1).mul(sine(200))
 .add(x=>x.delay(.1).mul(.8))
-.play()*/
+.out()*/
         const MAX_DELAY_TIME = 10;
-        class Delay /* extends Node  */ {
+        class Delay extends Node {
           writeIdx = 0;
           readIdx = 0;
           buffer = new Float32Array(MAX_DELAY_TIME * sampleRate); // .fill(0)
@@ -1218,7 +1400,7 @@
         globalThis.Delay = Delay;
         globalThis.delay = registerClass("delay", Delay);
 
-        class Fold /* extends Node  */ {
+        class Fold extends Node {
           update(input = 0, rate = 0) {
             if (rate < 0) rate = 0;
             rate = rate + 1;
@@ -1235,7 +1417,7 @@
 
         let perc = register("perc", (gate, decay) => gate.adsr(0, 0, 1, decay));
 
-        class Lag /* extends Node  */ {
+        class Lag extends Node {
           lagUnit = 4410;
           s = 0;
           update(input, rate) {
@@ -1249,7 +1431,7 @@
         globalThis.Lag = Lag;
         globalThis.lag = registerClass("lag", Lag);
 
-        class Slew /* extends Node  */ {
+        class Slew extends Node {
           last = 0;
           update(input, up, dn) {
             const upStep = up * ISR;
@@ -1282,7 +1464,7 @@
           input.sub(input.lpf(cutoff, resonance))
         );
 
-        class Sequence /* extends Node  */ {
+        class Sequence extends Node {
           clockSgn = true;
           step = 0;
           first = true;
@@ -1366,7 +1548,7 @@
       </script>
     </template>
     <script>
-      function register(type, getNode) {
+      function register(type, getNode = (...args) => new Node(type, args)) {
         // register method for chaining
         Node.prototype[type] = function (...args) {
           //return getNode(type, [this, ...args]);
@@ -1378,14 +1560,16 @@
       }
       let registerFn = (type, update) =>
         //register(type, (type, args) => new Node(type, args, update));
-        register(type, (...args) => new Node(type, args, update));
+        register(type, (...args) => new Node(type, args, { update }));
 
       let registerUgen = (type, name) =>
         //register(type, (type, args) => new Node(type, args, update));
         register(
           type,
           (...args) =>
-            new Node(type, args, null, null, (r) => `${r} = new ${name}()`)
+            new Node(type, args, {
+              compileSetup: (r) => `${r} = new ${name}()`,
+            })
         );
 
       const registerRaw = (type, compileSelf) =>
@@ -1396,23 +1580,8 @@
           );
           const body = `${compileSelf("let v", argNames)}; return v;`;
           const update = new Function(...argNames, body);
-          return new Node(type, args, update, compileSelf);
+          return new Node(type, args, { update, compileSelf });
         });
-    </script>
-    <script id="node-feedback">
-      Node = class {
-        constructor(type, ins, update) {
-          this.type = type;
-          this.ins = this.ins.map((input) => this.parseInput(input));
-          this.update = update;
-        }
-      };
-      Node.prototype.parseInput = function (input) {
-        if (typeof input === "function") {
-          return input(this);
-        }
-        return input;
-      };
     </script>
     <script id="node-expansion">
       let poly = registerFn("poly", (...args) => args);
@@ -1424,43 +1593,10 @@
 
       // this is the "full" version
       Node = class {
-        /* constructor(type, ins, update) {
+        constructor(type, ins, config) {
           this.type = type;
-          this.update = update;
-          let maxExpansions = 0;
-          this.ins = ins.map((input) => {
-            input = this.parseInput(input);
-            if (input.type === "poly") {
-              maxExpansions = Math.max(maxExpansions, input.ins.length);
-            }
-            return input;
-          });
-          if (expansion !== -1 && expansions >= expansion) {
-            return; // dirty hack for viz (not needed otherwise)
-          }
-          if (maxExpansions > 0) {
-            expansions++; // dirty hack for viz (not needed otherwise)
-            // multichannel expansion
-            this.type = "poly";
-            this.update = (...args) => args;
-            this.ins = Array(maxExpansions)
-              .fill(0)
-              .map((_, i) => {
-                const clone = new this.constructor(type, [], update);
-                clone.ins = ins.map((input) => {
-                  input = clone.parseInput(input);
-                  if (input.type === "poly") {
-                    return input.ins[i % input.ins.length];
-                  }
-                  return input;
-                });
-                return clone;
-              });
-          }
-        } */
-
-        constructor(type, ins, update, compileSelf, compileSetup) {
-          this.type = type;
+          this.config = config;
+          const { update, compileSelf, compileSetup } = config || {};
           update && (this.update = update);
           compileSelf && (this.compileSelf = compileSelf);
           compileSetup && (this.compileSetup = compileSetup);
@@ -1481,20 +1617,13 @@
             expansions++; // dirty hack for viz (not needed otherwise)
             this.type = "poly";
             this.update = (...args) => args;
-            this.compileSelf = (r, args) =>
-              `$.l=${args[0]}*0.3;$.r=${args[1] || args[0]}*0.3;`;
+            this.compileSelf = Node.compilePoly;
             // make mono if only one channel
 
             this.ins = Array(maxExpansions)
               .fill(0)
               .map((_, i) => {
-                const clone = new this.constructor(
-                  type,
-                  [],
-                  update,
-                  compileSelf,
-                  compileSetup
-                );
+                const clone = new this.constructor(type, [], config);
                 clone.ins = ins.map((input) => {
                   input = clone.parseInput(input);
                   if (input.type === "poly") {
@@ -1516,6 +1645,10 @@
         }
         return input;
       };
+      Node.prototype.input = function (node) {
+        this.ins[0] = node;
+        return this;
+      };
     </script>
     <!-- Node.run -->
     <script id="node-run">
@@ -1535,7 +1668,6 @@
         results[this.id] = result;
         return result;
       };
-      codeblock(document.currentScript, 8);
     </script>
     <script id="node-compile">
       Node.prototype.compile = function (memory) {
@@ -1616,8 +1748,30 @@
       };
     </script>
     <script id="node-play">
-      const fadein = registerUgen("fadein", "FadeIn");
-      const fadeout = registerUgen("fadeout", "FadeOut");
+      /* const fadein = registerUgen("fadein", "FadeIn"); */
+      /* const fadeout = registerUgen("fadeout", "FadeOut"); */
+      const fadein = register("fadein", (input, fadeTime) => {
+        if (typeof fadeTime !== "number") {
+          throw new Error("fadein: fadeTime must be a number!");
+        }
+        return new Node("fadein", [input, fadeTime], {
+          compileSelf: (r, [input], _, id) =>
+            `${r} = n[${id}].update(${input})`,
+          compileSetup: (r) => `${r} = new FadeIn(${fadeTime})`,
+          doneTime: ctx.currentTime + fadeTime,
+        });
+      });
+      const fadeout = register("fadeout", (input, fadeTime) => {
+        if (typeof fadeTime !== "number") {
+          throw new Error("fadein: fadeTime must be a number!");
+        }
+        return new Node("fadeout", [input, fadeTime], {
+          compileSelf: (r, [input], _, id) =>
+            `${r} = n[${id}].update(${input})`,
+          compileSetup: (r) => `${r} = new FadeOut(${fadeTime})`,
+          doneTime: ctx.currentTime + fadeTime,
+        });
+      });
       const sine = registerUgen("sine", "SineOsc");
       const zaw = registerUgen("zaw", "ZawOsc");
       const saw = registerUgen("saw", "SawOsc");
@@ -1736,10 +1890,11 @@
         $.nodes = $.nodes.reduce((acc, node, i) => {
           // assumes nodes is poly node with at least 1 channel
           const in0 = node.ins[0];
-          if (in0.type === "fadeout" && ctx.currentTime > node.doneTime) {
+          console.log("in0", in0);
+          if (in0.type === "fadeout" && ctx.currentTime > in0.config.doneTime) {
             return acc; // omit already silent node
           }
-          if (in0.type === "fadein" && ctx.currentTime > node.doneTime) {
+          if (in0.type === "fadein" && ctx.currentTime > in0.config.doneTime) {
             // unwrap node that's done fading in
             node.ins = node.ins.map((input) => input.ins[0]);
           }
@@ -1748,7 +1903,6 @@
               return acc;
             }
             node = fadeout(node, fadeOut);
-            node.doneTime = ctx.currentTime + fadeOut + 0.1;
           }
           acc.push(node);
           return acc;
@@ -1762,18 +1916,16 @@
         }
         if (fadeIn) {
           node = fadein(node, fadeIn); // remember: node is poly
-          node.doneTime = ctx.currentTime + fadeIn + 0.1;
         }
         $.nodes.push(node);
         return add(...$.nodes);
       };
       Node.prototype.spawn = function (max, fadeIn, fadeOut) {
-        return this.group(max, fadeIn, fadeOut).play();
+        return this.group(max, fadeIn, fadeOut).out();
       };
       Node.prototype.viz = function () {
         try {
-          // console.log("viz", this, $.vizContainer);
-          renderNode(this, $.vizContainer);
+          $.vizContainer && renderNode(this, $.vizContainer);
         } catch (err) {
           console.warn("non serializable node. probably because of feedback");
         }
@@ -1848,120 +2000,399 @@
     <div class="logo">
       <img src="./img/kabelsalat_logo_scrot.png" />
     </div>
+
+    <template id="chapter0">
+      <h1 class="active">1.graph based</h1>
+      <h1 class="active">2.language</h1>
+      <h1 class="active">3.for</h1>
+      <h1 class="active">4.audio</h1>
+      <h1 class="active">5.visual</h1>
+      <h1 class="active">6.livecoding</h1>
+      <h1 class="active">7.on the web</h1>
+      <h1 class="active">8.and beyond</h1>
+    </template>
+
+    <template id="chapter1">
+      <h1 class="active">1.graph based</h1>
+      <h1>2.language</h1>
+      <h1>3.for</h1>
+      <h1>4.audio</h1>
+      <h1>5.visual</h1>
+      <h1>6.livecoding</h1>
+      <h1>7.on the web</h1>
+      <h1>8.and beyond</h1>
+    </template>
+    <template id="chapter2">
+      <h1>1.graph based</h1>
+      <h1 class="active">2.language</h1>
+      <h1>3.for</h1>
+      <h1>4.audio</h1>
+      <h1>5.visual</h1>
+      <h1>6.livecoding</h1>
+      <h1>7.on the web</h1>
+      <h1>8.and beyond</h1>
+    </template>
+    <template id="chapter3">
+      <h1>1.graph based</h1>
+      <h1>2.language</h1>
+      <h1 class="active">3.for</h1>
+      <h1>4.audio</h1>
+      <h1>5.visual</h1>
+      <h1>6.livecoding</h1>
+      <h1>7.on the web</h1>
+      <h1>8.and beyond</h1>
+    </template>
+    <template id="chapter4">
+      <h1>1.graph based</h1>
+      <h1>2.language</h1>
+      <h1>3.for</h1>
+      <h1 class="active">4.audio</h1>
+      <h1>5.visual</h1>
+      <h1>6.livecoding</h1>
+      <h1>7.on the web</h1>
+      <h1>8.and beyond</h1>
+    </template>
+    <template id="chapter5">
+      <h1>1.graph based</h1>
+      <h1>2.language</h1>
+      <h1>3.for</h1>
+      <h1>4.audio</h1>
+      <h1 class="active">5.visual</h1>
+      <h1>6.livecoding</h1>
+      <h1>7.on the web</h1>
+      <h1>8.and beyond</h1>
+    </template>
+    <template id="chapter6">
+      <h1>1.graph based</h1>
+      <h1>2.language</h1>
+      <h1>3.for</h1>
+      <h1>4.audio</h1>
+      <h1>5.visual</h1>
+      <h1 class="active">6.livecoding</h1>
+      <h1>7.on the web</h1>
+      <h1>8.and beyond</h1>
+    </template>
+    <template id="chapter7">
+      <h1>1.graph based</h1>
+      <h1>2.language</h1>
+      <h1>3.for</h1>
+      <h1>4.audio</h1>
+      <h1>5.visual</h1>
+      <h1>6.livecoding</h1>
+      <h1 class="active">7.on the web</h1>
+      <h1>8.and beyond</h1>
+    </template>
+    <template id="chapter8">
+      <h1>1.graph based</h1>
+      <h1>2.language</h1>
+      <h1>3.for</h1>
+      <h1>4.audio</h1>
+      <h1>5.visual</h1>
+      <h1>6.livecoding</h1>
+      <h1>7.on the web</h1>
+      <h1 class="active">8.and beyond</h1>
+    </template>
+    <template id="hero0">
+      <h2 style="font-size: 3em; z-index: 3000; position: sticky">
+        kabelsalat
+      </h2>
+      <img
+        alt="graph"
+        src="https://www.businessinsider.de/wp-content/uploads/2016/02/kabelsalat.jpg"
+        class="hero"
+      />
+    </template>
     <section>
-      <h1>kabelsalat</h1>
-      <p>graph based language for live coding on the web and beyond</p>
-      <p>a project started on june 7, 2024 -> almost 1 year in the making</p>
-      <p>paper by felix roos and raphael forment</p>
-    </section>
-    <section>
-      <h2>kabelsalat is a..</h2>
+      <clone-template tid="hero0"></clone-template>
+      <clone-template tid="chapter0" class="chapters"></clone-template>
       <ul>
-        <li>1.graph based</li>
-        <li>2.language</li>
-        <li>3.for</li>
-        <li>4.audio</li>
-        <li>5.visual</li>
-        <li>6.livecoding</li>
-        <li>7.on the web</li>
-        <li>8.and beyond</li>
+        <li>spoken "cable salad"</li>
+        <li>graph based language for live coding audio|video</li>
+        <li>project started on june 7, 2024</li>
+        <li>paper by felix roos and raphael forment</li>
+        <li>
+          <a href="https://kabel.salat.dev/" target="_blank">kabel.salat.dev</a>
+        </li>
       </ul>
     </section>
     <section>
+      <h2>why?</h2>
+      <!-- <clone-template tid="hero0"></clone-template> -->
+      <clone-template tid="chapter0" class="chapters"></clone-template>
+      <node-viz
+        style="margin-top: 40px"
+        code="return tidal().superdirt().supercollider()"
+      ></node-viz>
+      <node-viz
+        style="margin-top: 40px"
+        code="return strudel().superdough()['?']()"
+      ></node-viz>
+      <h4>why not *just* use X?</h4>
+      <ul>
+        <li>single sample feedback</li>
+        <li>dynamically spawning graphs</li>
+        <li>minimalism / resilience</li>
+        <li>i want to learn</li>
+        <li>i only know javascript</li>
+        <li>inner peace</li>
+      </ul>
+    </section>
+    <script>
+      globalThis.tidal = register("tidal");
+      globalThis.superdirt = register("superdirt");
+      globalThis.supercollider = register("supercollider");
+      globalThis.strudel = register("strudel");
+      globalThis.superdough = register("superdough");
+      globalThis["?"] = register("?");
+    </script>
+
+    <section>
+      <clone-template tid="chapter1" class="chapters"></clone-template>
       <h2>1.graph based</h2>
-      <!-- ![graph](./img/pd_graph.png) -->
-      <p><img src="./img/nc_graph2.png" alt="graph" /></p>
-      <!-- ![graph](./img/ks_graph.png) -->
+      <img
+        src="https://blog.bela.io/images/puredata/header-2.png"
+        alt="graph"
+        class="hero"
+      />
+      <ul>
+        <li>Pure Data, Max, modular synths, ...</li>
+        <li>modules + cables = graph</li>
+        <li>to model signal flow</li>
+        <li>each module has inputs and outputs</li>
+      </ul>
+      <node-viz
+        style="margin-top: 40px"
+        code="return saw(55).lpf(200).out()"
+      ></node-viz>
+    </section>
+    <section>
+      <clone-template tid="chapter1" class="chapters"></clone-template>
+      <h2>noisecraft</h2>
+      <img src="./img/nc_graph2.png" alt="graph" />
       <ul>
         <li>
-          you&#39;ve seen patch based interfaces Pure Data, Max, cables.gl,
-          noisecraft.. or modular synths
+          <a href="https://github.com/maximecb/noisecraft" target="_blank"
+            >github.com/maximecb/noisecraft</a
+          >
         </li>
-        <li>modules + cables = graph</li>
-        <li>each module has inputs and one or more outputs</li>
+        <li>project by Maxime Chevalier-Boisvert</li>
+        <li>modular synth for the browser</li>
+        <li>"loosely inspired by Pure Data and Max/MSP"</li>
+        <li>original inspiration for kabelsalat</li>
+        <ul>
+          <li>minimal (readable) codebase</li>
+          <li>AudioWorklet only</li>
+          <li>uses compilation</li>
+        </ul>
+        <li>i gradually adapted it for live coding</li>
+        <li>ended up rewriting most of it</li>
       </ul>
-      <pre>Saw 55 -> Filter 0.5 -> AudioOut</pre>
+    </section>
+
+    <section>
+      <clone-template tid="chapter1" class="chapters"></clone-template>
+      <h3>Web Audio Nodes used by strudel / superdough</h3>
+      <p style="word-break: break-all">
+        AnalyserNode AudioBufferSourceNode AudioDestinationNode AudioWorkletNode
+        BiquadFilterNode ChannelMergerNode ChannelSplitterNode
+        ConstantSourceNode ConvolverNode DelayNode DynamicsCompressorNode
+        GainNode
+        <span style="color: #ffffff50">IIRFilterNode</span>
+        <span style="color: #ffffff50"
+          >MediaElementAudioSourceNode MediaStreamAudioDestinationNode
+          MediaStreamAudioSourceNode</span
+        >
+        OscillatorNode PannerNode StereoPannerNode WaveShaperNode
+      </p>
+      <ul>
+        <li>❌ this is all browser only (no node.js)</li>
+        <li>❌ there are differences between browsers</li>
+        <li>❌ this is hard to port</li>
+        <li>❌ you cannot do single sample feedback</li>
+        <li>❌ it feels clunky to use</li>
+      </ul>
+      <pre style="font-size: 0.5em">
+// a frequency modulated sine wave
+const lfo = audioCtx.createOscillator();
+lfo.frequency.value = 2;
+let min = 200,
+  max = 400;
+const lfoGain = audioCtx.createGain();
+lfoGain.gain.value = (max - min) / 2;
+const offset = audioCtx.createConstantSource();
+offset.offset.value = (max + min) / 2;
+const adder = audioCtx.createGain();
+lfo.connect(lfoGain).connect(adder);
+offset.connect(adder);
+offset.start();
+const carrier = audioCtx.createOscillator();
+carrier.frequency.value = 0;
+adder.connect(carrier.frequency);
+carrier.connect(audioCtx.destination);
+carrier.start();
+lfo.start();
+      </pre>
+    </section>
+    <section>
+      <clone-template tid="chapter1" class="chapters"></clone-template>
+      <h3>Web Audio Nodes used by kabelsalat</h3>
+      <p style="color: #ffffff50; word-break: break-all">
+        AnalyserNode AudioBufferSourceNode
+        <span style="color: #ffffff">AudioDestinationNode</span>
+        <span style="color: #ffffff">AudioWorkletNode</span>
+        BiquadFilterNode ChannelMergerNode ChannelSplitterNode
+        ConstantSourceNode ConvolverNode DelayNode DynamicsCompressorNode
+        GainNode IIRFilterNode MediaElementAudioSourceNode
+        MediaStreamAudioDestinationNode MediaStreamAudioSourceNode
+        OscillatorNode PannerNode StereoPannerNode WaveShaperNode
+      </p>
+      <ul>
+        <li>✅ easy to run in node.js</li>
+        <li>✅ no differences between browsers</li>
+        <li>✅ this is easier to port</li>
+        <li>✅ you can do single sample feedback</li>
+        <li>✅ it feels amazing to use</li>
+      </ul>
+      <pre style="font-size: 0.5em">
+// a frequency modulated sine wave
+sine(2).range(200, 300).sine().out()
+      </pre>
     </section>
     <section>
       <h2>2.language</h2>
-      <img
-        src="./img/hydra_chaining.jpg"
-        alt="hydra chaining"
-        style="margin-top: -140px; width: 800px"
-      />
+      <clone-template tid="chapter2" class="chapters"></clone-template>
+      <img src="./img/hydra_chaining.jpg" alt="hydra chaining" class="hero" />
+      <p>text is...</p>
+      <ul>
+        <li>compact</li>
+        <li>understood</li>
+        <li>standardized</li>
+        <li>fast</li>
+      </ul>
+    </section>
+    <template id="example-node">
+      <node-viz
+        code="let n1 = saw(55); n1.color='cyan'; let n2 = lpf(n1, 200); n2.color='magenta'; let n3 = out(n2); n3.color = 'yellow'; return n3;"
+      ></node-viz>
+    </template>
+    <template id="example-node-rl">
+      <node-viz
+        code="let n1 = saw(55); n1.color='cyan'; let n2 = lpf(n1, 200); n2.color='magenta'; let n3 = out(n2); n3.color = 'yellow'; return n3;"
+        dir="RL"
+      ></node-viz>
+    </template>
+    <template id="method-chaining">
+      <p style="text-align: center">method chaining:</p>
+      <pre
+        class="pristine"
+      ><span style="color:cyan">saw(55)</span>.<span style="color: magenta">lpf(200)</span>.<span style="color: yellow">out()</span></pre>
+    </template>
+    <template id="node-datastructure">
+      <p style="text-align: center">Node data structure:</p>
+      <pre class="pristine" style="font-size: 1em">
+<span style="color:yellow">{
+  "type": "out",
+  "ins": [
+    <span style="color:magenta" class="pristine">{
+      "type": "lpf",
+      "ins": [
+        <span style="color:cyan" class="pristine">{
+          "type": "saw",
+          "ins": [55]
+        }</span>
+        200
+      ]
+    }</span>
+  ]
+}</span>
+      </pre>
+    </template>
+    <template id="node-interface">
+      <pre class="pristine" style="font-size: 1em">
+interface Node {
+  type: string;
+  ins: (Node | number)[]
+}</pre
+      >
+    </template>
+    <template id="function-composition"
+      ><p style="text-align: center">function composition:</p>
+      <pre
+        class="pristine"
+      ><span style="color: yellow">out(<span style="color: magenta">lpf(<span style="color:cyan">saw(55)</span>, 200)</span>)</span></pre>
+      <!-- <p style="text-align: center">lisp style:</p>
+      <pre
+        class="pristine"
+      ><span style="color: yellow">(out <span style="color: magenta">(lpf <span style="color:cyan">(saw 55)</span> 200)</span>)</span></pre> -->
+    </template>
+    <template id="imperative-steps"
+      ><p style="text-align: center">imperative steps:</p>
+      <pre class="pristine">
+<span style="color:cyan">r[0] = saw(55)</span>
+<span style="color: magenta">r[1] = lpf(r[0], 200)</span>
+<span style="color: yellow">out(r[1])</span>
+    </pre>
+    </template>
+    <section>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
+      <clone-template tid="example-node"></clone-template>
+      <clone-template tid="method-chaining"></clone-template>
+      <ul>
+        <li>left to right reading</li>
+        <li>no nesting</li>
+        <li>similar to hydra / strudel</li>
+        <li>this is syntax sugar for...</li>
+      </ul>
     </section>
     <section>
-      <h2>2.language</h2>
-      <!-- <p>module = function, cable = data flow</p> -->
-      <p>
-        <img src="./img/lang_graphviz.svg" alt="lang graph" width="500px" />
-      </p>
-      <p>
-        <img src="./img/lang_unnested.png" alt="lang unnested" width="500px" />
-      </p>
-      <p><img src="./img/lang_nested.png" alt="lang nested" width="500px" /></p>
-      <p>
-        <img src="./img/lang_imperative.png" alt="lang nested" width="500px" />
-      </p>
-      <!-- <pre>out(lpf(saw(55), 200))</pre>
-      <pre>saw(55).lpf(200).out()</pre>
-      <pre>
-r[0] = saw(55)
-r[1] = lpf(r[0], 200)
-out(r[1])</pre
-      > -->
+      <clone-template tid="chapter2" class="chapters"></clone-template>
+      <clone-template tid="example-node-rl"></clone-template>
+      <clone-template tid="function-composition"></clone-template>
+      <ul>
+        <li>right to left / ping pong reading</li>
+        <li>nesting</li>
+        <li>these nested functions generate...</li>
+      </ul>
+    </section>
+    <section>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
+      <clone-template tid="example-node-rl"></clone-template>
+      <clone-template tid="node-datastructure"></clone-template>
+      <ul>
+        <li>this is a like a syntax tree</li>
+        <li>we can iterate over this</li>
+        <li>we can do cool graph tricks</li>
+        <li>we can optimize it</li>
+        <li>we can compile this to...</li>
+      </ul>
+    </section>
+    <section>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
+      <clone-template tid="example-node"></clone-template>
+      <clone-template tid="imperative-steps"></clone-template>
+      <ul>
+        <li>top to bottom</li>
+        <li>machine friendly (low abstraction)</li>
+        <li>performant</li>
+        <li>language agnostic</li>
+      </ul>
     </section>
     <!-- <section>
-      <h2>2.language</h2>
-      <h3>Node class</h3>
-      <script>
-        codeblock(document.querySelector("#node-class"), 8);
-      </script>
-    </section>
-    <section>
-      <h2>2.language</h2>
-      <h3>run method</h3>
-      <script>
-        codeblock(document.querySelector("#node-run"), 8);
-      </script>
-    </section> -->
-    <!-- <section>
-      <h2>2.language</h2>
-      <script>
-        codeblock(document.querySelector("#math-nodes"), 6);
-      </script>
-      <details>
-        <summary>show implementation</summary>
-        <script>
-          codeblock(document.querySelector("#node-class"), 6);
-        </script>
-      </details>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
+      <clone-template tid="example-node"></clone-template>
+      <clone-template tid="method-chaining"></clone-template>
+      <clone-template tid="function-composition"></clone-template>
+      <clone-template tid="node-datastructure"></clone-template>
+      <clone-template tid="imperative-steps"></clone-template>
     </section> -->
     <section>
-      <h2>2.language</h2>
-      <p>a simple chain:</p>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
+      <p>chain:</p>
       <node-garden rows="3">return add(4, 2).mul(3).div(2).out()</node-garden>
     </section>
     <section>
-      <h2>2.language</h2>
-      <p>without method chaining:</p>
-      <node-garden rows="3">return out(div(mul(add(4, 2), 3), 2))</node-garden>
-      <!-- <p>we can mix and match method chaining and regular functions:</p>
-      <pre>a.b(c) === b(a, c)</pre> -->
-    </section>
-    <section>
-      <h2>2.language</h2>
-      <p>we can reuse nodes using variables:</p>
-      <node-garden rows="3">
-        <!--
-let a = add(1, 2)
-return a.mul(3).add(a).out()
-          -->
-      </node-garden>
-    </section>
-    <section>
-      <h2>2.language</h2>
-      <p>tree walking:</p>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
+      <p>tree:</p>
       <node-garden rows="3">
         <!--
 return add(8,2).mul( add(3,5) )
@@ -1969,17 +2400,60 @@ return add(8,2).mul( add(3,5) )
 -->
       </node-garden>
     </section>
+    <!-- <section>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
+      <p>run method:</p>
+
+      <script>
+        codeblock(document.querySelector("#node-run"), 6);
+      </script>
+    </section> -->
     <section>
-      <h2>2.language</h2>
-      <p>multichannel expansion:</p>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
+      <p>dag:</p>
+      <node-garden rows="3">
+        <!--
+let a = add(1, 2)
+return a.mul(3).add(a).out()
+          -->
+      </node-garden>
+      <ul>
+        <li>dag = directed acyclic graph</li>
+        <li>calculate nodes once and remember result</li>
+      </ul>
+    </section>
+    <section>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
+      <p>dag:</p>
+      <node-garden rows="3">
+        <!--
+return add(1, 2)
+.apply( a => a.mul(3).add(a) )
+.out()
+          -->
+      </node-garden>
+      <ul>
+        <li>no variable needed</li>
+        <li>no break in control flow</li>
+      </ul>
+    </section>
+
+    <section>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
+      <p>multichannel:</p>
       <node-garden rows="3">
         <!--
 return add([2, 3], 1).mul(4)
       -->
       </node-garden>
+      <ul>
+        <li>like a ziplock</li>
+        <li>good for audio</li>
+        <li>supercollider ripoff</li>
+      </ul>
     </section>
     <section>
-      <h2>2.language</h2>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
       <p>channel matching:</p>
       <node-garden rows="3">
         <!--
@@ -1987,34 +2461,28 @@ return add([2, 3], 1).mul([4, 5])
       -->
       </node-garden>
     </section>
-    <section>
-      <h2>2.language</h2>
+    <!-- <section>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
       <p>feedback:</p>
-      <node-garden rows="3">
-        <!--
+      <node-garden rows="3"> -->
+    <!--
 const node = add(1)
 node.ins.push(node)
 return node.out()
       -->
-      </node-garden>
-    </section>
+    <!-- </node-garden>
+    </section> -->
     <section>
-      <h2>2.language</h2>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
       <p>feedback with lambdas:</p>
       <node-garden rows="3">
         <!--
 return add(1, o=>o).out()
       -->
       </node-garden>
-      <!-- <details>
-        <summary>show implementation</summary>
-        <script>
-          codeblock(document.querySelector("#node-feedback"), 6);
-        </script>
-      </details> -->
     </section>
     <section>
-      <h2>2.language</h2>
+      <clone-template tid="chapter2" class="chapters"></clone-template>
       <p>multichannel expansion + feedback:</p>
       <node-garden rows="3">
         <!--
@@ -2027,110 +2495,171 @@ return add([2, 3], o=>o)
       <pre></pre>
     </section> -->
     <section>
-      <h2>3. audio</h2>
-      <p>dsp-repl, without kabelsalat:</p>
+      <h2>3.for</h2>
+      <img src="./img/horseflip.gif" class="hero" />
+      <clone-template tid="chapter3" class="chapters"></clone-template>
+      <p>we love repetition</p>
+    </section>
+    <section>
+      <h2>4.audio</h2>
+      <img
+        src="https://manual.audacityteam.org/m/images/e/ed/mel_log_linear_spectrogram_annotated.png"
+        class="hero"
+      />
+      <clone-template tid="chapter4" class="chapters"></clone-template>
+      <ul>
+        <li>run 48000 times per second</li>
+        <li>make sure numbers are between -1 and 1</li>
+      </ul>
+    </section>
+    <section>
+      <p>dsp-repl, without graphs:</p>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
       <dsp-repl rows="6"
         ><!-- 
 $.dsp = (t) => {
-  $.l = $.r = sin(241*t*2*PI)/4
+  $.l = $.r = sin(241*t * 2*PI)/4
 }
 --></dsp-repl
       >
       <ul>
         <li>the $.dsp function runs for every sample = 48kHz</li>
-        <li>$.l and $.r hold the speaker position between -1 and 1</li>
+        <li>$.l and $.r are the left and right speakers</li>
       </ul>
     </section>
     <section>
-      <h2>3. audio</h2>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
       <p>bytebeat example:</p>
       <dsp-repl rows="7"
         ><!-- 
-$.dsp = () => {
-  let t = $.t
+$.dsp = (t) => {
+  t = t*sampleRate;
   $.l = $.r = ((( // ryg 2011-10-10
 ((t*("36364689"[t>>13&7]&15))/12&128)+(((((t>>12)^(t>>12)-2)%11*t)/4|t>>13)&127)
 ) & 255) / 127.5 - 1)/4
 }
 --></dsp-repl
       >
+      <ul>
+        <li>only uses current time and math to make noise</li>
+        <li>ackchyually this is floatbeat</li>
+      </ul>
     </section>
     <section>
-      <h2>3. audio</h2>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
       <p>with kabelsalat:</p>
-      <dsp-repl rows="6"
+      <dsp-repl rows="6" viz="1"
         ><!--
-let node = sine(241).div(4).viz()
+const node = sine(241).mul(sine(2).range(.5,1)).mul(.3)
+node.viz()
 
 $.dsp = (t) => {
   $.l = $.r = node.run()
 }
 --></dsp-repl
       >
+      <!-- const node = sine(241).mul(sine(2).range(.5,1)).mul(.3)
+.poly().compile()
+
+$.dsp = (t) => node.run() -->
+      <ul>
+        <li>create node outside of dsp loop</li>
+        <li>node.run() calculates the next value</li>
+        <li>we're still in a bytebeat editor</li>
+      </ul>
     </section>
     <section>
-      <h2>3. audio</h2>
-      <p>play function:</p>
-      <dsp-repl rows="6"
+      <clone-template tid="chapter4" class="chapters"></clone-template>
+      <p>out function:</p>
+      <dsp-repl rows="6" viz="1"
         ><!--
-Node.prototype.play = function() {
+Node.prototype.out = function() {
   this.viz()
   $.dsp = (t) => ($.l = $.r = this.run())
 }
-sine(241).div(4).play()
+
+sine(241).mul(sine(2).range(.5,1)).mul(.3).out()
 --></dsp-repl
       >
+      <ul>
+        <li>we're still in a bytebeat editor</li>
+      </ul>
     </section>
     <section>
-      <h2>3. audio</h2>
-      <p>play function:</p>
-      <dsp-repl rows="6" next="1"
+      <clone-template tid="chapter4" class="chapters"></clone-template>
+      <p>out function:</p>
+      <!-- next="1" -->
+      <dsp-repl rows="6" viz="1">
+        <!--
+sine(241).mul(sine(2).range(.5,1)).out()
+--></dsp-repl
+      >
+      <ul>
+        <li>we're still in a bytebeat editor</li>
+      </ul>
+    </section>
+    <section>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
+      <p>multichannel:</p>
+      <!-- next="1" -->
+      <dsp-repl rows="6" viz="1"
         ><!--
-sine(241).div(4).play()
+saw([60,121,239,361]).mix(2)
+.lpf(sine(.4).range(.6,.8),.2)
+.mul(.6).out()
 --></dsp-repl
       >
     </section>
     <section>
-      <h2>3. audio</h2>
-      <p>multichannel expansion:</p>
-      <dsp-repl rows="6" next="1"
-        ><!--
-saw([120,121])
-.lpf(sine(2).range(.2,.8))
-.div(2)
-.group(1, 1, 1)
-.play()
---></dsp-repl
-      >
-    </section>
-    <section>
-      <h2>3. audio</h2>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
       <p>spawn:</p>
-      <dsp-repl rows="6" next="1"
+      <!-- next="1" -->
+      <dsp-repl rows="6" viz="1"
         ><!--
 $.m ??= 0
 $.m = ($.m+5)%24+50
 
-midinote($.m).sine().spawn(2, 1, 1)
+midinote($.m).sine().spawn(2, 0, 1)
 --></dsp-repl
       >
     </section>
     <section>
-      <h2>3. audio</h2>
-      <p>stress test:</p>
-      <dsp-repl rows="6" next="1"
+      <clone-template tid="chapter4" class="chapters"></clone-template>
+      <p>dynamic spawn:</p>
+      <!-- next="1" -->
+      <dsp-repl rows="10" viz="1"
         ><!--
-sine(random()*800+100)
+    $.m ??= 0
+$.m = ($.m+5)%12
+
+let env = impulse(0).ad(.02,.4)
+n($.m+52).add([0,3,7,10,14]).midinote()
+.pulse(.2).mix(2)
+.lpf(env,.3).div(4)
+.mul(env)
+.add(x=>x.delay(.16).mul(.5))
+.spawn(2, 0, .1)
+--></dsp-repl
+      >
+    </section>
+    <section>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
+      <p>stress test:</p>
+      <!-- next="1" -->
+      <dsp-repl rows="6"
+        ><!--
+sine(Math.random()*800+100)
 .group(1000, .1, .1)
 .div(100)
-.play()
+.out()
 --></dsp-repl
       >
     </section>
     <section>
-      <h2>3. audio</h2>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
       <p>distorted guitar:</p>
-      <dsp-repl rows="12" next="1"
+      <!-- next="1" -->
+      <dsp-repl rows="12"
         ><!--
 $.lfo ??= saw(.01)
 $.lfo2 ??= sine(.5).range(.3,.7)
@@ -2149,9 +2678,10 @@ poly(55,110,220,330).mul(2).zaw()
       >
     </section>
     <section>
-      <h2>3. audio</h2>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
       <p>stardust:</p>
-      <dsp-repl rows="12" next="1"
+      <!-- next="1" -->
+      <dsp-repl rows="12"
         ><!--
 // stardust
 // by pulu : https://pulusound.fi
@@ -2185,57 +2715,16 @@ let drone = add(...[0,7,10,12].map((x,i) =>
   .mul(0.8);
 add(mel, wind, drone)
 .spawn(1,4,4)
-//.play()
+//.out()
 --></dsp-repl
       >
     </section>
     <section>
-      <h2>3. audio</h2>
-      <p><img src="./img/nathan_ho_kick.png" alt="nathan ho kick" /></p>
-      <pre>
-sine(60)
-.perc(.001, .3)
-.mul(.4)
-.pan(sine(.4))
-.out()</pre
-      >
-      <dsp-repl rows="6"
-        ><!-- 
-sine(61)
-.range(200,400)
-.sine()
-.div(4)
-.play()
---></dsp-repl
-      >
-
-      <dsp-repl rows="8"
-        ><!-- 
-$.m ??= 0
-$.m = ($.m+5)%24
-let f = midi2freq($.m+60)
-sine(f)
-.div(4)
-.mul(sine(2).range(.5,1))
-.group(3, .01, .5).play()
--->
-      </dsp-repl>
-    </section>
-
-    <section>
-      <dsp-repl rows="8"
-        ><!-- 
-$.mem ??= new Float32Array(8)
-let node = add(1,o=>o).mul(121/$.SR)
-.mod(1).sub(0.5)
-.compile($.mem)
-$.dsp = (t) => {
-  $.l = $.r = node.run()
-}
--->
-      </dsp-repl>
+      <clone-template tid="chapter5" class="chapters"></clone-template>
+      <p>what now</p>
     </section>
     <section>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
       <ul>
         <li>
           <p>
@@ -2244,7 +2733,9 @@ $.dsp = (t) => {
             >
           </p>
         </li>
-        <li><p>show Node data structure</p></li>
+        <li>show Node data structure</li>
+        <li>show c compilation</li>
+        <li>talk about liveness</li>
         <li>talk about mondo?</li>
       </ul>
     </section>
