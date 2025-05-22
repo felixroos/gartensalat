@@ -33,7 +33,7 @@
         display: flex;
         top: 0;
         left: 20px;
-        width: 100%;
+        width: 80px;
         position: absolute;
         align-items: flex-end;
         img {
@@ -65,7 +65,7 @@
         }
       }
       .hero {
-        margin-top: -160px;
+        margin-top: -120px;
         width: 800px;
         max-width: 100%;
       }
@@ -101,7 +101,7 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 80px 20px;
+        padding: 40px 20px;
         width: 100%;
         font-size: 1.5em;
         img {
@@ -497,6 +497,7 @@
               .join("\n")}
             }`;
       }
+      const numberTypes = ["n", "float"]; // hydra
       function node2gvjson(graph, editNode, editEdge) {
         const nodes = [],
           edges = [];
@@ -512,13 +513,20 @@
           return node;
         });
         sorted.forEach((node, i) => {
+          if (numberTypes.includes(node.type)) {
+            return;
+          }
           node.id = i;
           const label = `${node.type} ${node.ins
-            .map((input) =>
-              typeof input === "object"
-                ? "_"
-                : Math.round(input * 10000) / 10000
-            )
+            .map((input) => {
+              if (numberTypes.includes(input.type)) {
+                input = input.value;
+              }
+              if (typeof input === "number") {
+                return Math.round(input * 10000) / 10000;
+              }
+              return "_";
+            })
             .join(" ")}`;
           let gvnode = {
             id: node.id,
@@ -533,7 +541,10 @@
           }
           nodes.push(gvnode);
           for (let i in node.ins) {
-            if (typeof node.ins[i] !== "object") {
+            if (
+              typeof node.ins[i] !== "object" ||
+              numberTypes.includes(node.ins[i].type)
+            ) {
               continue;
             }
             if (node.ins[i].id === undefined) {
@@ -575,8 +586,8 @@
         const dataUrl = `data:image/svg+xml;base64,${base64}`;
         const img = document.createElement("img");
         img.src = dataUrl;
-        img.style.maxHeight = "200px";
-        img.style.width = "600px";
+        /* img.style.maxHeight = "200px";
+        img.style.width = "600px"; */
         container.innerText = "";
         container.appendChild(img);
       }
@@ -717,9 +728,16 @@
         _lerp(invLerp(v, vmin, vmax), omin, omax);
 
       class DSPRepl extends HTMLElement {
-        static observedAttributes = ["code", "rows", "next", "viz"];
+        static observedAttributes = [
+          "code",
+          "rows",
+          "next",
+          "viz",
+          "font-size",
+        ];
         worklet;
         init() {
+          let fontSize = this.getAttribute("font-size") ?? 24;
           const code =
             this.getAttribute("code") ||
             (this.innerHTML + "").replace("<!--", "").replace("-->", "").trim();
@@ -732,8 +750,7 @@
           this.insertAdjacentHTML(
             "beforeend",
             `<div style="border:0px solid #222;padding:0;">
-
-            <textarea id="code" spellcheck="false" rows="${rows}"></textarea>
+            <textarea spellcheck="false" rows="${rows}"></textarea>
             <div style="user-select:none;cursor:pointer">
             <button class="play">run</button> <button class="stop">stop</button>
             </div>
@@ -761,7 +778,7 @@
           // repl logic
           const input = this.querySelector("textarea");
           input.value = code;
-          input.style = "margin:0;border-bottom:2px solid #222";
+          input.style = `margin:0;border-bottom:2px solid #222;font-size:${fontSize}px`;
           this.input = input;
 
           this.querySelector(".play").onclick = () => this.update(input.value);
@@ -1198,6 +1215,18 @@
         globalThis.SawOsc = SawOsc;
         globalThis.saw = registerClass("saw", SawOsc);
 
+        class TriOsc extends Node {
+          phase = 0;
+          update(freq) {
+            this.phase += ISR * freq;
+            let phase = this.phase % 1;
+            let value = phase < 0.5 ? 2 * phase : 1 - 2 * (phase - 0.5);
+            return value * 2 - 1;
+          }
+        }
+        globalThis.TriOsc = TriOsc;
+        globalThis.tri = registerClass("tri", TriOsc);
+
         globalThis.mix = register("mix", (input, channels = 1) => {
           if (![1, 2].includes(channels)) {
             channels = 2;
@@ -1274,6 +1303,27 @@
         }
         globalThis.Impulse = Impulse;
         globalThis.impulse = registerClass("impulse", Impulse);
+
+        class ClockDiv extends Node {
+          inSgn = true;
+          outSgn = true;
+          clockCnt = 0;
+          update(clock, factor) {
+            let curSgn = clock > 0;
+            if (this.inSgn != curSgn) {
+              this.clockCnt++;
+              if (this.clockCnt >= factor) {
+                this.clockCnt = 0;
+                this.outSgn = !this.outSgn;
+              }
+            }
+
+            this.inSgn = curSgn;
+            return this.outSgn ? 1 : -1;
+          }
+        }
+        globalThis.ClockDiv = ClockDiv;
+        globalThis.clockdiv = registerClass("clockdiv", ClockDiv);
 
         globalThis.noise = registerRaw(
           "noise",
@@ -1983,9 +2033,18 @@
     </script>
     <!-- topoSort -->
     <script>
+      function isNode(node) {
+        // node instanceof Node <- fails for serialized nodes (like hydro)
+        return (
+          typeof node === "object" &&
+          Array.isArray(node.ins) &&
+          typeof node.type === "string"
+        );
+      }
       // sort nodes by dependencies (using generator function to be able to step through)
       function* topoSort(node, visited = new Set()) {
-        if (!(node instanceof Node) || visited.has(node)) {
+        /* if (!(node instanceof Node) || visited.has(node)) { */
+        if (!isNode(node) || visited.has(node)) {
           return; // constant values or already visited nodes
         }
         visited.add(node);
@@ -2007,7 +2066,7 @@
       <h1 class="active">3.for</h1>
       <h1 class="active">4.audio</h1>
       <h1 class="active">5.visual</h1>
-      <h1 class="active">6.livecoding</h1>
+      <h1 class="active">6.live coding</h1>
       <h1 class="active">7.on the web</h1>
       <h1 class="active">8.and beyond</h1>
     </template>
@@ -2018,7 +2077,7 @@
       <h1>3.for</h1>
       <h1>4.audio</h1>
       <h1>5.visual</h1>
-      <h1>6.livecoding</h1>
+      <h1>6.live coding</h1>
       <h1>7.on the web</h1>
       <h1>8.and beyond</h1>
     </template>
@@ -2028,7 +2087,7 @@
       <h1>3.for</h1>
       <h1>4.audio</h1>
       <h1>5.visual</h1>
-      <h1>6.livecoding</h1>
+      <h1>6.live coding</h1>
       <h1>7.on the web</h1>
       <h1>8.and beyond</h1>
     </template>
@@ -2038,7 +2097,7 @@
       <h1 class="active">3.for</h1>
       <h1>4.audio</h1>
       <h1>5.visual</h1>
-      <h1>6.livecoding</h1>
+      <h1>6.live coding</h1>
       <h1>7.on the web</h1>
       <h1>8.and beyond</h1>
     </template>
@@ -2048,7 +2107,7 @@
       <h1>3.for</h1>
       <h1 class="active">4.audio</h1>
       <h1>5.visual</h1>
-      <h1>6.livecoding</h1>
+      <h1>6.live coding</h1>
       <h1>7.on the web</h1>
       <h1>8.and beyond</h1>
     </template>
@@ -2058,7 +2117,7 @@
       <h1>3.for</h1>
       <h1>4.audio</h1>
       <h1 class="active">5.visual</h1>
-      <h1>6.livecoding</h1>
+      <h1>6.live coding</h1>
       <h1>7.on the web</h1>
       <h1>8.and beyond</h1>
     </template>
@@ -2068,7 +2127,7 @@
       <h1>3.for</h1>
       <h1>4.audio</h1>
       <h1>5.visual</h1>
-      <h1 class="active">6.livecoding</h1>
+      <h1 class="active">6.live coding</h1>
       <h1>7.on the web</h1>
       <h1>8.and beyond</h1>
     </template>
@@ -2078,7 +2137,7 @@
       <h1>3.for</h1>
       <h1>4.audio</h1>
       <h1>5.visual</h1>
-      <h1>6.livecoding</h1>
+      <h1>6.live coding</h1>
       <h1 class="active">7.on the web</h1>
       <h1>8.and beyond</h1>
     </template>
@@ -2088,7 +2147,7 @@
       <h1>3.for</h1>
       <h1>4.audio</h1>
       <h1>5.visual</h1>
-      <h1>6.livecoding</h1>
+      <h1>6.live coding</h1>
       <h1>7.on the web</h1>
       <h1 class="active">8.and beyond</h1>
     </template>
@@ -2107,9 +2166,7 @@
       <clone-template tid="chapter0" class="chapters"></clone-template>
       <ul>
         <li>spoken "cable salad"</li>
-        <li>graph based language for live coding audio|video</li>
-        <li>project started on june 7, 2024</li>
-        <li>paper by felix roos and raphael forment</li>
+        <li>paper by Felix Roos and Raphaël Forment</li>
         <li>
           <a href="https://kabel.salat.dev/" target="_blank">kabel.salat.dev</a>
         </li>
@@ -2127,14 +2184,54 @@
         style="margin-top: 40px"
         code="return strudel().superdough()['?']()"
       ></node-viz>
-      <h4>why not *just* use X?</h4>
       <ul>
-        <li>single sample feedback</li>
-        <li>dynamically spawning graphs</li>
+        <li>live codable dsp for strudel</li>
         <li>minimalism / resilience</li>
         <li>i want to learn</li>
         <li>i only know javascript</li>
         <li>inner peace</li>
+        <li><strong>why not use tool X Y Z?</strong></li>
+        <ul>
+          <li>dynamically spawning graphs</li>
+          <li>single sample feedback</li>
+          <li>big codebases</li>
+        </ul>
+      </ul>
+    </section>
+    <section>
+      <clone-template tid="chapter0" class="chapters"></clone-template>
+      <h2>history</h2>
+      <ul>
+        <li>project started on june 7, 2024</li>
+        <li>started as a noisecraft fork</li>
+        <li>also inspired by:</li>
+        <ul>
+          <li>SuperCollider</li>
+          <li>Max/MSP</li>
+          <li>Pure Data</li>
+        </ul>
+        <li>paper by felix roos and raphael forment</li>
+        <li>
+          <a href="https://kabel.salat.dev/" target="_blank">kabel.salat.dev</a>
+        </li>
+      </ul>
+    </section>
+    <section>
+      <clone-template tid="chapter0" class="chapters"></clone-template>
+      <h2>history</h2>
+      <ul>
+        <li>project started on june 7, 2024</li>
+        <li>started as a noisecraft fork</li>
+        <li>also inspired by:</li>
+        <ul>
+          <li>SuperCollider</li>
+          <li>Max/MSP</li>
+          <li>Pure Data</li>
+        </ul>
+        <li>paper by felix roos and raphael forment</li>
+        <li>
+          <a href="https://kabel.salat.dev/" target="_blank">kabel.salat.dev</a>
+        </li>
       </ul>
     </section>
     <script>
@@ -2548,7 +2645,7 @@ $.dsp = (t) => {
     <section>
       <clone-template tid="chapter4" class="chapters"></clone-template>
       <p>with kabelsalat:</p>
-      <dsp-repl rows="6" viz="1"
+      <dsp-repl rows="8" viz="1"
         ><!--
 const node = sine(241).mul(sine(2).range(.5,1)).mul(.3)
 node.viz()
@@ -2612,76 +2709,119 @@ saw([60,121,239,361]).mix(2)
     </section>
     <section>
       <clone-template tid="chapter4" class="chapters"></clone-template>
-      <p>spawn:</p>
-      <!-- next="1" -->
-      <dsp-repl rows="6" viz="1"
-        ><!--
-$.m ??= 0
-$.m = ($.m+5)%24+50
-
-midinote($.m).sine().spawn(2, 0, 1)
---></dsp-repl
-      >
-    </section>
-    <section>
-      <clone-template tid="chapter4" class="chapters"></clone-template>
-      <p>dynamic spawn:</p>
+      <p>feedback:</p>
       <!-- next="1" -->
       <dsp-repl rows="10" viz="1"
         ><!--
-    $.m ??= 0
-$.m = ($.m+5)%12
-
-let env = impulse(0).ad(.02,.4)
-n($.m+52).add([0,3,7,10,14]).midinote()
-.pulse(.2).mix(2)
-.lpf(env,.3).div(4)
-.mul(env)
-.add(x=>x.delay(.16).mul(.5))
-.spawn(2, 0, .1)
---></dsp-repl
-      >
-    </section>
-    <section>
-      <clone-template tid="chapter4" class="chapters"></clone-template>
-      <p>stress test:</p>
-      <!-- next="1" -->
-      <dsp-repl rows="6"
-        ><!--
-sine(Math.random()*800+100)
-.group(1000, .1, .1)
-.div(100)
+zaw([55,110,220,330]).lpf( sine(.25).range(.3,.7) )
+.mix(2)
+.mul(impulse(4).perc(.1).lag(.05))
+.add(x=>x.delay(zaw(.01).range(.005,.02)).mul(.9))
+.add(x=>x.delay(.3).mul(.7))
+.fold().mul(.6)
 .out()
 --></dsp-repl
       >
     </section>
     <section>
       <clone-template tid="chapter4" class="chapters"></clone-template>
-      <p>distorted guitar:</p>
-      <!-- next="1" -->
-      <dsp-repl rows="12"
+      <p>custom ugen: fm</p>
+      <dsp-repl rows="24" font-size="16" viz="1"
         ><!--
-$.lfo ??= saw(.01)
-$.lfo2 ??= sine(.5).range(.3,.7)
-$.imp ??= impulse(4)
+let fm2 = register("fm2", (freq, fmh = 1, fmi = 4) => {
+  let modfreq = n(freq).mul(fmh)
+  let modgain = modfreq.mul(fmi)
+  return sine(modfreq).mul(modgain).sine()
+})
 
-poly(55,110,220,330).mul(2).zaw()
-.lpf( $.lfo2 )
+// rootnotes
+let root = impulse(0.125).seq(40, 42, 43, 42).add(2)
+
+$.blips ??= impulse(0.5)
+  .apply((imp) =>
+    imp
+      .seq(0, 12, 7, 15, 3, 7)
+      .add(root)
+      .midinote()
+      .fm2(2.005, imp.ad(0.01, 0.2).bipolar().range(2, 7))
+      .mul(imp.ad(0.02, 0.4))
+      .mul(imp.seq(1, 0, 1, 1, 0))
+      .pan(sine(0.6))
+      .add((x) => x.delay([0.33, 0.12]).mul(0.9))
+  )
+  .mul(0.6)
+
+$.chords ??= n([0, 7, 10])
+  .add(root)
+  //.add(impulse(1).seq(0,0,7,0,12))
+  .midinote()
+  .mul(sine(3).range(0.96, 1.04))
+  .lag(1)
+  .fm2(0.501, 8)
+  .mul(tri(2).range(0.5, 1))
+  .mix(2)
+
+$.bass ??= impulse(2)
+  .seq(0, 0, 0, 7, 0, 12, 0, 1)
+  .add(root)
+  .midinote()
+  .fm2(0.5, sine(2).range(6, 0.2))
+  .distort(0.7)
+
+$.kik ??= impulse(2)
+  .adsr(0, 0.11, 0, 0.11)
+  .apply((env) =>
+    env
+      .mul(env)
+      .mul(158) // frequency range
+      .sine(env)
+      .distort(0.9)
+  )
+
+$.snare ??= impulse(2, 0.5)
+  .seq(0, 1, 0, 1)
+  .adsr(0, 0.1, 0.02, 0.02)
+  .mul(noise())
+  .lpf(0.78, 0.29)
+
+add(
+$.blips, 
+$.chords, 
+$.bass.mul(0), 
+$.kik.mul(0), 
+$.snare.mul(0)
+).out()
+      --></dsp-repl>
+    </section>
+    <section>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
+      <p>custom ugen: chorus</p>
+      <dsp-repl rows="18" viz="1" font-size="18"
+        ><!--
+register('chorus', (input, speed, depth = 0.5, phase=Math.random()) => {
+  const maxDelay = n(depth).mul(0.005);
+  let lfo = n(speed).sine(0,phase).range(0, maxDelay);
+  return input.apply(x=>x.add(x.delay(lfo))).mul(.5)
+})
+
+n([0,3,7,10])
+.add(impulse(1).seq(50,50,52,52,54,54,55,56))
+.midinote().lag(0.69)
+.saw()
+.chorus([1,2.1,0.4],0.81)
 .mix(2)
-.mul( $.imp.ad(0,.1).lag(.05) )
-.add(x=>x.delay($.lfo.range(.005,.02)).mul(.9))
-.add(x=>x.delay(.3).mul(.7))
-.fold()
+.lpf(0.50)
 .mul(.6)
-.spawn(1,.1,.1)
---></dsp-repl
-      >
+.fadein(.2)
+.out()
+
+      --></dsp-repl>
     </section>
     <section>
       <clone-template tid="chapter4" class="chapters"></clone-template>
       <p>stardust:</p>
       <!-- next="1" -->
-      <dsp-repl rows="12"
+      <dsp-repl rows="12" font-size="18" viz="1"
         ><!--
 // stardust
 // by pulu : https://pulusound.fi
@@ -2714,37 +2854,133 @@ let drone = add(...[0,7,10,12].map((x,i) =>
 ))
   .mul(0.8);
 add(mel, wind, drone)
-.spawn(1,4,4)
-//.out()
+//.spawn(1,4,4)
+.out()
 --></dsp-repl
       >
     </section>
     <section>
+      <h2>5.visual</h2>
+      <img
+        src="./img/mechanicalgif2.gif"
+        class="hero"
+        style="height: 600px; width: 600px"
+      />
       <clone-template tid="chapter5" class="chapters"></clone-template>
-      <p>what now</p>
+      <ul>
+        <li>graphs are also useful for visuals</li>
+        <li>poc: hydro = kabelsalat + hydra</li>
+        <li>compiles kabelsalat Node's to glsl code</li>
+        <li>
+          <a href="https://codeberg.org/froos/hydro" target="_blank"
+            >codeberg.org/froos/hydro</a
+          >
+        </li>
+      </ul>
+    </section>
+    <section>
+      <clone-template tid="chapter5" class="chapters"></clone-template>
+
+      <iframe
+        id="hydroFrame"
+        src="hydro.html"
+        style="border: 0; width: 800px; height: 500px"
+      ></iframe>
+      <textarea
+        spellcheck="false"
+        id="hydroInput"
+        rows="6"
+        style="font-size: 0.6em"
+      ></textarea>
+      <div id="hydroViz" style="height: 800px"></div>
+      <script>
+        hydroInput.value = `// licensed with CC BY-NC-SA 4.0
+// by Olivia Jack
+osc(20, 0.03, 1.7).kaleid().mult(osc(20, 0.001, 0).rotate(1.58)).blend(o0, 0.94).modulateScale(osc(10, 0),-0.03).scale(0.8, () => (1.05 + 0.1 * Math.sin(0.05*time))).out(o0)`;
+        let hydroMsg = (msg) => hydroFrame.contentWindow.postMessage(msg);
+        let updateHydro = (code) => hydroMsg({ code });
+        let stopHydro = (code) => hydroMsg({ stop: true });
+        window.hydroOut = (outputs) => {
+          renderNode(outputs[0], hydroViz, null, null, "TB");
+        };
+
+        let maybeRender = () => {
+          console.log("maybe?");
+          const slide = getSlide();
+          if (slide.contains(hydroFrame)) {
+            console.log("WE'RE LIVE!!!!");
+            updateHydro(hydroInput.value);
+          } else {
+            console.log("not live");
+            stopHydro();
+          }
+        };
+        /* maybeRender(); */
+        document.addEventListener("change-slide", () => maybeRender());
+        hydroInput.addEventListener("keydown", (e) => {
+          if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+            updateHydro(e.target.value);
+          }
+          if ((e.ctrlKey || e.altKey) && e.code === "Period") {
+            stopHydro();
+          }
+        });
+        /* hydroMsg({ code: hydroInput.value }); */
+      </script>
+    </section>
+    <section>
+      <img src="./img/itsallgraphs.png" />
+      <clone-template tid="chapter5" class="chapters"></clone-template>
+    </section>
+    <section>
+      <h2>6.live coding</h2>
+      <clone-template tid="chapter6" class="chapters"></clone-template>
     </section>
     <section>
       <clone-template tid="chapter4" class="chapters"></clone-template>
-      <ul>
-        <li>
-          <p>
-            <a href="https://garten.salat.dev/kabelsalat/graph-language.html"
-              >a graph language</a
-            >
-          </p>
-        </li>
-        <li>show Node data structure</li>
-        <li>show c compilation</li>
-        <li>talk about liveness</li>
-        <li>talk about mondo?</li>
-      </ul>
+      <p>spawn:</p>
+      <!-- next="1" -->
+      <dsp-repl rows="6" viz="1"
+        ><!--
+$.m ??= 0
+$.m = ($.m+5)%24+50
+
+midinote($.m).sine().spawn(2, 0, 1)
+--></dsp-repl
+      >
+    </section>
+    <section>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
+      <p>dynamic spawn:</p>
+      <!-- next="1" -->
+      <dsp-repl rows="10" viz="1"
+        ><!--
+    $.m ??= 0
+$.m = ($.m+5)%12
+
+let env = impulse(0).ad(.02,.4)
+n($.m+52).add([0,3,7,10,14]).midinote()
+.pulse(.2).mix(2)
+.lpf(env,.3).div(4)
+.mul(env)
+.add(x=>x.delay(.16).mul(.5))
+.spawn(2, 0, .1)
+--></dsp-repl
+      >
     </section>
     <script>
       const slides = Array.from(document.querySelectorAll("section"));
       let slideIndex = Number(window.location.hash.slice(1)) || 0;
+      function getSlide() {
+        return slides[slideIndex];
+      }
       let setSlideIndex = (index) => {
         slideIndex = index % slides.length;
-        console.log("slideIndex", slideIndex);
+        document.dispatchEvent(
+          new CustomEvent("change-slide", {
+            detail: slideIndex,
+          })
+        );
         slides.forEach((slide, i) => {
           //slide.style.display = "none";
           if (i < slideIndex) {
