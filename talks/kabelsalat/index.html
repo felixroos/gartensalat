@@ -2882,24 +2882,124 @@ add(mel, wind, drone)
       ></textarea>
       <div id="hydroViz" style="height: 800px"></div>
       <script>
-        hydroInput.value = `// licensed with CC BY-NC-SA 4.0
-// by Olivia Jack
-osc(20, 0.03, 1.7).kaleid().mult(osc(20, 0.001, 0).rotate(1.58)).blend(o0, 0.94).modulateScale(osc(10, 0),-0.03).scale(0.8, () => (1.05 + 0.1 * Math.sin(0.05*time))).out(o0)`;
+        hydroInput.value = `// 3.3 by ΔNDR0M3DΔ, CC BY-NC-SA 4.0
+osc().modulateRotate(o0,0.3).out()
+osc(33,0.3,0.3).diff(o3,3).out(o1)
+osc(3,0.3,33).modulateKaleid(o3,3).diff(o0).out(o2)
+src(o0,3).mult(o1,3).kaleid(3).out(o3)
+render(o2)`;
         let hydroMsg = (msg) => hydroFrame.contentWindow.postMessage(msg);
         let updateHydro = (code) => hydroMsg({ code });
         let stopHydro = (code) => hydroMsg({ stop: true });
+        const typeFunctions = {
+          vec2: [
+            "st",
+            "rotate",
+            "scale",
+            "pixelate",
+            "repeat",
+            "repeatX",
+            "repeatY",
+            "kaleid",
+            "scroll",
+            "scrollX",
+            "scrollY",
+            "modulateRepeat",
+            "modulateRepeatX",
+            "modulateRepeatY",
+            "modulateKaleid",
+            "modulateScrollX",
+            "modulateScrollY",
+            "modulate",
+            "modulateScale",
+            "modulatePixelate",
+            "modulateRotate",
+            "modulateHue",
+          ],
+          vec4: [
+            "noise",
+            "voronoi",
+            "osc",
+            "shape",
+            "gradient",
+            "src",
+            "solid",
+            "prev",
+            "posterize",
+            "shift",
+            "invert",
+            "contrast",
+            "brightness",
+            "luma",
+            "thresh",
+            "color",
+            "saturate",
+            "hue",
+            "colorama",
+            "sum",
+            "r",
+            "g",
+            "b",
+            "a",
+            "add",
+            "sub",
+            "layer",
+            "blend",
+            "mult",
+            "diff",
+            "mask",
+            "out",
+            "render",
+          ],
+        };
+        const typeColor = {
+          vec2: "cyan",
+          vec4: "magenta",
+        };
+        function getType(functionName) {
+          if (functionName.startsWith("_")) {
+            functionName = functionName.slice(1);
+          }
+          const match = Object.entries(typeFunctions).find(([key, fns]) =>
+            fns.includes(functionName)
+          );
+          return match?.[0];
+        }
+        function getFunctionColor(functionName) {
+          const type = getType(functionName);
+          if (type) {
+            return typeColor[type];
+          }
+          return "white";
+        }
         window.hydroOut = (outputs) => {
-          renderNode(outputs[0], hydroViz, null, null, "TB");
+          const output = {
+            type: "render",
+            ins: Object.values(outputs).map((output, i) => ({
+              type: "out",
+              ins: [output, i],
+            })),
+          };
+          renderNode(
+            output,
+            hydroViz,
+            (gvnode, node) => {
+              gvnode.color = getFunctionColor(node.type);
+              return gvnode;
+            },
+            (gvedge, target, i) => {
+              gvedge.color = getFunctionColor(target.ins[i].type);
+              return gvedge;
+            },
+            "TB"
+          );
         };
 
         let maybeRender = () => {
-          console.log("maybe?");
           const slide = getSlide();
           if (slide.contains(hydroFrame)) {
-            console.log("WE'RE LIVE!!!!");
             updateHydro(hydroInput.value);
           } else {
-            console.log("not live");
             stopHydro();
           }
         };

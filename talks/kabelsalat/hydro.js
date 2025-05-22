@@ -749,13 +749,15 @@ uniform float iTime;
 ${sourceUniforms}
 `;
 
-  // this should be shadertoy compatible
-  let shadertoy = `${H.shaders}
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  let mainImage = `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   vec2 uv = fragCoord.xy / iResolution.xy;
   vec2 st = vec2(uv.x, 1.0 - uv.y);   
   ${unit.src}
 }`;
+  console.log(mainImage);
+  // this should be shadertoy compatible
+  let shadertoy = `${H.shaders}
+${mainImage}`;
   // console.log(shadertoy);
   return `
 ${head}

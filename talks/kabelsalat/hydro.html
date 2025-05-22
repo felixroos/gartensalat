@@ -7,7 +7,6 @@
     <script src="./hydro.js"></script>
     <script>
       window.addEventListener("message", (e) => {
-        console.log("hydro", e.data);
         if (e.data.code) {
           H.evaluate(e.data.code);
         } else if (e.data.stop) {
