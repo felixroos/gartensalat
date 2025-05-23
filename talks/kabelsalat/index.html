@@ -106,7 +106,7 @@
         width: 100%;
         font-size: 1.5em;
         img {
-          max-width: 100%;
+          max-width: 90%;
         }
         padding-bottom: 500px;
         padding-left: 240px;
@@ -587,7 +587,7 @@
         const dataUrl = `data:image/svg+xml;base64,${base64}`;
         const img = document.createElement("img");
         img.src = dataUrl;
-        /* img.style.maxHeight = "200px"; */
+        img.style.maxHeight = "800px";
         img.style.width = "100%";
         container.innerText = "";
         container.appendChild(img);
@@ -657,13 +657,13 @@
         const dot = node2dot(node, editNode, editEdge, dir);
         return renderDot(dot, container);
       }
-      function nodes2dot(nodes, editNode, editEdge) {
+      function nodes2dot(nodes, editNode, editEdge, dir) {
         const flat = nodes2gvjson(nodes, editNode, editEdge);
-        const dot = gvjson2dot(flat);
+        const dot = gvjson2dot(flat, dir);
         return dot;
       }
-      function renderNodes(nodes, container, editNode, editEdge) {
-        const dot = nodes2dot(nodes, editNode, editEdge);
+      function renderNodes(nodes, container, editNode, editEdge, dir) {
+        const dot = nodes2dot(nodes, editNode, editEdge, dir);
         return renderDot(dot, container);
       }
     </script>
@@ -740,6 +740,7 @@
           "next",
           "viz",
           "font-size",
+          "dir",
         ];
         worklet;
         init() {
@@ -785,7 +786,7 @@
           this.canvas.height =
             this.canvas.clientHeight * window.devicePixelRatio;
           this.drawContext = this.canvas.getContext("2d");
-          this.drawSilence(this.drawContext);
+          /* this.drawSilence(this.drawContext); */
 
           // repl logic
           const input = this.querySelector("textarea");
@@ -823,14 +824,20 @@
             } else if (e.data.viz) {
               const nodes = JSON.parse(e.data.viz);
               this.vizContainer &&
-                renderNodes(nodes, this.vizContainer, (gvnode, node) => {
-                  if (node.type === "fadeout") {
-                    gvnode.color = "red";
-                  } else if (node.type === "fadein") {
-                    gvnode.color = "green";
-                  }
-                  return gvnode;
-                });
+                renderNodes(
+                  nodes,
+                  this.vizContainer,
+                  (gvnode, node) => {
+                    if (node.type === "fadeout") {
+                      gvnode.color = "red";
+                    } else if (node.type === "fadein") {
+                      gvnode.color = "green";
+                    }
+                    return gvnode;
+                  },
+                  null,
+                  this.getAttribute("dir")
+                );
             } else if (e.data.code && this.stepsContainer) {
               this.stepsDetails.style.opacity = 1;
               this.stepsContainer.innerText = `// this runs for every sample:\n${e.data.code}`;
@@ -2235,21 +2242,13 @@
       </ul>
     </section>
     <section>
-      <p>live looping:</p>
+      <p>kabelsalat + strudel</p>
       <img src="./img/rudolf_trumpet.jpg" style="width: 800px" />
       <clone-template tid="chapter0" class="chapters"></clone-template>
       <p>
-        <a href="https://www.youtube.com/watch?v=MXz8131Ut0A" target="_blank"
-          >eddyflux algorave set @ rudolf5</a
-        >
-      </p>
-    </section>
-    <section>
-      <p>kabelsalat + strudel</p>
-      <img src="./img/ks_rudolf.png" style="width: 800px" />
-      <clone-template tid="chapter0" class="chapters"></clone-template>
-      <p>
-        <a href="https://www.youtube.com/watch?v=MXz8131Ut0A" target="_blank"
+        <a
+          href="https://youtu.be/MXz8131Ut0A?si=NoxgGdzw--e9WqGZ&t=148"
+          target="_blank"
           >eddyflux algorave set @ rudolf5</a
         >
       </p>
@@ -2259,7 +2258,9 @@
       <img src="./img/jan_ten_solstice.png" style="width: 800px" />
       <clone-template tid="chapter0" class="chapters"></clone-template>
       <p>
-        <a href="https://www.youtube.com/watch?v=1mE54z6ijhs" target="_blank"
+        <a
+          href="https://youtu.be/1mE54z6ijhs?si=AUwOTsqKmU-PEod_&t=491"
+          target="_blank"
           >jan ten @ solstice stream december</a
         >
       </p>
@@ -2287,15 +2288,14 @@
         code="return strudel().superdough()['?']()"
       ></node-viz>
       <ul>
-        <li>live codable dsp for strudel</li>
-        <li>minimalism / resilience</li>
-        <li>i want to learn</li>
+        <li>og goal: live codable audio dsp for strudel</li>
+        <li>i want to learn about audio dsp</li>
         <li>inner peace</li>
         <li><strong>why not use tool X Y Z?</strong></li>
         <ul>
           <li>dynamically spawning graphs</li>
           <li>single sample feedback</li>
-          <li>big codebases</li>
+          <li>i cannot learn from big codebases</li>
         </ul>
       </ul>
     </section>
@@ -2323,15 +2323,16 @@
         <ul>
           <li>SuperCollider</li>
           <li>hydra</li>
-          <li>genish</li>
-          <li>wax</li>
+          <li>strudel</li>
+          <li>"it's like hydra and strudel having a baby"</li>
         </ul>
         <li>
-          many details
+          many details on
           <a href="https://garten.salat.dev/" target="_blank"
             >garten.salat.dev</a
           >
         </li>
+        <li>in active development</li>
       </ul>
     </section>
     <section>
@@ -2411,7 +2412,7 @@
         <li>❌ there are differences between browsers</li>
         <li>❌ this is hard to port</li>
         <li>❌ you cannot do single sample feedback</li>
-        <li>❌ it feels clunky to use</li>
+        <li>❌ it feels clunky to use at times</li>
       </ul>
       <pre style="font-size: 0.5em">
 // a frequency modulated sine wave
@@ -2780,7 +2781,7 @@ sine(241)
       <dsp-repl rows="6" viz="1"
         ><!--
 saw([60,121,239,361]).mix(2)
-.lpf(sine(.4).range(.6,.8),.2)
+.lpf(sine([.4,.6]).range(.6,.8),.2)
 .mul(.6).out()
 --></dsp-repl
       >
@@ -2803,9 +2804,49 @@ zaw([55,110,220,330]).lpf( sine(.25).range(.3,.7) )
     </section>
     <section>
       <clone-template tid="chapter4" class="chapters"></clone-template>
+      <p>register</p>
+      <dsp-repl rows="12" font-size="20" viz="1" dir="LR"
+        ><!--
+let fm = register('fm', (freq, fmh, fmi) => {
+  let modfreq = n(freq).mul(fmh)
+  let modgain = modfreq.mul(fmi)
+  return sine(modfreq).mul(modgain).sine()
+})
+
+let imp = impulse(6)
+let blips = imp.seq(50,50,100,50,200)
+ .fm(1.005, sine(.5).range(4,20) )
+ .mul( imp.ad(1,1) )
+
+blips.mul(.5).out()
+    -->
+      </dsp-repl>
+    </section>
+    <section>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
+      <p>registerClass</p>
+      <dsp-repl rows="10" font-size="20" viz="1" dir="LR"
+        ><!--
+class IIRFilter extends Node {
+  p = 0;
+  update(input, cutoff) {
+    this.p = (input * cutoff) + (this.p * (1-cutoff));
+    return this.p;
+  }
+}
+registerClass('iir', IIRFilter)
+
+saw(55).iir(sine(.4).rangex(0.01,1)).out()
+    -->
+      </dsp-repl>
+      <!-- <p>on kabel.salat.dev, this is a bit different (addUgen)</p> -->
+    </section>
+    <!-- <section>
+      <clone-template tid="chapter4" class="chapters"></clone-template>
       <p>custom ugen: fm</p>
       <dsp-repl rows="24" font-size="16" viz="1"
-        ><!--
+        > -->
+    <!--
 let fm2 = register("fm2", (freq, fmh = 1, fmi = 4) => {
   let modfreq = n(freq).mul(fmh)
   let modgain = modfreq.mul(fmi)
@@ -2869,13 +2910,13 @@ $.bass.mul(0),
 $.kik.mul(0), 
 $.snare.mul(0)
 ).out()
-      --></dsp-repl>
-    </section>
-    <section>
+      --><!-- </dsp-repl>
+    </section> -->
+    <!-- <section>
       <clone-template tid="chapter4" class="chapters"></clone-template>
       <p>custom ugen: chorus</p>
       <dsp-repl rows="18" viz="1" font-size="18"
-        ><!--
+        > --><!--
 register('chorus', (input, speed, depth = 0.5, phase=Math.random()) => {
   const maxDelay = n(depth).mul(0.005);
   let lfo = n(speed).sine(0,phase).range(0, maxDelay);
@@ -2893,14 +2934,13 @@ n([0,3,7,10])
 .fadein(.2)
 .out()
 
-      --></dsp-repl>
-    </section>
-    <section>
+      --><!-- </dsp-repl>
+    </section> -->
+    <!-- <section>
       <clone-template tid="chapter4" class="chapters"></clone-template>
       <p>stardust:</p>
-      <!-- next="1" -->
       <dsp-repl rows="12" font-size="18" viz="1"
-        ><!--
+        > --><!--
 // stardust
 // by pulu : https://pulusound.fi
 let mel = n(sine(0.1).rangex(1, 5)).dust().apply(g => 
@@ -2934,8 +2974,36 @@ let drone = add(...[0,7,10,12].map((x,i) =>
 add(mel, wind, drone)
 //.spawn(1,4,4)
 .out()
---></dsp-repl
+--><!-- </dsp-repl
       >
+    </section> -->
+    <section>
+      <h2>4.demos</h2>
+      <img src="./img/biquad.png" class="hero" />
+      <clone-template tid="chapter4" class="chapters"></clone-template>
+      <ul>
+        <li>
+          <a
+            href="https://kabel.salat.dev/?p=YWRkVWdlbigndHJpZycsIGNsYXNzIFRyaWcgewogIGNvbnN0cnVjdG9yKCkgewogICAgdGhpcy5oaSA9IGZhbHNlOwogIH0KICB1cGRhdGUoaW5wdXQpIHsKICAgIGlmICghdGhpcy5oaSAmJiBpbnB1dCA%2BIDApIHsKICAgICAgdGhpcy5oaT10cnVlOwogICAgICByZXR1cm4gMTsKICAgIH0KICAgIGlmKHRoaXMuaGkgJiYgaW5wdXQgPD0wKSB7CiAgICAgIHRoaXMuaGk9ZmFsc2U7CiAgICB9CiAgICByZXR1cm4gMDsKICB9Cn0pCgpwdWxzZSgyKQoudHJpZygpIC8vIGNvbW1lbnQgb3V0IHRvIGhlYXIgZGlmZmVyZW5jZQouYXIoLjAxLC4yKQoubXVsKHNpbmUoMjAwKSkub3V0KCk%3D#Ly8gZnJlZXZlcmIKLy8gcG9ydGVkIGZyb20gaHR0cHM6Ly9naXRodWIuY29tL3NpbnNodS9mcmVldmVyYgphZGRVZ2VuKCdjb21iJywgY2xhc3MgQ29tYiB7CiAgY29uc3RydWN0b3IoKSB7Cgl0aGlzLmZpbHRlcnN0b3JlID0gMDsKICAgIHRoaXMubWF4U2l6ZSA9IDIwMDA7CiAgICB0aGlzLmJ1ZmlkeCA9IDA7CiAgICB0aGlzLmJ1ZmZlciA9IG5ldyBGbG9hdDMyQXJyYXkodGhpcy5tYXhTaXplKTsKICB9CiAgdXBkYXRlKGlucHV0LCBzaXplLCBkYW1wLCBmZWVkYmFjaykgewoJbGV0IGRhbXAxID0gZGFtcDsgCglsZXQgZGFtcDIgPSAxLWRhbXA7CglsZXQgb3V0cHV0ID0gdGhpcy5idWZmZXJbdGhpcy5idWZpZHhdOwoJLy8gdW5kZW5vcm1hbGlzZShvdXRwdXQpOwoJdGhpcy5maWx0ZXJzdG9yZSA9IChvdXRwdXQgKiBkYW1wMikgKyAodGhpcy5maWx0ZXJzdG9yZSAqIGRhbXAxKTsKCS8vdW5kZW5vcm1hbGlzZSh0aGlzLmZpbHRlcnN0b3JlKTsKCXRoaXMuYnVmZmVyW3RoaXMuYnVmaWR4XSA9IGlucHV0ICsgKHRoaXMuZmlsdGVyc3RvcmUqZmVlZGJhY2spOwogICAgdGhpcy5idWZpZHggPSAodGhpcy5idWZpZHgrMSklc2l6ZTsKCXJldHVybiBvdXRwdXQ7CiAgfQp9KQoKYWRkVWdlbignYWxscGFzcycsIGNsYXNzIEFsbFBhc3MgewogIGNvbnN0cnVjdG9yKCkgewogICAgdGhpcy5tYXhTaXplID0gMTAwMDsKICAgIHRoaXMuYnVmaWR4ID0gMDsKICAgIHRoaXMuYnVmZmVyID0gbmV3IEZsb2F0MzJBcnJheSh0aGlzLm1heFNpemUpOwogIH0KICB1cGRhdGUoaW5wdXQsIHNpemUsIGZlZWRiYWNrKSB7CiAgICBjb25zdCBidWZvdXQgPSB0aGlzLmJ1ZmZlclt0aGlzLmJ1ZmlkeF07CiAgICBzaXplID0gTWF0aC5taW4oc2l6ZSwgdGhpcy5tYXhTaXplKTsKICAgIHNpemUgPSBNYXRoLm1heChzaXplLCAxKTsKICAgIC8vdW5kZW5vcm1hbGlzZShidWZvdXQpOwogICAgY29uc3Qgb3V0cHV0ID0gYnVmb3V0IC0gaW5wdXQ7CiAgICB0aGlzLmJ1ZmZlclt0aGlzLmJ1ZmlkeF0gPSBpbnB1dCArIGJ1Zm91dCAqIGZlZWRiYWNrOwogICAgdGhpcy5idWZpZHggPSAodGhpcy5idWZpZHggKyAxKSAlIE1hdGgucm91bmQoc2l6ZSk7CiAgICByZXR1cm4gb3V0cHV0OwogIH0KfSkKCmxldCBmcmVldmVyYk1vbm8gPSByZWdpc3RlcignZnJlZXZlcmJNb25vJywgKAogaW5wdXQsIAovLyB3ZXQgPSAxLzMgLy8gMS9zY2FsZXdldAogcm9vbXNpemUgPSAuNSwgLy8gaW5pdGlhbHJvb20KLy8gZHJ5ID0gMCAvLyBpbml0aWFsZHJ5CiBkYW1wPS41LCAvLyBpbml0aWFsZGFtcAogd2V0ID0gLjUsCiBvZmZzZXQ9MCAvLyBzdGVyZW9zcHJlYWQKLy8gd2lkdGggPSAxIC8vIGluaXRpYWx3aWR0aAovLyBtb2RlID0gMCAvLyBpbml0aWFsbW9kZQopID0%2BIHsKcm9vbXNpemUgPSBuKHJvb21zaXplKTsgLy8gc2NhbGVyb29tCmRhbXAgPSBuKGRhbXApLm11bCgwLjQpOyAvLyBzY2FsZWRhbXAKcmV0dXJuIGlucHV0CiAubXVsKDAuMDE1KSAvLyAqIGdhaW4gKD1maXhlZGdhaW4gZm9yIG1vZGUhPT1mcmVlemUpCiAuY29tYigKICBwb2x5KDExMTYsMTE4OCwxMjc3LDEzNTYsMTQyMiwxNDkxLDE1NTcsMTYxNykuYWRkKG9mZnNldCksCiAgLy8gY29tcGlsZSB0aW1lIGFkZDoKICAvL1sxMTE2LDExODgsMTI3NywxMzU2LDE0MjIsMTQ5MSwxNTU3LDE2MTddLm1hcCh2PT52K29mZnNldCksCiAgZGFtcCwgcm9vbXNpemUKICkKIC5zcGxpdChjaHMgPT4gYWRkKC4uLmNocykpIC8vIGFkZCBwYXJhbGxlbCBjb21icwogLmFwcGx5KHg9Pls1NTYsNDQxLDM0MSwyMjVdCiAgLnJlZHVjZSgoYWNjLCB2KT0%2BYWNjLmFsbHBhc3MoCiAgIG4odikuYWRkKG9mZnNldCksCiAgIC8vIHYrb2Zmc2V0LCAvLyBjb21waWxlIHRpbWUgYWRkCiAgIC41KSwgeCkKICkKIC5tdWwod2V0KSAvLyB3ZXQKIC5hZGQoaW5wdXQubXVsKG4oMSkuc3ViKHdldCkpKSAvLyBkcnkKfSkKCi8vIDIgY2hhbm5lbHMgd2l0aCBzdGVyZW9zcHJlYWQgWzAsMjNdIApsZXQgZnJlZXZlcmIgPSByZWdpc3RlcignZnJlZXZlcmInLCAoCiBpbnB1dCwgcm9vbXNpemUsIGRhbXAsIHdldAopID0%2BIHBvbHkoCiBpbnB1dC5mcmVldmVyYk1vbm8ocm9vbXNpemUsIGRhbXAsIHdldCwgMCksCiBpbnB1dC5mcmVldmVyYk1vbm8ocm9vbXNpemUsIGRhbXAsIHdldCwgMjMpCikpCgoKbGV0IGtpY2sgPSBpbXB1bHNlKDIpLmFkc3IoMCwuMTEsMCwuMTEpCiAgLmFwcGx5KGVudiA9PiBlbnYubXVsKGVudikKICAgIC5tdWwoMTU4KSAvLyBmcmVxdWVuY3kgcmFuZ2UKICAgIC5zaW5lKGVudikKICAgIC5kaXN0b3J0KC45KQogICkKCmxldCBzbmFyZSA9IGltcHVsc2UoMiwuNSkuc2VxKDAsMSwwLDEpCi5hZHNyKDAsLjEsLjAyLC4wMikKIC5tdWwobm9pc2UoKSkubHBmKC43OCwuMjkpCgpsZXQgYmxpcHMgPSBpbXB1bHNlKDYpLmFwcGx5KGltcCA9PiBpbXAuc2VxKDEwMCwyMDAsMzAwLDQwMCw1MDAsNjAwLDcwMCkKLm11bCgyKS5zYXcoKQoubXVsKGltcC5hZCguMDEsLjEpKSkKLy8uYWRkKHg9PnguZGVsYXkoLjEyKS5tdWwoLjgpKQoubHBmKF8oMC43MCksLjIpCgpsZXQgaGggPSBub2lzZSgpCi5tdWwoaW1wdWxzZSgxKS5hZCguMDA1LC4wOCkucG93KDQpLmRlbGF5KC41KSkKLmhwZiguOCkKCmFkZCgKIGJsaXBzLAoga2ljay5tdWwoXygwLjAwKS5sYWcoLjEpKSwKIGhoLAogc2F3KDUwKQogIC5scGYoXygwLjY3KS5tdWwoc2luZSgzKS5yYW5nZSguNSwxKSksLjMpCiAgLm11bChzaW5lKDQpLnJhbmdlKC4yLDEpKS5taXgoMSkKICAubXVsKGltcHVsc2UoMikuYWQoLjIsLjUpKQopLm11bChfKDAuNjYpLmxhZyguMikpCi5mcmVldmVyYigKLy8gcm9vbXNpemU6CiBfKDAuOTgpLmJpcG9sYXIoKS5yYW5nZSgwLC45OTk5KSwKLy8gZGFtcDoKIF8oMC4xNCkubXVsKDIpLmFkZCguMDEpLAovLyB3ZXQ6CiBfKDAuNDcpLmxhZyguMSkKKQoubXVsKDAuMikKLmZvbGQoKQouY2xpcCgpCi5vdXQoKTsK"
+            target="_blank"
+            >freeverb</a
+          >
+        </li>
+        <li>
+          <a
+            href="https://kabel.salat.dev/#Ly8gcGx1Y2sKLy8gY29tYiBmaWx0ZXIgZnJvbSBmcmVldmVyYgphZGRVZ2VuKCdjb21iJywgY2xhc3MgQ29tYiB7CiAgY29uc3RydWN0b3IoKSB7Cgl0aGlzLmZpbHRlcnN0b3JlID0gMDsKICAgIHRoaXMubWF4U2l6ZSA9IDIyNTA7CiAgICB0aGlzLmJ1ZmlkeCA9IDA7CiAgICB0aGlzLmJ1ZmZlciA9IG5ldyBGbG9hdDMyQXJyYXkodGhpcy5tYXhTaXplKTsKICB9CiAgdXBkYXRlKGlucHV0LCBzaXplLCBkYW1wLCBmZWVkYmFjaykgewoJbGV0IGRhbXAxID0gZGFtcDsgCglsZXQgZGFtcDIgPSAxLWRhbXA7CglsZXQgb3V0cHV0ID0gdGhpcy5idWZmZXJbdGhpcy5idWZpZHhdOwoJLy8gdW5kZW5vcm1hbGlzZShvdXRwdXQpOwoJdGhpcy5maWx0ZXJzdG9yZSA9IChvdXRwdXQgKiBkYW1wMikgKyAodGhpcy5maWx0ZXJzdG9yZSAqIGRhbXAxKTsKCS8vdW5kZW5vcm1hbGlzZSh0aGlzLmZpbHRlcnN0b3JlKTsKCXRoaXMuYnVmZmVyW3RoaXMuYnVmaWR4XSA9IGlucHV0ICsgKHRoaXMuZmlsdGVyc3RvcmUqZmVlZGJhY2spOwogICAgdGhpcy5idWZpZHggPSAodGhpcy5idWZpZHgrMSklc2l6ZTsKCXJldHVybiBvdXRwdXQ7CiAgfQp9KQoKbGV0IHBsdWNrID0gcmVnaXN0ZXIoJ3BsdWNrJywgKAogZnJlcSwgCiBpbXAsIAogZGFtcD0wLjIsCiBmZWVkYmFjaz0uOTksCiBhdHRhY2s9LjAxCikgPT4gewpjb25zdCBzYW1wbGVzID0gbig0NDEwMCkuZGl2KGZyZXEpLnJvdW5kKCkKY29uc3Qgc2Vjb25kcyA9IG4oMSkuZGl2KGZyZXEpOwpyZXR1cm4gaW1wLmFkKGF0dGFjaywgc2Vjb25kcykKLm11bChwaW5rKCkpCi5jb21iKHNhbXBsZXMsZGFtcCxmZWVkYmFjaykKfSkKCgpsZXQgaW1wID0gaW1wdWxzZShbMywyXSkKaW1wLnNlcSgxMDAsIDMwMCwgMjAwLCA1MDAsIDQwMCwgNjAwKQoucGx1Y2soaW1wLCBzaW5lKC4xKS5yYW5nZSguMSwuNiksIC45OSkKLmFkZCh4PT54LmRlbGF5KFsuMjMsLjJdKS5tdWwoLjYpKQoub3V0KCkK"
+            target="_blank"
+            >karplus strong</a
+          >
+        </li>
+        <li>
+          <a
+            href="https://kabel.salat.dev/#Ly8gYmlxdWFkIGZpbHRlcgovLyBodHRwczovL3dlYmF1ZGlvLmdpdGh1Yi5pby9BdWRpby1FUS1Db29rYm9vay9hdWRpby1lcS1jb29rYm9vay5odG1sCmFkZFVnZW4oCiAgImJpcXVhZCIsCiAgY2xhc3MgQmlxdWFkRmlsdGVyIHsKICAgIGNvbnN0cnVjdG9yKCkgewogICAgICAvLyBiaXF1YWQgZXF1YXRpb246CiAgICAgIC8vIHlbbl0gPSAoYjAgKiB4W25dKSArIChiMSAqIHhbbi0xXSkgKyAoYjIgKiB4W24tMl0pIC0gKGExICogeVtuLTFdKSAtIChhMiAqIHlbbi0yXSkKICAgICAgdGhpcy54MSA9IDA7IC8vIHhbbi0xXQogICAgICB0aGlzLngyID0gMDsgLy8geFtuLTJdCiAgICAgIHRoaXMueTEgPSAwOyAvLyB5W24tMV0KICAgICAgdGhpcy55MiA9IDA7IC8vIHlbbi0yXQoKICAgICAgdGhpcy5hMCA9IDE7CiAgICAgIHRoaXMuYTEgPSAwOwogICAgICB0aGlzLmEyID0gMDsKICAgICAgdGhpcy5iMCA9IDE7CiAgICAgIHRoaXMuYjEgPSAwOwogICAgICB0aGlzLmIyID0gMDsKICAgIH0KICAgIHVwZGF0ZShpbnB1dCA9IDAsIHR5cGU9MCwgb21lZ2EgPSAwLjUsIGJhbmR3aWR0aCA9IDEsIGdhaW4gPSAxKSB7CiAgICAgIC8vIHRvIHJlcGxhY2Ugb21lZ2EgaW5wdXQgd2l0aCBmcmVxOgogICAgICAvL2NvbnN0IG9tZWdhID0gMiAqIE1hdGguUEkgKiBmcmVxIC8gc2FtcGxlUmF0ZTsKICAgICAgY29uc3Qgc2luX29tZWdhID0gTWF0aC5zaW4ob21lZ2EpOwogICAgICBjb25zdCBhbHBoYSA9CiAgICAgICAgc2luX29tZWdhICoKICAgICAgICBNYXRoLnNpbmgoKChNYXRoLmxvZygyKSAvIDIpICogYmFuZHdpZHRoICogb21lZ2EpIC8gc2luX29tZWdhKTsKCiAgICAgIGNvbnN0IGNvc19vbWVnYSA9IE1hdGguY29zKG9tZWdhKTsKCiAgICAgIGlmICh0eXBlID09PSAwKSB7CiAgICAgICAgLy8gbG93cGFzcwogICAgICAgIHRoaXMuYjEgPSAxIC0gY29zX29tZWdhOwogICAgICAgIHRoaXMuYjAgPSB0aGlzLmIxIC8gMjsKICAgICAgICB0aGlzLmIyID0gdGhpcy5iMDsKICAgICAgICB0aGlzLmEwID0gMSArIGFscGhhOwogICAgICAgIHRoaXMuYTEgPSAtMiAqIGNvc19vbWVnYTsKICAgICAgICB0aGlzLmEyID0gMSAtIGFscGhhOwogICAgICB9IGVsc2UgaWYgKHR5cGUgPT09IDEpIHsKICAgICAgICAvLyBoaWdocGFzcwogICAgICAgIHRoaXMuYjAgPSAoMSArIGNvc19vbWVnYSkvMjsKICAgICAgICB0aGlzLmIxID0gLSgxICsgY29zX29tZWdhKTsKICAgICAgICB0aGlzLmIyID0gdGhpcy5iMDsKICAgICAgICB0aGlzLmEwID0gMSArIGFscGhhOwogICAgICAgIHRoaXMuYTEgPSAtMiAqIGNvc19vbWVnYTsKICAgICAgICB0aGlzLmEyID0gMSAtIGFscGhhOwogICAgICB9IGVsc2UgaWYgKHR5cGUgPT09IDIpIHsKICAgICAgICAvLyBiYW5kIHBhc3MgKGNvbnN0YW50IHNraXJ0IGdhaW4sIHBlYWsgZ2FpbiA9IFEpCiAgICAgICAgdGhpcy5iMCA9IHNpbl9vbWVnYSAvIDI7CiAgICAgICAgdGhpcy5iMSA9IDA7CiAgICAgICAgdGhpcy5iMiA9IC10aGlzLmIwOwogICAgICAgIHRoaXMuYTAgPSAxICsgYWxwaGE7CiAgICAgICAgdGhpcy5hMSA9IC0yICogY29zX29tZWdhOwogICAgICAgIHRoaXMuYTIgPSAxIC0gYWxwaGE7CiAgICAgIH0gZWxzZSBpZiAodHlwZSA9PT0gMykgewogICAgICAgIC8vIG5vdGNoCiAgICAgICAgdGhpcy5iMCA9IDE7CiAgICAgICAgdGhpcy5iMSA9IC0yICogY29zX29tZWdhOwogICAgICAgIHRoaXMuYjIgPSAxOwogICAgICAgIHRoaXMuYTAgPSAxICsgYWxwaGE7CiAgICAgICAgdGhpcy5hMSA9IC0yICogY29zX29tZWdhOwogICAgICAgIHRoaXMuYTIgPSAxIC0gYWxwaGE7CiAgICAgIH0gZWxzZSBpZiAodHlwZSA9PT0gNCkgewogICAgICAgIC8vIGFsbHBhc3MKICAgICAgICB0aGlzLmIwID0gMSAtIGFscGhhOwogICAgICAgIHRoaXMuYjEgPSAtMiAqIGNvc19vbWVnYTsKICAgICAgICB0aGlzLmIyID0gMSArIGFscGhhOwogICAgICAgIHRoaXMuYTAgPSAxICsgYWxwaGE7CiAgICAgICAgdGhpcy5hMSA9IC0yICogY29zX29tZWdhOwogICAgICAgIHRoaXMuYTIgPSAxIC0gYWxwaGE7CiAgICAgIH0gZWxzZSBpZiAodHlwZSA9PT0gNSkgewogICAgICAgIC8vIHBlYWtpbmcKICAgICAgICBjb25zdCBBID0gTWF0aC5wb3coMTAsIGdhaW4gLyA0MCk7CiAgICAgICAgdGhpcy5iMCA9IDEgKyBhbHBoYSAqIEE7CiAgICAgICAgdGhpcy5iMSA9IC0yICogY29zX29tZWdhOwogICAgICAgIHRoaXMuYjIgPSAxIC0gYWxwaGEgKiBBOwogICAgICAgIHRoaXMuYTAgPSAxICsgYWxwaGEgLyBBOwogICAgICAgIHRoaXMuYTEgPSAtMiAqIGNvc19vbWVnYTsKICAgICAgICB0aGlzLmEyID0gMSAtIGFscGhhIC8gQTsKICAgICAgfSBlbHNlIGlmICh0eXBlID09PSA2KSB7CiAgICAgICAgLy8gbG93c2hlbGYKICAgICAgICBjb25zdCBBID0gTWF0aC5wb3coMTAsIGdhaW4gLyA0MCk7CiAgICAgICAgY29uc3Qgc3FydDJBYSA9IDIqTWF0aC5zcXJ0KEEpKmFscGhhOwogICAgICAgIGNvbnN0IGFtMXcwID0gKEEtMSkqY29zX29tZWdhOwogICAgICAgIGNvbnN0IGFwMXcwID0gKEErMSkqY29zX29tZWdhOwogICAgICAgIHRoaXMuYjAgPSBBKigoQSsxKSAtIGFtMXcwICsgc3FydDJBYSk7CiAgICAgICAgdGhpcy5iMSA9IDIqQSooKEEtMSkgLSBhcDF3MCk7CiAgICAgICAgdGhpcy5iMiA9IEEqKChBKzEpIC0gYW0xdzAgLSBzcXJ0MkFhKTsKICAgICAgICB0aGlzLmEwID0gKEErMSkgKyBhbTF3MCArIHNxcnQyQWE7CiAgICAgICAgdGhpcy5hMSA9IC0yICogKChBLTEpICsgYXAxdzApOwogICAgICAgIHRoaXMuYTIgPSAoQSsxKSArIGFtMXcwIC0gc3FydDJBYTsKICAgICAgfSBlbHNlIGlmICh0eXBlID09PSA3KSB7CiAgICAgICAgLy8gaGlnaHNoZWxmCiAgICAgICAgY29uc3QgQSA9IE1hdGgucG93KDEwLCBnYWluIC8gNDApOwogICAgICAgIGNvbnN0IHNxcnQyQWEgPSAyKk1hdGguc3FydChBKSphbHBoYTsKICAgICAgICBjb25zdCBhbTF3MCA9IChBLTEpKmNvc19vbWVnYTsKICAgICAgICBjb25zdCBhcDF3MCA9IChBKzEpKmNvc19vbWVnYTsKICAgICAgICB0aGlzLmIwID0gQSooKEErMSkgKyBhbTF3MCArIHNxcnQyQWEpOwogICAgICAgIHRoaXMuYjEgPSAtMipBKigoQS0xKSArIGFwMXcwKTsKICAgICAgICB0aGlzLmIyID0gQSooKEErMSkgKyBhbTF3MCAtIHNxcnQyQWEpOwogICAgICAgIHRoaXMuYTAgPSAoQSsxKSAtIGFtMXcwICsgc3FydDJBYTsKICAgICAgICB0aGlzLmExID0gMiAqICgoQS0xKSAtIGFwMXcwKTsKICAgICAgICB0aGlzLmEyID0gKEErMSkgLSBhbTF3MCAtIHNxcnQyQWE7CiAgICAgIH0KICAgICAgdGhpcy5iMCAvPSB0aGlzLmEwOwogICAgICB0aGlzLmIxIC89IHRoaXMuYTA7CiAgICAgIHRoaXMuYjIgLz0gdGhpcy5hMDsKICAgICAgdGhpcy5hMSAvPSB0aGlzLmEwOwogICAgICB0aGlzLmEyIC89IHRoaXMuYTA7CiAgICAgIHRoaXMuYTAgPSAxOwoKICAgICAgY29uc3Qgb3V0cHV0ID0KICAgICAgICB0aGlzLmIwICogaW5wdXQgKwogICAgICAgIHRoaXMuYjEgKiB0aGlzLngxICsKICAgICAgICB0aGlzLmIyICogdGhpcy54MiAtCiAgICAgICAgdGhpcy5hMSAqIHRoaXMueTEgLQogICAgICAgIHRoaXMuYTIgKiB0aGlzLnkyOwoKICAgICAgdGhpcy54MiA9IHRoaXMueDE7CiAgICAgIHRoaXMueDEgPSBpbnB1dDsKICAgICAgdGhpcy55MiA9IHRoaXMueTE7CiAgICAgIHRoaXMueTEgPSBvdXRwdXQ7CgogICAgICByZXR1cm4gb3V0cHV0OwogICAgfQogIH0KKTsKCnBpbmsoKQouYmlxdWFkKAogaW1wdWxzZSguNSkuc2VxKDAsMSwyLDMsNCw1LDYsNyksIC8vIHR5cGUKIHRyaSgwLjUpLnJhbmdleCgwLjEsIDAuNyksIAogMSwgCiAyMCwgLy9nYWluCikuZGl2KDEwKS5vdXQoKTsK"
+            target="_blank"
+            >biquad filter</a
+          >
+        </li>
+      </ul>
     </section>
     <section>
       <h2>5.visual</h2>
