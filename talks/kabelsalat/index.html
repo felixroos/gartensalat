@@ -85,6 +85,7 @@
       }
       node-garden,
       dsp-repl,
+      node-viz,
       details {
         width: 100%;
         max-width: 800px;
@@ -207,6 +208,7 @@
         init() {
           const container = document.createElement("div");
           container.style.height = this.getAttribute("height");
+          container.style.width = "100%";
           this.code = this.getAttribute("code");
           const dir = this.getAttribute("dir") ?? "LR";
           const node = new Function(this.code)();
@@ -268,7 +270,6 @@
           <summary>show steps</summary>
           <pre class="steps"></pre>
         </details>
-
       </div>`
           );
           // repl logic
@@ -586,8 +587,8 @@
         const dataUrl = `data:image/svg+xml;base64,${base64}`;
         const img = document.createElement("img");
         img.src = dataUrl;
-        /* img.style.maxHeight = "200px";
-        img.style.width = "600px"; */
+        /* img.style.maxHeight = "200px"; */
+        img.style.width = "100%";
         container.innerText = "";
         container.appendChild(img);
       }
@@ -749,18 +750,22 @@
           this.innerHTML = "";
           this.insertAdjacentHTML(
             "beforeend",
-            `<div style="border:0px solid #222;padding:0;">
+            `<div style="border:0px solid #222;padding:0;position:relative">
             <textarea spellcheck="false" rows="${rows}"></textarea>
-            <div style="user-select:none;cursor:pointer">
+            <div style="user-select:none;cursor:pointer;position:absolute;top:0;right:0">
             <button class="play">run</button> <button class="stop">stop</button>
             </div>
+            <details class="steps-details" style="opacity:0">
+              <summary>show compiled output</summary>
+              <pre class="steps"></pre>
+            </details>
             <canvas width="400" height="80"></canvas>
             ${
               !!this.getAttribute("viz")
                 ? `
               <div
                 class="viz"
-                style="display:flex;justify-content:center;padding:10px;height:300px"
+                style="display:flex;justify-content:center;padding:10px"
               ></div>`
                 : ""
             }
@@ -768,6 +773,8 @@
           );
           // draw logic
           this.vizContainer = this.querySelector(".viz");
+          this.stepsDetails = this.querySelector(".steps-details");
+          this.stepsContainer = this.querySelector(".steps");
           this.canvas = this.querySelector("canvas");
           this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
           this.canvas.height =
@@ -807,6 +814,9 @@
             } else if (e.data.viz) {
               const nodes = JSON.parse(e.data.viz);
               this.vizContainer && renderNodes(nodes, this.vizContainer);
+            } else if (e.data.code && this.stepsContainer) {
+              this.stepsDetails.style.opacity = 1;
+              this.stepsContainer.innerText = `// this runs for every sample:\n${e.data.code}`;
             }
           };
         }
@@ -999,6 +1009,8 @@
           console.log(code);
           const update = new Function("n", "r", code);
           const node = new Node("compiled", [], () => update(nodes, r));
+          node.code = code;
+          $.port.postMessage({ code: code });
           return node;
         };
         Node.prototype.viz = function () {
@@ -1085,6 +1097,9 @@
         };
       </script>
       <script id="group-method">
+        globalThis.polify = register("polyify", (input) =>
+          input.type === "poly" ? input : poly(input)
+        );
         Node.prototype.group = function (max = 1, fadeIn = 0, fadeOut = 0.1) {
           $.nodes ??= [];
           let len = $.nodes.length;
@@ -1113,9 +1128,7 @@
           // fade in new node
           let node = fadeIn ? this.fadein(fadeIn) : this;
           // make sure node is always poly (simplifies checks in reducer above)
-          if (node.type !== "poly") {
-            node = poly(node);
-          }
+          node = polify(node);
           $.nodes.push(node);
           return add(...$.nodes);
         };
@@ -2188,7 +2201,6 @@
         <li>live codable dsp for strudel</li>
         <li>minimalism / resilience</li>
         <li>i want to learn</li>
-        <li>i only know javascript</li>
         <li>inner peace</li>
         <li><strong>why not use tool X Y Z?</strong></li>
         <ul>
@@ -2202,24 +2214,63 @@
       <clone-template tid="chapter0" class="chapters"></clone-template>
       <h2>history</h2>
       <ul>
-        <li>project started on june 7, 2024</li>
-        <li>started as a noisecraft fork</li>
+        <li>started messing with bytebeat in late 2023</li>
+        <li>
+          made a wacky
+          <a
+            href="https://loophole-letters.netlify.app/patcher/"
+            target="_blank"
+            >patcher interface ui</a
+          >
+        </li>
+        <li>
+          found
+          <a href="https://github.com/maximecb/noisecraft" target="_blank"
+            >noisecraft</a
+          >, adapted it for live coding
+        </li>
+        <li>kabelsalat project started on june 7, 2024</li>
         <li>also inspired by:</li>
         <ul>
           <li>SuperCollider</li>
-          <li>Max/MSP</li>
-          <li>Pure Data</li>
+          <li>hydra</li>
+          <li>genish</li>
+          <li>wax</li>
         </ul>
         <li>
-          re-built piece by piece on
+          many details
           <a href="https://garten.salat.dev/" target="_blank"
             >garten.salat.dev</a
           >
         </li>
-        <li>paper by felix roos and raphael forment</li>
+      </ul>
+    </section>
+    <section>
+      <clone-template tid="chapter1" class="chapters"></clone-template>
+      <h2>noisecraft</h2>
+      <img src="./img/nc_graph2.png" alt="graph" />
+      <ul>
         <li>
-          <a href="https://kabel.salat.dev/" target="_blank">kabel.salat.dev</a>
+          <a href="https://github.com/maximecb/noisecraft" target="_blank"
+            >github.com/maximecb/noisecraft</a
+          >
         </li>
+        <li>project by Maxime Chevalier-Boisvert</li>
+        <li>modular synth for the browser</li>
+        <ul>
+          <li>minimal (readable) codebase</li>
+          <li>AudioWorklet only</li>
+          <li>uses compilation</li>
+        </ul>
+        <li>kabelsalat started as a noisecraft fork without ui</li>
+        <li>i gradually adapted it for live coding</li>
+        <li>ended up rewriting most of it</li>
+        <ul>
+          <li>new compiler</li>
+          <li>multichannel expansion</li>
+          <li>feedback anywhere</li>
+          <li>more dsp</li>
+        </ul>
       </ul>
     </section>
     <script>
@@ -2249,29 +2300,6 @@
         style="margin-top: 40px"
         code="return saw(55).lpf(200).out()"
       ></node-viz>
-    </section>
-    <section>
-      <clone-template tid="chapter1" class="chapters"></clone-template>
-      <h2>noisecraft</h2>
-      <img src="./img/nc_graph2.png" alt="graph" />
-      <ul>
-        <li>
-          <a href="https://github.com/maximecb/noisecraft" target="_blank"
-            >github.com/maximecb/noisecraft</a
-          >
-        </li>
-        <li>project by Maxime Chevalier-Boisvert</li>
-        <li>modular synth for the browser</li>
-        <li>"loosely inspired by Pure Data and Max/MSP"</li>
-        <li>original inspiration for kabelsalat</li>
-        <ul>
-          <li>minimal (readable) codebase</li>
-          <li>AudioWorklet only</li>
-          <li>uses compilation</li>
-        </ul>
-        <li>i gradually adapted it for live coding</li>
-        <li>ended up rewriting most of it</li>
-      </ul>
     </section>
 
     <section>
@@ -2347,13 +2375,13 @@ sine(2).range(200, 300).sine().out()
       <h2>2.language</h2>
       <clone-template tid="chapter2" class="chapters"></clone-template>
       <img src="./img/hydra_chaining.jpg" alt="hydra chaining" class="hero" />
-      <p>text is...</p>
+      <!-- <p>text is...</p>
       <ul>
         <li>compact</li>
         <li>understood</li>
         <li>standardized</li>
         <li>fast</li>
-      </ul>
+      </ul> -->
     </section>
     <template id="example-node">
       <node-viz
@@ -2420,7 +2448,7 @@ interface Node {
     </template>
     <section>
       <clone-template tid="chapter2" class="chapters"></clone-template>
-      <clone-template tid="example-node"></clone-template>
+      <clone-template tid="example-node" style="width: 600px"></clone-template>
       <clone-template tid="method-chaining"></clone-template>
       <ul>
         <li>left to right reading</li>
@@ -2431,7 +2459,10 @@ interface Node {
     </section>
     <section>
       <clone-template tid="chapter2" class="chapters"></clone-template>
-      <clone-template tid="example-node-rl"></clone-template>
+      <clone-template
+        tid="example-node-rl"
+        style="width: 600px"
+      ></clone-template>
       <clone-template tid="function-composition"></clone-template>
       <ul>
         <li>right to left / ping pong reading</li>
@@ -2441,7 +2472,10 @@ interface Node {
     </section>
     <section>
       <clone-template tid="chapter2" class="chapters"></clone-template>
-      <clone-template tid="example-node-rl"></clone-template>
+      <clone-template
+        tid="example-node-rl"
+        style="width: 600px"
+      ></clone-template>
       <clone-template tid="node-datastructure"></clone-template>
       <ul>
         <li>this is a like a syntax tree</li>
@@ -2453,7 +2487,7 @@ interface Node {
     </section>
     <section>
       <clone-template tid="chapter2" class="chapters"></clone-template>
-      <clone-template tid="example-node"></clone-template>
+      <clone-template tid="example-node" style="width: 600px"></clone-template>
       <clone-template tid="imperative-steps"></clone-template>
       <ul>
         <li>top to bottom</li>
@@ -2598,7 +2632,7 @@ return add([2, 3], o=>o)
       </ul>
     </section>
     <section>
-      <p>dsp-repl, without graphs:</p>
+      <p>dsp-repl:</p>
       <clone-template tid="chapter4" class="chapters"></clone-template>
       <dsp-repl rows="6"
         ><!-- 
@@ -2630,58 +2664,45 @@ $.dsp = (t) => {
         <li>ackchyually this is floatbeat</li>
       </ul>
     </section>
-    <section>
+    <!-- <section>
       <clone-template tid="chapter4" class="chapters"></clone-template>
       <p>with kabelsalat:</p>
       <dsp-repl rows="8" viz="1"
-        ><!--
+        > --><!--
 const node = sine(241).mul(sine(2).range(.5,1)).mul(.3)
 node.viz()
 
 $.dsp = (t) => {
   $.l = $.r = node.run()
 }
---></dsp-repl
+--><!-- </dsp-repl
       >
-      <!-- const node = sine(241).mul(sine(2).range(.5,1)).mul(.3)
-.poly().compile()
-
-$.dsp = (t) => node.run() -->
       <ul>
         <li>create node outside of dsp loop</li>
         <li>node.run() calculates the next value</li>
         <li>we're still in a bytebeat editor</li>
       </ul>
-    </section>
+    </section> -->
     <section>
       <clone-template tid="chapter4" class="chapters"></clone-template>
-      <p>out function:</p>
-      <dsp-repl rows="6" viz="1"
+      <p>with kabelsalat:</p>
+      <dsp-repl rows="10" viz="1"
         ><!--
-Node.prototype.out = function() {
-  this.viz()
-  $.dsp = (t) => ($.l = $.r = this.run())
-}
+register('out', (graph) => {
+  graph.viz()
+  graph = polify(graph).compile()
+  $.dsp = () => graph.update()
+})
 
-sine(241).mul(sine(2).range(.5,1)).mul(.3).out()
+sine(241)
+.mul(sine(2).range(.5,1))
+.mul(.3)
+.out() // <- what we registered above
 --></dsp-repl
       >
-      <ul>
+      <!-- <ul>
         <li>we're still in a bytebeat editor</li>
-      </ul>
-    </section>
-    <section>
-      <clone-template tid="chapter4" class="chapters"></clone-template>
-      <p>out function:</p>
-      <!-- next="1" -->
-      <dsp-repl rows="6" viz="1">
-        <!--
-sine(241).mul(sine(2).range(.5,1)).out()
---></dsp-repl
-      >
-      <ul>
-        <li>we're still in a bytebeat editor</li>
-      </ul>
+      </ul> -->
     </section>
     <section>
       <clone-template tid="chapter4" class="chapters"></clone-template>
