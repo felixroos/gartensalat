@@ -65,7 +65,7 @@
         }
       }
       .hero {
-        margin-top: -120px;
+        margin-top: -80px;
         width: 800px;
         max-width: 100%;
       }
@@ -131,7 +131,7 @@
           display: none;
         }
         section {
-          padding: 90px 20px;
+          padding: 50px 20px;
         }
       }
       @font-face {
@@ -590,6 +590,7 @@
         img.style.maxHeight = "800px";
         img.style.width = "100%";
         container.innerText = "";
+        container.style = "display:flex;justify-content:center;margin:16px 0px";
         container.appendChild(img);
       }
       function nodes2gvjson(nodes, editNode, editEdge) {
@@ -3203,34 +3204,25 @@ render(o2)`;
     <section>
       <clone-template tid="chapter6" class="chapters"></clone-template>
       <p>spawn:</p>
-      <dsp-repl rows="6" viz="1"
+      <dsp-repl rows="6" viz="1" dir="LR"
         ><!--
 $.m ??= 0
 $.m = ($.m+5)%24+50
 
-midinote($.m).sine().spawn(2, 1, 1)
+midinote($.m).sine().spawn(2, .1, 1)
 --></dsp-repl
       >
     </section>
     <section>
       <clone-template tid="chapter6" class="chapters"></clone-template>
-      <p>fx spawn:</p>
+      <p>remembering nodes:</p>
       <!-- next="1" -->
-      <dsp-repl rows="10" viz="1"
+      <dsp-repl rows="10" viz="1" dir="LR"
         ><!--
-$.m ??= 0
-$.m = ($.m+5)%24+50
-$.fx ??= add(0,x=>x.delay(.2).mul(.8))
-$.lfo ??= sine(.5)
+$.seq ??= impulse(4).seq(100,200,300,400)
 
-add($.m,0)
-.midinote().saw().mul(impulse(0).ad(.02,.3))
-.lpf($.lfo.range(.4,.8),.3)
-//.mul([1,0.5])
-//.group(2, 0, 0)
-.send($.fx)
-.mul(.5)
-.out()
+tri($.seq)
+.spawn()
 --></dsp-repl
       >
     </section>
@@ -3253,6 +3245,45 @@ n($.m+52).add([0,3,7,10,14]).midinote()
 --></dsp-repl
       >
     </section>
+    <section>
+      <h2>7.on the web</h2>
+      <clone-template tid="chapter6" class="chapters"></clone-template>
+      <iframe
+        width="560"
+        height="315"
+        src="https://www.youtube.com/embed/9zAx1kFr-yY?si=b0dhZeRKJEbh8M9I&rel=0"
+        title="YouTube video player"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        referrerpolicy="strict-origin-when-cross-origin"
+        allowfullscreen
+      ></iframe>
+      - https://block.salat.dev/ - https://github.com/felixroos/tldaw
+    </section>
+    <section>
+      <clone-template tid="chapter6" class="chapters"></clone-template>
+      <p>spawn:</p>
+      <dsp-repl rows="6" viz="1"
+        ><!--
+$.m ??= 0
+$.m = ($.m+5)%24+50
+
+midinote($.m).sine().spawn(2, 1, 1)
+--></dsp-repl
+      >
+    </section>
+    <div
+      style="
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        justify-content: space-between;
+      "
+    >
+      <button style="font-size: 1.5em" id="prevSlideButton">prev</button>
+      <button style="font-size: 1.5em" id="nextSlideButton">next</button>
+    </div>
     <script>
       const slides = Array.from(document.querySelectorAll("section"));
       let slideIndex = Number(window.location.hash.slice(1)) || 0;
@@ -3303,6 +3334,8 @@ n($.m+52).add([0,3,7,10,14]).midinote()
           }
         }
       };
+      nextSlideButton.onclick = nextSlide;
+      prevSlideButton.onclick = prevSlide;
     </script>
   </body>
 </html>
