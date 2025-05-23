@@ -249,7 +249,6 @@
             "beforeend",
             `
       <div style="padding:0;width:100%">
-        <div class="viz" style="display:flex;justify-content:center;padding:10px;height:220px;margin:10px"></div>
         <textarea id="code" spellcheck="false" rows="${rows}" style="margin:0;border-bottom:2px solid #222;width:100%;font-size:.8em"></textarea>
         <div style="position:relative">
           <pre class="result"></pre>
@@ -262,14 +261,17 @@
             <button class="expand">+</button>
           </div>
         </div>
-        <details>
-          <summary>show json</summary>
-          <pre class="json" ></pre>
-        </details>
-        <details>
-          <summary>show steps</summary>
-          <pre class="steps"></pre>
-        </details>
+        <div class="viz" style="display:flex;justify-content:center;padding:10px;height:220px;margin:10px"></div>
+        <div style="text-align:right">
+          <details>
+            <summary>show json</summary>
+            <pre class="json" style="text-align:left;font-size:.5em"></pre>
+          </details>
+          <details>
+            <summary>show steps</summary>
+            <pre class="steps" style="text-align:left"></pre>
+          </details>
+        </div>
       </div>`
           );
           // repl logic
@@ -2342,6 +2344,7 @@
         </li>
         <li>in active development</li>
       </ul>
+      <img src="./img/first_kabel.png" />
     </section>
     <section>
       <clone-template tid="chapter1" class="chapters"></clone-template>
@@ -3200,6 +3203,12 @@ render(o2)`;
     <section>
       <h2>6.live coding</h2>
       <clone-template tid="chapter6" class="chapters"></clone-template>
+      <img src="./img/strudel_atnight.jpg" class="hero" />
+      <ul>
+        <li>how can we interact with the code?</li>
+        <li>what happens when we update the code?</li>
+        <li>how do we maintain a sense of time</li>
+      </ul>
     </section>
     <section>
       <clone-template tid="chapter6" class="chapters"></clone-template>
@@ -3212,26 +3221,34 @@ $.m = ($.m+5)%24+50
 midinote($.m).sine().spawn(2, .1, 1)
 --></dsp-repl
       >
+      <ul>
+        <li>global mutable variables via $</li>
+        <li>spawn to fade between 2 or more graphs</li>
+        <li>-> no audible cracks</li>
+      </ul>
     </section>
     <section>
       <clone-template tid="chapter6" class="chapters"></clone-template>
-      <p>remembering nodes:</p>
+      <p>maintain time:</p>
       <!-- next="1" -->
       <dsp-repl rows="10" viz="1" dir="LR"
         ><!--
-$.seq ??= impulse(4).seq(100,200,300,400)
+$.seq ??= impulse(4).seq(120,240,360,480)
 
 tri($.seq)
 .spawn()
 --></dsp-repl
       >
+      <ul>
+        <li>"??=" -> nullish coalescing assignment</li>
+        <li>or block based evaluation</li>
+      </ul>
     </section>
-    <section>
+    <!-- <section>
       <clone-template tid="chapter6" class="chapters"></clone-template>
       <p>dynamic spawn:</p>
-      <!-- next="1" -->
       <dsp-repl rows="10" viz="1"
-        ><!--
+        > --><!--
     $.m ??= 0
 $.m = ($.m+5)%12
 
@@ -3242,35 +3259,50 @@ n($.m+52).add([0,3,7,10,14]).midinote()
 .mul(env)
 .add(x=>x.delay(.16).mul(.5))
 .spawn(2, 0, .1)
---></dsp-repl
+--><!-- </dsp-repl
       >
-    </section>
+    </section> -->
     <section>
       <h2>7.on the web</h2>
-      <clone-template tid="chapter6" class="chapters"></clone-template>
-      <iframe
-        width="560"
-        height="315"
-        src="https://www.youtube.com/embed/9zAx1kFr-yY?si=b0dhZeRKJEbh8M9I&rel=0"
-        title="YouTube video player"
-        frameborder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        referrerpolicy="strict-origin-when-cross-origin"
-        allowfullscreen
-      ></iframe>
-      - https://block.salat.dev/ - https://github.com/felixroos/tldaw
+      <img src="./img/strudel_cybercafe.png" class="hero" />
+      <clone-template tid="chapter7" class="chapters"></clone-template>
     </section>
     <section>
-      <clone-template tid="chapter6" class="chapters"></clone-template>
-      <p>spawn:</p>
-      <dsp-repl rows="6" viz="1"
-        ><!--
-$.m ??= 0
-$.m = ($.m+5)%24+50
-
-midinote($.m).sine().spawn(2, 1, 1)
---></dsp-repl
+      <p>strudel -> kabelsalat</p>
+      <clone-template tid="chapter7" class="chapters"></clone-template>
+      <img src="./img/nudelsalat.png" />
+      <a href="https://www.youtube.com/watch?v=9zAx1kFr-yY" target="_blank"
+        >youtube.com/watch?v=9zAx1kFr-yY</a
       >
+    </section>
+    <section>
+      <p>kabelsalat -> strudel</p>
+      <clone-template tid="chapter7" class="chapters"></clone-template>
+      <img src="./img/strudelsalat.png" />
+    </section>
+    <section>
+      <p>blocksalat</p>
+      <clone-template tid="chapter7" class="chapters"></clone-template>
+      <img src="./img/blocksalat.png" />
+      <a href="https://block.salat.dev" target="_blank">block.salat.dev</a>
+    </section>
+    <section>
+      <p>tldaw</p>
+      <clone-template tid="chapter7" class="chapters"></clone-template>
+      <img src="./img/tldaw.png" />
+      <a href="https://felixroos.github.io/tldaw/" target="_blank"
+        >felixroos.github.io/tldaw (broken)</a
+      >
+    </section>
+    <section>
+      <h2>8.and beyond</h2>
+      <clone-template tid="chapter8" class="chapters"></clone-template>
+      <ul>
+        <li>supercollider export</li>
+        <li>c compilation</li>
+        <li>mondo kabelsalat</li>
+        <li>webassembly kabelsalat</li>
+      </ul>
     </section>
     <div
       style="
