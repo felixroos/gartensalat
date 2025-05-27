@@ -382,11 +382,15 @@
             node.id = i;
           });
           try {
-            this.querySelector(".json").innerText = JSON.stringify(
-              this.node,
-              null,
-              2
-            );
+            const json = JSON.stringify(this.node, null, 2)
+              .split("\n")
+              // cleanup json
+              .filter(
+                (line) =>
+                  !line.includes('"config": {},') && !line.includes('"id":')
+              )
+              .join("\n");
+            this.querySelector(".json").innerText = json;
           } catch (err) {}
         }
         async update() {
@@ -1673,24 +1677,19 @@
       function register(type, getNode = (...args) => new Node(type, args)) {
         // register method for chaining
         Node.prototype[type] = function (...args) {
-          //return getNode(type, [this, ...args]);
           return getNode(this, ...args);
         };
-        // return function for unchained calls
-        //return (...args) => getNode(type, args);
         return getNode;
       }
       let registerFn = (type, update) =>
-        //register(type, (type, args) => new Node(type, args, update));
         register(type, (...args) => new Node(type, args, { update }));
 
       let registerUgen = (type, name) =>
-        //register(type, (type, args) => new Node(type, args, update));
         register(
           type,
           (...args) =>
             new Node(type, args, {
-              compileSetup: (r) => `${r} = new ${name}()`,
+              compileSetup: (r) => `${r} = new ${name}('${type}',[])`,
             })
         );
 
@@ -1706,8 +1705,16 @@
         });
     </script>
     <script id="node-expansion">
-      let poly = registerFn("poly", (...args) => args);
-
+      function compilePoly(r, args) {
+        return `$.l=${args[0]}*0.3;$.r=${args[1] || args[0]}*0.3;`;
+      }
+      let polify = register("polify", (input) =>
+        input.type === "poly" ? input : poly(input)
+      );
+      let poly = register(
+        "poly",
+        (...args) => new Node("poly", args, { compileSelf: compilePoly })
+      );
       // these variables are for the stepwise viz (very dirty hack)
       let expansions = 0;
       let expansion = -1;
@@ -1739,7 +1746,7 @@
             expansions++; // dirty hack for viz (not needed otherwise)
             this.type = "poly";
             this.update = (...args) => args;
-            this.compileSelf = Node.compilePoly;
+            this.compileSelf = compilePoly;
             // make mono if only one channel
 
             this.ins = Array(maxExpansions)
@@ -1792,108 +1799,39 @@
       };
     </script>
     <script id="node-compile">
+      // this compile only runs for the worklet test
       Node.prototype.compile = function (memory) {
         let nodes = Array.from(topoSort(this));
-        /* console.log("nodes", nodes); */
-        $.n ??= [];
+        // console.log(memory.join("\n"));
+        let r = memory ? memory : Array(nodes.length).fill(0);
         const getRef = (input) =>
           typeof input !== "object" ? input : `r[${nodes.indexOf(input)}]`;
-        let init = [
-          `$.n ??= []; // init nodes array`,
-          `const n = $.n; // only to save some chars`,
-          `const r = new Float32Array(${nodes.length});`,
+        let setup = [
+          `let r = new Float32Array(${nodes.length})`,
+          `let n = [];`,
         ];
-        let move = [];
-        let create = [];
-        let dsp = [`$.dsp = () => {`];
-
-        let deps = [];
-        let rootDep = dep();
-        rootDep.value = -1;
+        let lines = [];
         for (let id in nodes) {
           const node = nodes[id];
-          if (node.compileSetup) {
-            const oldId = $.n.findIndex((n) => n === node);
-            if (oldId === -1) {
-              create.push(`${node.compileSetup(`n[${id}]`)} // ${node.type}`);
-            } else if (oldId !== Number(id)) {
-              // dependency graph for variable assignments
-              if (!deps[id]) {
-                deps[id] = dep();
-                deps[id].value = id;
-              }
-              if (!deps[oldId]) {
-                deps[oldId] = dep();
-                deps[oldId].value = oldId;
-              }
-              deps[oldId].ins.push(deps[id]);
-              rootDep.ins.push(deps[oldId]);
-              /* move.push(`n[${id}] = n[${oldId}] // ${node.type}`); */
-            } else {
-              // id hasn't changed -> no setup needed!
-            }
-          }
           const args = node.ins.map(getRef);
           const ref = getRef(node);
-          let line;
-          if (!node.compileSelf) {
-            line = `${ref} = n[${id}].update(${args.join(",")})`;
-          } else {
-            line = node.compileSelf(ref, args, node, id);
+          if (node.compileSetup) {
+            setup.push(node.compileSetup(`n[${id}]`));
           }
-          line = `  ${line} // ${node.type}`;
-          dsp.push(line);
+          if (!node.compileSelf) {
+            lines.push(`${ref} = n[${id}].update(${args.join(",")})`);
+          } else {
+            lines.push(node.compileSelf(ref, args, node, id));
+          }
+          lines[lines.length - 1] += ` // ${node.type}`;
         }
-        dsp.push(`}`);
-
-        // generate topo sorted variable assignments
-        const assignments = Array.from(topoSort(rootDep))
-          .slice(0, -1)
-          .filter((dep) => dep.ins.length)
-          .map((dep) =>
-            dep.ins.map(
-              (input) =>
-                `n[${input.value}] = n[${dep.value}] // ${
-                  nodes[input.value].type
-                }`
-            )
-          );
-
         const last = getRef(nodes[nodes.length - 1]);
-        // lines.push(`return ${last}`);
-
-        const code = [init, assignments, create, dsp].flat().join("\n");
-        console.log("-------compiled--------");
-        console.log(code);
-        $.n = nodes;
-        return code;
+        return { setup: setup.join("\n"), lines: lines.join("\n") };
       };
     </script>
     <script id="node-play">
-      /* const fadein = registerUgen("fadein", "FadeIn"); */
-      /* const fadeout = registerUgen("fadeout", "FadeOut"); */
-      const fadein = register("fadein", (input, fadeTime) => {
-        if (typeof fadeTime !== "number") {
-          throw new Error("fadein: fadeTime must be a number!");
-        }
-        return new Node("fadein", [input, fadeTime], {
-          compileSelf: (r, [input], _, id) =>
-            `${r} = n[${id}].update(${input})`,
-          compileSetup: (r) => `${r} = new FadeIn(${fadeTime})`,
-          doneTime: ctx.currentTime + fadeTime,
-        });
-      });
-      const fadeout = register("fadeout", (input, fadeTime) => {
-        if (typeof fadeTime !== "number") {
-          throw new Error("fadein: fadeTime must be a number!");
-        }
-        return new Node("fadeout", [input, fadeTime], {
-          compileSelf: (r, [input], _, id) =>
-            `${r} = n[${id}].update(${input})`,
-          compileSetup: (r) => `${r} = new FadeOut(${fadeTime})`,
-          doneTime: ctx.currentTime + fadeTime,
-        });
-      });
+      const fadein = registerUgen("fadein", "FadeIn");
+      const fadeout = registerUgen("fadeout", "FadeOut");
       const sine = registerUgen("sine", "SineOsc");
       const zaw = registerUgen("zaw", "ZawOsc");
       const saw = registerUgen("saw", "SawOsc");
@@ -2240,7 +2178,11 @@
         <li>spoken "cable salad"</li>
         <li>paper by Felix Roos and Raphaël Forment</li>
         <li>
-          <a href="https://kabel.salat.dev/" target="_blank">kabel.salat.dev</a>
+          <a
+            href="https://kabel.salat.dev/#Ly8gc2hhbGwgd2UgdHJhbmNlLCBidXR0b25zICYgc2xpZGVycyB2ZXJzaW9uCi8vIGJ5IHB1bHUgOiBodHRwczovL3B1bHVzb3VuZC5maQoKLy8gdXNlIHRoZSBjb250cm9scyBiZWxvdyB0byB0b2dnbGUgYW5kIHR3ZWFrIHRoZSBzb3VuZHMhCmxldCB0cmFja19jdHJscyA9IFsKICBbQigwKSwgQigwKV0sIC8vIGtpY2s6IG9uLCBmaWxsCiAgW0IoMCksIEIoMCldLCAvLyBoYXQ6IG9uLCBmaWxsCiAgW0IoMCldLCAvLyBzbmFyZTogb24KICBbQigxKV0sIC8vIGJhc3M6IG9uCiAgW0IoMCksIF8oMC4wKV0sIC8vIG1lbDE6IG9uLCBjdXRvZmYKICBbQigwKSwgQigwKSwgXygwLjApXSwgLy8gbWVsMjogb24sIG9jdGF2ZSwgZGVsYXkKICBbQigwKV0sIC8vIG1lbDM6IG9uCl07CmxldCBnbG9iYWxfY3RybHMgPSBbCiAgXygwLjApLCAvLyBtYXN0ZXIgZGVsYXkKXTsKCmxldCBjenJlc3NhdyA9IG1vZHVsZSgiY3pyZXNzYXciLCAoZnJlcSwgbSkgPT4gewogIGxldCBwaGFzZSA9IHNhdyhmcmVxKS51bmlwb2xhcigpOwogIGxldCBzYXd0b290aCA9IHBoYXNlLnN1YigxKTsKICBsZXQgY29zaW5lID0gc2luZSgwLCAwLCBwaGFzZS5tdWwobSkuYWRkKDEpLm1vZCgxKS5zdWIoMC4yNSkpLnJhbmdlKDAsIDEpOwogIHJldHVybiBzYXd0b290aC5tdWwoY29zaW5lKTsKfSk7CgpsZXQgYnpzbSA9IG1vZHVsZSgiYnpzbSIsICh0cmlnLCBmcmVxID0gNTUsIGZhYyA9IDQsIHZzd2VlcCA9IDAuNSkgPT4gewogIGxldCBwMCA9IDAuMDA2Njk5Njg3OwogIGxldCBwMSA9IDAuMDAwMDE4ODQ2MDY7CiAgbGV0IHAgPSBzdWIoMSwgdnN3ZWVwKS5tdWwocDApLmFkZChtdWwodnN3ZWVwLCBwMSkpOwogIGxldCBmcmVxMSA9IGZyZXE7CiAgbGV0IGZyZXEwID0gbXVsKGZyZXExLCBmYWMpOwogIGxldCBmcmVxX3ggPSB0cmlnLmFkKDAsIDEpLnJhbmdlKDEsIDApOwogIGxldCBmcmVxX3kgPSBhZGQoZnJlcTEsIHN1YihmcmVxMCwgZnJlcTEpLmRpdihhZGQoMSwgZnJlcV94LmRpdihwKSkpKTsKICByZXR1cm4gZnJlcV95LnNpbmUodHJpZyk7Cn0pOwoKbGV0IGltcHNlcSA9IG1vZHVsZSgiaW1wc2VxIiwgKHRyaWcsIC4uLnN0ZXApID0%2BCiAgdHJpZy5zZXEoLi4uc3RlcCkubXVsKHRyaWcucGVyYygwKSkKKTsKbGV0IGZlZWQgPSByZWdpc3RlcigiZmVlZCIsICh4LCBmKSA9PgogIHguYXBwbHkoKGRyeSkgPT4gewogICAgbGV0IHdldDsKICAgIHJldHVybiBkcnkKICAgICAgLmFkZCgoeCkgPT4gewogICAgICAgIHdldCA9IGYoeCk7CiAgICAgICAgcmV0dXJuIHdldDsKICAgICAgfSkKICAgICAgLmFwcGx5KHggPT4gd2V0KQogIH0pCik7CgpsZXQgbGFjZSA9IHJlZ2lzdGVyKCJsYWNlIiwgKHgsIC4uLnZhbHMpID0%2BIHsKICBsZXQgbGFjZVByb2R1Y3QgPSAobGlzdHMpID0%2BIHsKICAgIGxldCBjb3VudGVycyA9IEFycmF5KGxpc3RzLmxlbmd0aCkuZmlsbCgwKTsKICAgIGxldCBmaXJzdCA9IHRydWU7CiAgICBsZXQgcmVzdWx0ID0gW107CiAgICB3aGlsZSAoZmlyc3QgfHwgY291bnRlcnMuc29tZSgoYykgPT4gYyA%2BIDApKSB7CiAgICAgIHJlc3VsdC5wdXNoKGNvdW50ZXJzLm1hcCgoYywgaSkgPT4gbGlzdHNbaV1bY10pKTsKICAgICAgY291bnRlcnMuZm9yRWFjaCgoY291bnRlciwgaSkgPT4gewogICAgICAgIGNvdW50ZXJzW2ldID0gKGNvdW50ZXIgKyAxKSAlIGxpc3RzW2ldLmxlbmd0aDsKICAgICAgfSk7CiAgICAgIGZpcnN0ID0gZmFsc2U7CiAgICB9CiAgICByZXR1cm4gcmVzdWx0OwogIH07CgogIGxldCBsYWNlRXhwYW5kT25jZSA9IChsaXN0KSA9PiB7CiAgICBsZXQgc3VibGlzdHMgPSBsaXN0LmZpbHRlcigoeCkgPT4geC5sZW5ndGggPiAwKTsKICAgIGxldCBzdWJsaXN0SW5kaWNlcyA9IGxpc3QKICAgICAgLm1hcCgoeCwgaSkgPT4gaSkKICAgICAgLmZpbHRlcigoaSkgPT4gbGlzdFtpXS5sZW5ndGggPiAwKTsKICAgIGlmIChzdWJsaXN0cy5sZW5ndGggPT09IDApIHsKICAgICAgcmV0dXJuIGxpc3Q7CiAgICB9IGVsc2UgewogICAgICBsZXQgcHJvZHVjdCA9IGxhY2VQcm9kdWN0KHN1Ymxpc3RzKTsKICAgICAgcmV0dXJuIHByb2R1Y3QKICAgICAgICAubWFwKChwcm9kdWN0VmFscywgaSkgPT4gewogICAgICAgICAgbGV0IHN1Ymxpc3Q7CiAgICAgICAgICBzdWJsaXN0ID0gWy4uLmxpc3RdOwogICAgICAgICAgc3VibGlzdEluZGljZXMuZm9yRWFjaCgocHJvZHVjdEluZGV4LCBqKSA9PiB7CiAgICAgICAgICAgIHN1Ymxpc3RbcHJvZHVjdEluZGV4XSA9IHByb2R1Y3RWYWxzW2pdOwogICAgICAgICAgfSk7CiAgICAgICAgICByZXR1cm4gc3VibGlzdDsKICAgICAgICB9KQogICAgICAgIC5mbGF0KCk7CiAgICB9CiAgfTsKCiAgbGV0IGxhY2VFeHBhbmQgPSAobGlzdCkgPT4KICAgIGxhY2VFeHBhbmRPbmNlKGxpc3QubWFwKCh4KSA9PiAoQXJyYXkuaXNBcnJheSh4KSA%2FIGxhY2VFeHBhbmQoeCkgOiB4KSkpOwogIHJldHVybiB4LnNlcSguLi5sYWNlRXhwYW5kKHZhbHMpKTsKfSk7CmxldCBpbXBsYWNlID0gcmVnaXN0ZXIoImltcGxhY2UiLCAodHJpZywgLi4uc3RlcCkgPT4KICB0cmlnLmxhY2UoLi4uc3RlcCkubXVsKHRyaWcucGVyYygwKSkKKTsKCmxldCBjdHJsbWl4ID0gcmVnaXN0ZXIoIm1pZGltaXgiLCAodHJhY2tzKSA9PiB7CiAgcmV0dXJuIGFkZCguLi50cmFja3MubWFwKChtYWtlX3RyYWNrLCBpKSA9PiBtYWtlX3RyYWNrKHRyYWNrX2N0cmxzW2ldLCBpKSkpOwp9KTsKCmxldCBicHMgPSAxMzggLyA2MDsKbGV0IHJvb3QgPSA1OwoKbGV0IGkyeCA9IGltcHVsc2UoYnBzIC8gOCk7CmxldCBpNCA9IGltcHVsc2UoYnBzKTsKbGV0IGk4ID0gaW1wdWxzZShicHMgKiAyKTsKbGV0IGkxNiA9IGltcHVsc2UoYnBzICogNCk7CgpjdHJsbWl4KFsKICAvLyBraWNrCiAgKGMsIGkpID0%2BCiAgICBpNAogICAgICAuYXBwbHkoKGcwKSA9PiB7CiAgICAgICAgbGV0IGcxID0gaTguaW1wc2VxKDAsIDEpLm11bChjWzFdKTsKICAgICAgICBsZXQgZyA9IGFkZChnMCwgZzEpOwogICAgICAgIHJldHVybiBnCiAgICAgICAgICAuYnpzbShtaWRpbm90ZSgyNCArIHJvb3QpLCA1MTIsIDAuOTgpCiAgICAgICAgICAubXVsKGcubXVsKGNbMF0pLmFkKDAuMDAxLCAwLjMpKTsKICAgICAgfSkKICAgICAgLm11bCgxKSwKICAvLyBoYXQKICAoYywgaSkgPT4KICAgIGkxNgogICAgICAuYXBwbHkoKGcpID0%2BCiAgICAgICAgZy5zZXEoLTEsIC0xLCAxLCAtMSkuYXBwbHkoKG0pID0%2BCiAgICAgICAgICBub2lzZSgpCiAgICAgICAgICAgIC5ocGYobS5yYW5nZSgwLjk3LCAwLjk5KSwgMC4xKQogICAgICAgICAgICAubXVsKAogICAgICAgICAgICAgIGNbMV0KICAgICAgICAgICAgICAgIC5hcHBseSgoeikgPT4KICAgICAgICAgICAgICAgICAgZy5pbXBsYWNlKHosIFt6LCBbeiwgMV1dLCAxLCBbeiwgW3osIDFdXSkubXVsKGNbMF0pCiAgICAgICAgICAgICAgICApCiAgICAgICAgICAgICAgICAuYWQoMC4wMDEsIG0ucmFuZ2UoMC4wMywgMC4wNCkpCiAgICAgICAgICAgICAgICAubXVsKG0ucmFuZ2UoMC4yLCAxKSkKICAgICAgICAgICAgKQogICAgICAgICkKICAgICAgKQogICAgICAubXVsKDEuNCksCiAgLy8gc25hcmUKICAoYywgaSkgPT4KICAgIGk4CiAgICAgIC5hcHBseSgoZykgPT4KICAgICAgICBub2lzZSgpCiAgICAgICAgICAubHBmKGcuc2VxKDAuOSwgMC44NyksIDAuMSkKICAgICAgICAgIC5tdWwoCiAgICAgICAgICAgIGcKICAgICAgICAgICAgICAuaW1wbGFjZSgwLCAwLCBbMSwgMF0sIFswLCBbMSwgMF1dKQogICAgICAgICAgICAgIC5tdWwoY1swXSkKICAgICAgICAgICAgICAucGVyYyhnLnNlcSgwLjE3LCAwLjEzKSkKICAgICAgICAgICAgICAuYWRzcigwLjAwMSwgMC4wNCwgMC4yLCAwLjAxKQogICAgICAgICAgKQogICAgICApCiAgICAgIC5tdWwoMS4yKSwKICAvLyBiYXNzCiAgKGMsIGkpID0%2BCiAgICBpMTYKICAgICAgLmltcHNlcSgwLCAxLCAxLCAxKQogICAgICAuYXBwbHkoKGcpID0%2BCiAgICAgICAgZwogICAgICAgICAgLnNlcSgwLCAwLCAxMiwgMTIpCiAgICAgICAgICAuYWRkKGk4LmxhY2UoMCwgMCwgMCwgMCwgMCwgMCwgMCwgWzEsIDRdKSkKICAgICAgICAgIC5hZGQoMjQgKyByb290KQogICAgICAgICAgLm1pZGlub3RlKCkKICAgICAgICAgIC5zYXcoKQogICAgICAgICAgLmxwZihnLmFkKDAsIDAuMDUpLnBvdygyKS5yYW5nZSgwLjEsIDEpKQogICAgICAgICAgLm11bChnLm11bChjWzBdKS5hZCgwLjAwMSwgMC4xKSkKICAgICAgKQogICAgICAubXVsKDAuOSksCiAgLy8gbWVsMQogIChjLCBpKSA9PgogICAgaTE2LmFwcGx5KChnKSA9PgogICAgICBnCiAgICAgICAgLmxhY2UoMCwgMCwgMCwgMCwgMCwgMCwgMCwgMCwgMCwgMCwgMCwgMSwgMSwgMSwgMSwgWy0xLCBbNCwgNV1dKQogICAgICAgIC5hZGQoNDggKyByb290KQogICAgICAgIC5hZGQoWzAuMTIsIC0wLjEyXSkKICAgICAgICAubWlkaW5vdGUoKQogICAgICAgIC5zYXcoKQogICAgICAgIC5taXgoKQogICAgICAgIC5scGYoY1sxXS5iaXBvbGFyKCkucmFuZ2UoMC41LCAxKSkKICAgICAgICAuaHBmKDAuMzUpCiAgICAgICAgLm11bCgKICAgICAgICAgIDAuNCwKICAgICAgICAgIGcKICAgICAgICAgICAgLmltcHNlcSgwLCAwLCAxLCAxLCAxLCAxLCAxLCAxLCAxLCAxLCAxLCAxLCAwLCAxLCAwLCAxKQogICAgICAgICAgICAubXVsKGNbMF0pCiAgICAgICAgICAgIC5wZXJjKG5vaXNlKCkuaG9sZChnKS5yYW5nZXgoMC4wMywgMC4wNykpCiAgICAgICAgICAgIC5hZHNyKDAuMDAxLCAwLjA4LCAxLCAwLjAxKQogICAgICAgICkKICAgICAgICAuYWRkKCh4KSA9PiB4LmRlbGF5KDQuMDEgLyAoNCAqIGJwcykpLm11bCgwLjUpKQogICAgKSwKICAvLyBtZWwyCiAgKGMsIGkpID0%2BCiAgICBpMTYKICAgICAgLmltcHNlcSgxLCAxLCAxLCAxLCAwLCAxLCAwLCAxLCAwKQogICAgICAuYXBwbHkoKGcpID0%2BCiAgICAgICAgZwogICAgICAgICAgLnNlcSgwLCAxLCA0LCA1LCA3LCA4LCAxMSwgMTIsIDExLCA4LCA3LCA1LCA0LCAxKQogICAgICAgICAgLmFkZChnLnNlcSgwLCAwLCAxMiwgMCwgMCwgMCwgMTIsIDApKQogICAgICAgICAgLmFkZCg0OCArIHJvb3QsIGNbMV0uYmlwb2xhcigpLmhvbGQoZykucmFuZ2UoMCwgMTIpKQogICAgICAgICAgLm1pZGlub3RlKCkKICAgICAgICAgIC5jenJlc3NhdygKICAgICAgICAgICAgZwogICAgICAgICAgICAgIC5hZCgwLCAwLjIpCiAgICAgICAgICAgICAgLnJhbmdleCgxLCBzaW5lKHNpbmUoMC4yKS5yYW5nZXgoMC41LCA0LjMpKS5yYW5nZXgoMiwgMjApKQogICAgICAgICAgICAgIC5sYWcoMC4wMSkKICAgICAgICAgICkKICAgICAgICAgIC5tdWwoZy5tdWwoY1swXSkuYWQoMC4wMDEsIHNpbmUoMC41KS5yYW5nZXgoMC4wNSwgMC41KSkpCiAgICAgICAgICAucGFuKGxmbm9pc2UoYnBzICogNCkubGFnKDAuMSkpCiAgICAgICkKICAgICAgLmFwcGx5KChkcnkpID0%2BCiAgICAgICAgZHJ5CiAgICAgICAgICAuZmVlZCgoeCkgPT4KICAgICAgICAgICAgeAogICAgICAgICAgICAgIC5scGYoMC44LCAwLjEpCiAgICAgICAgICAgICAgLmhwZigwLjQpCiAgICAgICAgICAgICAgLmRlbGF5KDMgLyAoNCAqIGJwcykpCiAgICAgICAgICAgICAgLm11bChjWzJdLmJpcG9sYXIoKS5yYW5nZSgwLjIsIDAuNjUpKQogICAgICAgICAgKQogICAgICAgICAgLm11bCgxLjcpCiAgICAgICAgICAuYWRkKGRyeSkKICAgICAgKQogICAgICAubXVsKDAuODkpLAogIC8vIG1lbDMKICAoYywgaSkgPT4KICAgIGkxNgogICAgICAuaW1wbGFjZSgxLCAwLCBbMCwgMCwgMV0pCiAgICAgIC5hcHBseSgoZykgPT4KICAgICAgICBnCiAgICAgICAgICAubGFjZSg3LCA0LCBpMnguc2VxKDEyLCAxMykuaG9sZChnKSkKICAgICAgICAgIC5hZGQoCiAgICAgICAgICAgIDYwICsgcm9vdCwKICAgICAgICAgICAgZy5hZCgwLCBub2lzZSgpLmhvbGQoZykucmFuZ2V4KDAuMDIsIDAuMDUpKS5iaXBvbGFyKCkucmFuZ2UoMTIsIC0xMikKICAgICAgICAgICkKICAgICAgICAgIC5taWRpbm90ZSgpCiAgICAgICAgICAuc2luZSgpCiAgICAgICAgICAubXVsKGcubXVsKGNbMF0pLmFkKDAuMDAxLCAwLjEzKSkKICAgICAgKQogICAgICAubXVsKDAuNikKICAgICAgLnBhbihzaW5lKDAuMzMpLm11bCgwLjcpKQogICAgICAuYWRkKCh4KSA9PiB4LmRlbGF5KDcuOTkgLyAoNCAqIGJwcykpLm11bCgwLjYpKSwKXSkKICAuYXBwbHkoKGRyeSkgPT4KICAgIGRyeQogICAgICAubXVsKGdsb2JhbF9jdHJsc1swXSkKICAgICAgLmZlZWQoKHgpID0%2BCiAgICAgICAgeAogICAgICAgICAgLmhwZigwLjQsIDAuMDcpCiAgICAgICAgICAuZGVsYXkoNiAvICg0ICogYnBzKSkKICAgICAgICAgIC5tdWwoMC40NSkKICAgICAgKQogICAgICAubXVsKDIpCiAgICAgIC5hZGQoZHJ5KQogICkKICAubXVsKDAuOSkKICAub3V0KCk7Cg%3D%3D"
+            target="_blank"
+            >kabel.salat.dev</a
+          >
         </li>
       </ul>
     </section>
@@ -2258,7 +2200,7 @@
     </section>
     <section>
       <p>kabelsalat + orca</p>
-      <img src="./img/jan_ten_solstice.png" style="width: 800px" />
+      <img src="./img/janten_jubez.jpg" style="width: 800px" />
       <clone-template tid="chapter0" class="chapters"></clone-template>
       <p>
         <a
@@ -2299,13 +2241,14 @@
       ></node-viz>
       <ul>
         <li>og goal: live codable audio dsp for strudel</li>
-        <li>i want to learn about audio dsp</li>
+        <li>i want to learn: learning through making</li>
         <li>inner peace</li>
         <li><strong>why not use tool X Y Z?</strong></li>
         <ul>
           <li>dynamically spawning graphs</li>
           <li>single sample feedback</li>
           <li>i cannot learn from big codebases</li>
+          <li>minimalism</li>
         </ul>
       </ul>
     </section>
@@ -2384,28 +2327,7 @@
       globalThis.superdough = register("superdough");
       globalThis["?"] = register("?");
     </script>
-
-    <section>
-      <clone-template tid="chapter1" class="chapters"></clone-template>
-      <h2>1.graph based</h2>
-      <img
-        src="https://blog.bela.io/images/puredata/header-2.png"
-        alt="graph"
-        class="hero"
-      />
-      <ul>
-        <li>Pure Data, Max, modular synths, ...</li>
-        <li>modules + cables = graph</li>
-        <li>to model signal flow</li>
-        <li>each module has inputs and outputs</li>
-      </ul>
-      <node-viz
-        style="margin-top: 40px"
-        code="return saw(55).lpf(200).out()"
-      ></node-viz>
-    </section>
-
-    <section>
+    <!-- <section>
       <clone-template tid="chapter1" class="chapters"></clone-template>
       <h3>Web Audio Nodes used by superdough</h3>
       <p style="word-break: break-all">
@@ -2475,6 +2397,21 @@ lfo.start();
 // a frequency modulated sine wave
 sine(2).range(200, 300).sine().out()
       </pre>
+    </section> -->
+    <section>
+      <clone-template tid="chapter1" class="chapters"></clone-template>
+      <h2>1.graph based</h2>
+      <img src="./img/pd.png" alt="graph" class="hero" />
+      <ul>
+        <li>Pure Data, Max, modular synths, ...</li>
+        <li>modules + cables = graph</li>
+        <li>to model signal flow</li>
+        <li>each module has inputs and outputs</li>
+      </ul>
+      <node-viz
+        style="margin-top: 40px"
+        code="return saw(55).lpf(200).out()"
+      ></node-viz>
     </section>
     <section>
       <h2>2.language</h2>
@@ -2507,7 +2444,7 @@ sine(2).range(200, 300).sine().out()
     </template>
     <template id="node-datastructure">
       <p style="text-align: center">Node data structure:</p>
-      <pre class="pristine" style="font-size: 1em">
+      <pre class="pristine" style="font-size: 0.9em">
 <span style="color:yellow">{
   "type": "out",
   "ins": [
@@ -2523,7 +2460,11 @@ sine(2).range(200, 300).sine().out()
     }</span>
   ]
 }</span>
-      </pre>
+
+interface Node {
+  type: string;
+  ins: (Node | number)[]
+}</pre>
     </template>
     <template id="node-interface">
       <pre class="pristine" style="font-size: 1em">
@@ -2534,7 +2475,7 @@ interface Node {
       >
     </template>
     <template id="function-composition"
-      ><p style="text-align: center">function composition:</p>
+      ><p style="text-align: center">nested functions:</p>
       <pre
         class="pristine"
       ><span style="color: yellow">out(<span style="color: magenta">lpf(<span style="color:cyan">saw(55)</span>, 200)</span>)</span></pre>
@@ -2568,9 +2509,11 @@ interface Node {
         tid="example-node-rl"
         style="width: 600px"
       ></clone-template>
+      <!-- <clone-template tid="method-chaining"></clone-template> -->
       <clone-template tid="function-composition"></clone-template>
       <ul>
-        <li>right to left / ping pong reading</li>
+        <!-- <li>a(x).b(y) = b(a(x), y)</li> -->
+        <li>inside out / ping pong reading</li>
         <li>nesting</li>
         <li>these nested functions generate...</li>
       </ul>
@@ -2582,6 +2525,7 @@ interface Node {
         style="width: 600px"
       ></clone-template>
       <clone-template tid="node-datastructure"></clone-template>
+
       <ul>
         <li>this is a like a syntax tree</li>
         <li>we can iterate over this</li>
@@ -2664,7 +2608,7 @@ return add(1, 2)
 
     <section>
       <clone-template tid="chapter2" class="chapters"></clone-template>
-      <p>multichannel:</p>
+      <p>multichannel expansion:</p>
       <node-garden rows="3">
         <!--
 return add(1, [2, 3]).mul(4)
@@ -2705,15 +2649,15 @@ return add(1, o=>o).out()
       -->
       </node-garden>
     </section>
-    <section>
+    <!-- <section>
       <clone-template tid="chapter2" class="chapters"></clone-template>
       <p>multichannel expansion + feedback:</p>
-      <node-garden rows="3">
-        <!--
+      <node-garden rows="3"> -->
+    <!--
 return add([2, 3], o=>o)
       -->
-      </node-garden>
-    </section>
+    <!-- </node-garden>
+    </section> -->
     <!-- <section>
       <h2>2. for</h2>
       <pre></pre>
@@ -2726,10 +2670,7 @@ return add([2, 3], o=>o)
     </section>
     <section>
       <h2>4.audio</h2>
-      <img
-        src="https://manual.audacityteam.org/m/images/e/ed/mel_log_linear_spectrogram_annotated.png"
-        class="hero"
-      />
+      <img src="./img/spectrum.png" class="hero" />
       <clone-template tid="chapter4" class="chapters"></clone-template>
       <ul>
         <li>run 48000 times per second</li>
@@ -3197,10 +3138,6 @@ render(o2)`;
       </script>
     </section>
     <section>
-      <img src="./img/itsallgraphs.png" />
-      <clone-template tid="chapter5" class="chapters"></clone-template>
-    </section>
-    <section>
       <h2>6.live coding</h2>
       <clone-template tid="chapter6" class="chapters"></clone-template>
       <img src="./img/strudel_atnight.jpg" class="hero" />
@@ -3303,6 +3240,10 @@ n($.m+52).add([0,3,7,10,14]).midinote()
         <li>mondo kabelsalat</li>
         <li>webassembly kabelsalat</li>
       </ul>
+    </section>
+    <section>
+      <img src="./img/itsallgraphs.png" />
+      <clone-template tid="chapter0" class="chapters"></clone-template>
     </section>
     <div
       style="
