@@ -2233,17 +2233,17 @@
         >
       </p>
     </section>
-    <section>
+    <!-- <section>
       <p>Kabelsalat + Midi Controller</p>
-      <img src="./img/pulu_goa.gif" style="width: 800px" />
-      <!-- <img src="./img/ks_pulu_midi.png" style="width: 800px" /> -->
-      <clone-template tid="chapter0" class="chapters"></clone-template>
+      <img src="./img/pulu_goa.gif" style="width: 800px" /> -->
+    <!-- <img src="./img/ks_pulu_midi.png" style="width: 800px" /> -->
+    <!-- <clone-template tid="chapter0" class="chapters"></clone-template>
       <p>
         <a href="https://www.youtube.com/watch?v=uGn2mVF_jkI" target="_blank"
           >pulu - Goa Trance Jam With Kabelsalat</a
         >
       </p>
-    </section>
+    </section> -->
     <section>
       <h2>Why Another Live Coding System?</h2>
       <!-- <clone-template tid="hero0"></clone-template> -->
@@ -2523,7 +2523,7 @@ interface Node {
       <ul>
         <li>Left to right reading</li>
         <li>No nesting</li>
-        <li>Similar to hydra / strudel</li>
+        <li>like Hydra / Strudel</li>
         <li>This is syntactic sugar for...</li>
       </ul>
     </section>
@@ -2537,7 +2537,7 @@ interface Node {
       <clone-template tid="function-composition"></clone-template>
       <ul>
         <!-- <li>a(x).b(y) = b(a(x), y)</li> -->
-        <li>Inside out / ping pong reading</li>
+        <li>Inside out</li>
         <li>Nesting</li>
         <li>Less readable</li>
         <li>These nested functions generate...</li>
@@ -2606,15 +2606,15 @@ return add(8,2).mul( add(3,5) )
         codeblock(document.querySelector("#node-run"), 6);
       </script>
     </section> -->
-    <section>
+    <!-- <section>
       <clone-template tid="chapter2" class="chapters"></clone-template>
       <p>DAG:</p>
-      <node-garden rows="3">
-        <!--
+      <node-garden rows="3"> -->
+    <!--
 let a = add(1, 2)
 return a.mul(3).add(a).out()
           -->
-      </node-garden>
+    <!-- </node-garden>
       <ul>
         <li>DAG = Directed Acyclic Graph</li>
         <li>Calculate nodes once and memoize result</li>
@@ -2623,18 +2623,18 @@ return a.mul(3).add(a).out()
     <section>
       <clone-template tid="chapter2" class="chapters"></clone-template>
       <p>DAG:</p>
-      <node-garden rows="3">
-        <!--
+      <node-garden rows="3"> -->
+    <!--
 return add(1, 2)
 .apply( a => a.mul(3).add(a) )
 .out()
           -->
-      </node-garden>
+    <!-- </node-garden>
       <ul>
         <li>no intermediate variable needed</li>
         <li>no break in control flow</li>
       </ul>
-    </section>
+    </section> -->
 
     <section>
       <clone-template tid="chapter2" class="chapters"></clone-template>
@@ -2650,15 +2650,15 @@ return add(1, [2, 3]).mul(4)
         <li>Good for multichannel Audio</li>
       </ul>
     </section>
-    <section>
+    <!-- <section>
       <clone-template tid="chapter2" class="chapters"></clone-template>
       <p>Channel Matching:</p>
-      <node-garden rows="3">
-        <!--
+      <node-garden rows="3"> -->
+    <!--
 return add(1, [2, 3]).mul([4, 5])
       -->
-      </node-garden>
-    </section>
+    <!-- </node-garden>
+    </section> -->
     <!-- <section>
       <clone-template tid="chapter2" class="chapters"></clone-template>
       <p>feedback:</p>
@@ -3235,6 +3235,7 @@ n($.m+52).add([0,3,7,10,14]).midinote()
       <a href="https://www.youtube.com/watch?v=9zAx1kFr-yY" target="_blank"
         >youtube.com/watch?v=9zAx1kFr-yY</a
       >
+      come jam on nudel.cc
     </section>
     <section>
       <p>Kabelsalat -> Strudel</p>
@@ -3259,16 +3260,24 @@ n($.m+52).add([0,3,7,10,14]).midinote()
       <h2>8.and beyond</h2>
       <clone-template tid="chapter8" class="chapters"></clone-template>
       <ul>
-        <li>SuperCollider export</li>
         <li>C compilation</li>
         <li>Mondo Kabelsalat</li>
         <li>WebAssembly Kabelsalat</li>
-        <li>please write your own</li>
+        <li>KabelSalat -> sclang</li>
+        <li>What would you do with this?</li>
       </ul>
     </section>
     <section>
       <img src="./img/itsallgraphs.png" />
       <clone-template tid="chapter0" class="chapters"></clone-template>
+      <p>Thanks</p>
+      <ul>
+        <li>Raphael Forment</li>
+        <li>Maxime Chevalier-Boisvert</li>
+        <!-- <li>yaxu</li> -->
+        <li>ICLC</li>
+        <li>You</li>
+      </ul>
     </section>
     <div
       style="
