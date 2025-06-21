@@ -180,12 +180,15 @@
     <p>
       <a href="/">back to garten.salat</a>
     </p>
-
     <script>
-      const html = document.querySelector("html").outerHTML;
-      const loc = html.split("\n").length;
-      document.querySelector("#pre").textContent = html;
-      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+      // render source code
+      fetch(window.location.href)
+        .then((response) => response.text())
+        .then((html) => {
+          const label = `show source (${html.split("\n").length} loc)`;
+          document.querySelector("#pre").textContent = html;
+          document.querySelector("#loc").textContent = label;
+        });
     </script>
   </body>
 </html>
