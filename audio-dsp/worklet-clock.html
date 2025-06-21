@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 webaudio clock II</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        text-align: left;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+        cursor: pointer;
+      }
+      textarea,
+      pre {
+        overflow: auto;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        background-color: #44444490;
+        border: 0;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      ul,
+      ol {
+        padding-left: 20px;
+      }
+      canvas {
+        max-width: 100%;
+        background-color: #44444490;
+      }
+    </style>
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        const pre = document.createElement("pre");
+        pre.textContent = getCode(scriptElement, indent);
+        script.after(pre);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <template class="worklet-clock">
+      <script>
+        class ClockProcessor extends AudioWorkletProcessor {
+          interval = 16; // number of audioblocks between each tick
+          t = 0; // audio blocks passed since last message
+          active = true; // if false, worklet will be gc'ed
+          running = false; // if true, ticks will start
+          constructor() {
+            super();
+            this.active = true;
+            this.port.onmessage = (e) => {
+              const msg = e.data;
+              if (msg === "start") {
+                this.running = true;
+              } else if (msg === "stop") {
+                this.running = false;
+                this.active = false;
+              }
+            };
+          }
+          process(inputs, outputs, parameters) {
+            if (!this.running) {
+              return this.active;
+            }
+            if (this.t > this.interval) {
+              this.port.postMessage(currentTime);
+              this.t -= this.interval;
+            }
+            this.t++;
+            return this.active;
+          }
+        }
+        registerProcessor("clock", ClockProcessor);
+      </script>
+    </template>
+  </head>
+  <body>
+    <h2>🌱 webaudio clock II</h2>
+    <p>
+      after
+      <a href="https://garten.salat.dev/webaudio/clock.html">my last clock</a>,
+      it's time to build another one.. this time, let's use an AudioWorklet
+      instead of a weird hack:
+    </p>
+
+    <script>
+      codeblock(
+        document
+          .querySelector("template.worklet-clock")
+          .content.querySelector("script"),
+        8
+      );
+    </script>
+    <p>
+      to simplify the worklet creation,deletion and communication, here's a
+      class that we can use:
+    </p>
+    <script>
+      class Clock {
+        constructor(ac, callback) {
+          this.ac = ac;
+          this.callback = callback;
+        }
+        async start() {
+          let workletCode = document
+            .querySelector("template.worklet-clock")
+            .content.querySelector("script").textContent;
+          await this.ac.resume();
+          const dataURL = `data:text/javascript;base64,${btoa(workletCode)}`;
+          await this.ac.audioWorklet.addModule(dataURL);
+          this.node = new AudioWorkletNode(this.ac, "clock");
+          this.node.connect(this.ac.destination);
+          this.node.port.onmessage = (e) => this.callback(e.data);
+          this.node.port.postMessage("start");
+        }
+        stop() {
+          this.node?.port.postMessage("stop");
+        }
+      }
+      codeblock(document.currentScript, 6);
+    </script>
+    <p>
+      the callback that is passed to the clock constructor can be used to
+      schedule things with the audio clock. for simplicity, let's beep on every
+      tick:
+    </p>
+    <button id="startclock">start</button>
+    <button id="stopclock">stop</button>
+    <script>
+      startclock.onclick = () => clock.start();
+      stopclock.onclick = () => clock.stop();
+      const ctx = new AudioContext();
+      const clock = new Clock(ctx, (time) => {
+        const target = time + 0.1; // add some latency
+        console.log("tick", time);
+        const osc = ctx.createOscillator();
+        osc.start(target);
+        osc.stop(target + 0.05);
+        osc.connect(ctx.destination);
+      });
+      // init audio context
+      document.addEventListener("click", function firstClick() {
+        ctx.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+    </script>
+    <p>to see how the Clock class is used, check out the source below</p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+
+    <script>
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
