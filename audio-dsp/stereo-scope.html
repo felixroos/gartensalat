@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html>
+  <!-- license: AGPL-3.0 -->
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🌱 stereo scope</title>
+    <style>
+      body {
+        background-color: #222;
+        max-width: 500px;
+        margin: auto;
+        font-family: serif;
+        font-size: 1.2em;
+        color: #edd;
+        padding: 20px 8px;
+      }
+      @font-face {
+        font-family: "FontWithASyntaxHighlighter";
+        src: url("/fonts/FontWithASyntaxHighlighter-Regular.woff2")
+          format("woff2");
+      }
+      a {
+        color: cyan;
+        font-size: 1em;
+      }
+      textarea,
+      pre {
+        box-sizing: border-box;
+        font-family: "FontWithASyntaxHighlighter", monospace;
+        padding: 8px;
+        font-size: 12px;
+        border: 0;
+        outline: none;
+        overflow: auto;
+        background-color: #44444490;
+        color: white;
+        width: 100%;
+        margin-top: 8px;
+        box-sizing: border-box;
+      }
+      #lines {
+        height: 200px;
+      }
+    </style>
+    <!-- codeblock -->
+    <script>
+      // render codeblock from script tag
+      let codeblock = (scriptElement, indent = 0) => {
+        const script = document.currentScript;
+        const pre = document.createElement("pre");
+        pre.textContent = getCode(scriptElement, indent);
+        script.after(pre);
+      };
+      function getCode(scriptElement, indent = 0) {
+        return scriptElement.innerText
+          .split("\n")
+          .map((line) => line.slice(indent))
+          .filter((x) => x && !x.startsWith("codeblock("))
+          .join("\n");
+      }
+    </script>
+    <!-- DSP-worklet -->
+    <template class="dsp-worklet">
+      <script>
+        class DspProcessor extends AudioWorkletProcessor {
+          dsp = () => {};
+          l = 0;
+          r = 0;
+          SR = sampleRate;
+          ISR = 1 / sampleRate;
+          constructor() {
+            super();
+            this.t = 0;
+            this.S = 0;
+            this.active = true;
+            this.frames = Math.floor(sampleRate / 30);
+            this.framebuffers = [
+              new Float32Array(this.frames),
+              new Float32Array(this.frames),
+            ];
+            this.msg = {
+              framebuffers: this.framebuffers,
+            };
+            globalThis.$ = this;
+            this.port.onmessage = (e) => {
+              const msg = e.data;
+              if (msg && msg.code) {
+                //new Function("$", msg.code)(this);
+                new Function(msg.code)();
+              } else if (msg === "stop") {
+                this.active = false;
+              }
+            };
+          }
+          process(inputs, outputs, parameters) {
+            const output = outputs[0];
+            for (let i = 0; i < output[0].length; i++) {
+              this.dsp(this.t / sampleRate);
+              output[0][i] = this.l;
+              output[1][i] = this.r;
+              this.t++;
+              this.S = this.t * this.ISR;
+              this.framebuffers[0][this.t % this.frames] = this.l;
+              this.framebuffers[1][this.t % this.frames] = this.r;
+              if (this.t % this.frames === 0 && this.t > 0) {
+                this.port.postMessage(this.msg);
+              }
+            }
+            return this.active;
+          }
+        }
+      </script>
+    </template>
+    <!-- dsp-repl -->
+    <script>
+      const ctx = new AudioContext();
+      // init audio context
+      document.addEventListener("click", function firstClick() {
+        ctx.resume(); // autoply policy
+        document.removeEventListener("click", firstClick);
+      });
+
+      const _lerp = (v, min, max) => v * (max - min) + min;
+      const invLerp = (v, min, max) => (v - min) / (max - min);
+      const remap = (v, vmin, vmax, omin, omax) =>
+        _lerp(invLerp(v, vmin, vmax), omin, omax);
+
+      class DSPRepl extends HTMLElement {
+        static observedAttributes = [
+          "code",
+          "rows",
+          "next",
+          "viz",
+          "font-size",
+          "dir",
+          "scope",
+        ];
+        worklet;
+        init() {
+          let fontSize = this.getAttribute("font-size") ?? 16;
+          const code =
+            this.getAttribute("code") ||
+            (this.innerHTML + "").replace("<!--", "").replace("-->", "").trim();
+
+          const rows = this.getAttribute("rows") ?? 4;
+          if (!code) {
+            return;
+          }
+          this.innerHTML = "";
+          this.scopeMode = this.getAttribute("scope") || "linear";
+
+          this.insertAdjacentHTML(
+            "beforeend",
+            `<div style="border:0px solid #222;padding:0;position:relative">
+            <textarea spellcheck="false" rows="${rows}"></textarea>
+            <div style="user-select:none;cursor:pointer;position:absolute;top:0;right:0">
+            <button class="play">run</button> <button class="stop">stop</button>
+            </div>
+            <details class="steps-details" style="opacity:0">
+              <summary>show compiled output</summary>
+              <pre class="steps"></pre>
+            </details>
+            <canvas width="500" height="120"></canvas>
+            ${
+              !!this.getAttribute("viz")
+                ? `
+              <div
+                class="viz"
+                style="display:flex;justify-content:center;padding:10px"
+              ></div>`
+                : ""
+            }
+          </div>`
+          );
+          // draw logic
+          this.vizContainer = this.querySelector(".viz");
+          this.stepsDetails = this.querySelector(".steps-details");
+          this.stepsContainer = this.querySelector(".steps");
+          this.canvas = this.querySelector("canvas");
+          this.canvas.width =
+            this.canvas.clientWidth /*  * window.devicePixelRatio */;
+          this.canvas.height =
+            this.canvas.clientHeight /*  * window.devicePixelRatio */;
+          this.drawContext = this.canvas.getContext("2d");
+          /* this.drawSilence(this.drawContext); */
+
+          // repl logic
+          const input = this.querySelector("textarea");
+          input.value = code;
+          input.style = `margin:0;border-bottom:2px solid #222;font-size:${fontSize}px`;
+          this.input = input;
+
+          this.querySelector(".play").onclick = () => this.update(input.value);
+          this.querySelector(".stop").onclick = () => this.stop();
+          input.addEventListener("keydown", async (e) => {
+            if ((e.ctrlKey || e.altKey) && e.key === "Enter") {
+              const hash = btoa(input.value);
+              let urlCode = window.location.hash.slice(1);
+              this.update(input.value);
+            }
+            if ((e.ctrlKey || e.altKey) && e.code === "Period") {
+              e.preventDefault();
+              this.stop();
+            }
+          });
+        }
+        async initWorklet() {
+          if (this.worklet) {
+            return;
+          }
+          await ctx.resume();
+          this.worklet = await this.runWorklet(ctx, this.input.value);
+          this.worklet.port.onmessage = (e) => {
+            if (e.data.framebuffers) {
+              const [l, r] = e.data.framebuffers;
+              requestAnimationFrame(() => {
+                /* if (this.scopeMode === "linear") { */
+                this.drawBuffer(l, [-4, 1]);
+                this.drawBuffer(r, [-1, 4], false);
+                /* } else if (this.scopeMode === "xy") { */
+                this.drawXYScope(l, r);
+                /* } */
+              });
+            } else if (e.data.viz) {
+              const nodes = JSON.parse(e.data.viz);
+              this.vizContainer &&
+                renderNodes(
+                  nodes,
+                  this.vizContainer,
+                  (gvnode, node) => {
+                    if (node.type === "fadeout") {
+                      gvnode.color = "red";
+                    } else if (node.type === "fadein") {
+                      gvnode.color = "green";
+                    }
+                    return gvnode;
+                  },
+                  null,
+                  this.getAttribute("dir")
+                );
+            } else if (e.data.code && this.stepsContainer) {
+              this.stepsDetails.style.opacity = 1;
+              this.stepsContainer.innerText = `// this runs for every sample:\n${e.data.code}`;
+            }
+          };
+        }
+
+        async update(code) {
+          await this.initWorklet();
+          /* console.log("update:::", code); */
+          if (this.getAttribute("next")) {
+            globalThis.$ = this;
+            const fn = new Function(code)();
+          } else {
+            this.worklet.port.postMessage({ code });
+          }
+        }
+        stop() {
+          this.worklet?.disconnect();
+          this.worklet?.port.postMessage("stop");
+          if (typeof $ !== "undefined") {
+            delete $.n;
+            delete $.nodes;
+          }
+          this.worklet = undefined;
+        }
+
+        async runWorklet(ac) {
+          const name = `worklet-${Date.now()}`;
+          const math = Object.getOwnPropertyNames(Math).join(",");
+          let prelude = `const {${math}} = Math;\nObject.assign(globalThis,{${math}})\n`;
+          // add DSP scripts
+          document
+            .querySelector("template.dsp-prelude")
+            .content.querySelectorAll("script")
+            .forEach((script) => {
+              prelude += script.textContent;
+            });
+
+          let workletCode = document
+            .querySelector("template.dsp-worklet")
+            .content.querySelector("script").textContent;
+
+          workletCode = `${prelude}\n${workletCode}\nregisterProcessor('${name}', DspProcessor);`;
+
+          await ac.resume();
+          const dataURL = `data:text/javascript;base64,${btoa(workletCode)}`;
+          await ac.audioWorklet.addModule(dataURL);
+          const node = new AudioWorkletNode(ac, name, {
+            outputChannelCount: [2],
+          });
+          node.connect(ac.destination);
+          return node;
+        }
+
+        drawXYScope(l, r, color = "white") {
+          const ctx = this.drawContext;
+          const diameter = Math.min(ctx.canvas.height, ctx.canvas.width);
+
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          let i = 0,
+            cx = ctx.canvas.width / 2,
+            cy = ctx.canvas.height / 2;
+          /* ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); */
+          /* ctx.moveTo(cx, cy); */
+
+          for (let i = 0; i < l.length; i++) {
+            /* const x = ((Math.sin((l[i] + 1) * Math.PI) + 1) / 2) * diameter;
+            const y = ((Math.cos((r[i] + 1) * Math.PI) + 1) / 2) * diameter; */
+            const x = ((l[i] + 1) / 2) * diameter;
+            const y = ((r[i] + 1) / 2) * diameter;
+            if (i === 0) {
+              ctx.moveTo(x, y);
+              ctx.beginPath();
+            } else {
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+        }
+
+        drawBuffer(samples, range = [-1, 1], clear = true) {
+          clear &&
+            this.drawContext.clearRect(
+              0,
+              0,
+              this.drawContext.canvas.width,
+              this.drawContext.canvas.height
+            );
+          this.plot(
+            (x) => samples[Math.floor(x)], // this is bad..
+            this.drawContext,
+            [1, samples.length],
+            range,
+            "white",
+            2
+          );
+        }
+        // plot function, see /plot.html
+        plot(
+          fn,
+          ctx,
+          xrange = [-1, 1],
+          yrange = [-1, 1],
+          color = "black",
+          lineWidth = 4
+        ) {
+          // these 3 functions are very good to know..
+          const lerp = (v, min, max) => v * (max - min) + min;
+          const invLerp = (v, min, max) => (v - min) / (max - min);
+          const remap = (v, vmin, vmax, omin, omax) =>
+            lerp(invLerp(v, vmin, vmax), omin, omax);
+          // prepare draw context
+          ctx.lineWidth = lineWidth;
+          ctx.strokeStyle = color;
+          // function ranges
+          const [x0, x1] = xrange;
+          const [y0, y1] = yrange;
+          // draw ranges
+          const [px0, px1] = [130, ctx.canvas.width];
+          const [py0, py1] = [ctx.canvas.height - ctx.lineWidth, ctx.lineWidth];
+          // actual draw logic
+          ctx.beginPath();
+          for (let px = 0; px < ctx.canvas.width; px++) {
+            const x = remap(px, px0, px1, x0, x1);
+            const y = fn(x);
+            const py = remap(y, y0, y1, py0, py1);
+            px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+        drawSilence(ctx, color = "white", lineWidth = 2) {
+          const canvas = ctx.canvas;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lineWidth;
+          ctx.beginPath();
+          ctx.moveTo(0, canvas.height / 2);
+          ctx.lineTo(canvas.width, canvas.height / 2);
+          ctx.stroke();
+        }
+
+        connectedCallback() {
+          setTimeout(() => {
+            this.init();
+          }, 0);
+        }
+        attributeChangedCallback(name, oldValue, newValue) {
+          this.init();
+        }
+      }
+      customElements.define("dsp-repl", DSPRepl);
+    </script>
+    <template class="dsp-prelude">
+      <script>
+        const ISR = 1 / sampleRate;
+        // https://garten.salat.dev/audio-dsp/oscillators.html
+        class SineOsc {
+          phase = 0;
+          value = 0;
+          update(freq, phi = 0) {
+            this.value = Math.sin((this.phase + phi) * 2 * Math.PI);
+            this.phase = (this.phase + freq / sampleRate) % 1;
+            return this.value;
+          }
+        }
+
+        class PulseOsc {
+          phase = 0;
+
+          update(freq, duty) {
+            this.phase += this.sampleTime * freq;
+            let cyclePos = this.phase % 1;
+            return cyclePos < duty ? 1 : -1;
+          }
+        }
+
+        class SawOsc {
+          phase = 0;
+          update(freq) {
+            this.phase += ISR * freq;
+            return (this.phase % 1) * 2 - 1;
+          }
+        }
+
+        let midi2freq = (midi) => Math.pow(2, (midi - 69) / 12) * 440;
+        Object.assign(globalThis, { SineOsc, PulseOsc, SawOsc, midi2freq });
+      </script>
+    </template>
+  </head>
+  <body>
+    <h2>🌱 stereo scope</h2>
+
+    <p>
+      continuing <a href="/audio-dsp/worklets3.html">dsp repl</a>, let's add a
+      stereo scope (loud):
+    </p>
+    <!-- <script>
+      codeblock(
+        document
+          .querySelector("template.dsp-worklet")
+          .content.querySelector("script"),
+        8
+      );
+    </script> -->
+
+    <dsp-repl rows="6"
+      ><!-- 
+const o1 = new SineOsc()
+const o2 = new SineOsc()
+$.dsp = (t) => {
+  $.l = o1.update(239);
+  $.r = o2.update(241);
+}
+--></dsp-repl
+    >
+    <p>
+      the main idea is that the dsp-repl has one frame buffer per channel. each
+      of these frame buffers holds audio data for the last draw frame. it means
+      we need a buffer size of `sampleRate/fps`, which is 1600 for 48kHz/30fps.
+      each time the buffer is full, it gets sent to the main thread to be drawn.
+      the fact that we're using frequencies that are close to multiples of 30
+      means we get a somewhat stable output.
+    </p>
+    <p>
+      the thing you see on the left is a
+      <a href="/plot-polar.html">polar</a> representation of the 2 signals,
+      where the left channel represents the sine and the right channel
+      represents the cosine component.
+    </p>
+    <dsp-repl rows="12" scope="xy"
+      ><!-- 
+const o1 = new SineOsc()
+const o2 = new SawOsc()
+$.dsp = (t) => {
+  $.l = o1.update(120);
+  $.r = o2.update(89.9);
+}
+--></dsp-repl
+    >
+    <p>
+      there's a lot to explore here, mainly finding stable or semi-stable states
+      of the polar plot..
+    </p>
+    <details>
+      <summary id="loc">show page source</summary>
+      <pre id="pre"></pre>
+    </details>
+    <p>
+      <a href="/">back to garten.salat</a>
+    </p>
+    <script>
+      const html = document.querySelector("html").outerHTML;
+      const loc = html.split("\n").length;
+      document.querySelector("#pre").textContent = html;
+      document.querySelector("#loc").textContent = `show source (${loc} loc)`;
+    </script>
+  </body>
+</html>
