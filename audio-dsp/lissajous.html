@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🌱 lambdoma</title>
+    <title>🌱 lissajous figures</title>
     <style>
       body {
         background-color: #222;
@@ -307,7 +307,7 @@
           return node;
         }
 
-        drawXYScope(l, r, color = "white") {
+        drawXYScope(l, r, color = "#ffffff80") {
           const ctx = this.drawContext;
           const diameter = Math.min(ctx.canvas.height, ctx.canvas.width);
 
@@ -318,7 +318,6 @@
             cy = ctx.canvas.height / 2;
           /* ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); */
           /* ctx.moveTo(cx, cy); */
-
           for (let i = 0; i < l.length; i++) {
             /* const x = ((Math.sin((l[i] + 1) * Math.PI) + 1) / 2) * diameter;
             const y = ((Math.cos((r[i] + 1) * Math.PI) + 1) / 2) * diameter; */
@@ -481,9 +480,13 @@
     </template>
   </head>
   <body>
-    <h2>🌱 another theory of dissonance</h2>
-    <p>...</p>
-    <dsp-repl rows="16" id="repl"
+    <h2>🌱 lissajous figures</h2>
+    <p>
+      i want to learn more about these lissajous curves.. here's a dsp repl with
+      a
+      <a href="/audio-dsp/stereo-scope.html">stereo scope:</a>
+    </p>
+    <dsp-repl rows="8" id="repl"
       ><!-- 
 let f1 = 240, f2 = 241, phi = 0;
 const o1 = new SineOsc()
@@ -509,9 +512,23 @@ $.onmessage = msg => {
 }
 --></dsp-repl
     >
+    <p>
+      don't worry too much about the code.. press run to see the scope! the
+      slider below let's you change the ratio manually:
+    </p>
 
     <input type="range" id="ratio-slider" style="width: 100%" step="0.1" />
+    <p>
+      the slider goes from 1:1 to 3:2. at certain positions, the curve on the
+      left can reacht a stable state, where there is no movement. these stable
+      states sit at rational frequency ratios. here's a table of all rational
+      numbers that can be built from numbers 1 to 9:
+    </p>
     <canvas id="lambdoma" style="width: 100%"></canvas>
+    <p>
+      here's a second slider to change the phase offset, which manifests as a
+      rotation of the figure:
+    </p>
     <input type="range" id="phase-slider" style="width: 100%" step="0.1" />
     <script>
       let slider = (el, onInput, onDragStart, onDragEnd) => {
@@ -532,8 +549,10 @@ $.onmessage = msg => {
       const ratioSlider = document.getElementById("ratio-slider");
       const phaseSlider = document.getElementById("phase-slider");
       let cells = 8;
-      let minRatio = 1 / cells,
-        maxRatio = cells;
+      /* let minRatio = 1 / cells,
+        maxRatio = cells; */
+      let minRatio = 1,
+        maxRatio = 1.5;
 
       slider(ratioSlider, () => {
         const ratio = lerp(Number(ratioSlider.value) / 100, minRatio, maxRatio);
@@ -584,14 +603,16 @@ $.onmessage = msg => {
           const ratio = getRatio(e);
           updateRatio(ratio);
         };
-        canvas.onmousemove = (e) => {
-          const ratio = getRatio(e);
-          updateRatio(ratio);
-        };
       };
       renderLamdoma(cells);
     </script>
-
+    <p>
+      it seems, the lower the numbers in the fraction, the more pleasant the
+      sound. this hints at another
+      <a href="/audio-dsp/dissonance.html">theory of dissonance</a>. spoiler
+      alert: it's called harmonicity. i want to investigate more on this in a
+      future post.
+    </p>
     <details>
       <summary id="loc">show page source</summary>
       <pre id="pre"></pre>
