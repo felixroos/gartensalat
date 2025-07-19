@@ -9,7 +9,7 @@
 #include <math.h>
 #include <string.h>
 #include <portaudio.h>
-
+#include <stdint.h>
 #ifndef UGENS_H
 #define UGENS_H
 
